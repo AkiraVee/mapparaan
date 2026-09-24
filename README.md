@@ -1,3 +1,12 @@
-# mapparaan
-
-MapParaan — an AI chatbot-based commute planner for Metro Manila, built as a real React Native / Expo mobile app (not a web demo). It's a port of an earlier browser prototype. Users type a query in natural language ("from Quiapo to Ayala"), and the app finds the best multimodal route across rail, jeepney, bus, and walking, showing fare, ETA, and a schematic "metro map" view.
+# Mapparaan
+ 
+## About
+ 
+Mapparaan is an AI chatbot-based interactive mapping system built for Metro Manila commuters. It addresses the difficulty of navigating a fragmented public transportation system by combining route planning, fare computation, and applicable discounts into a single tool.
+ 
+Through a natural language (Filipino/Taglish) chatbot interface, Mapparaan:
+ 
+- Recommends appropriate modes of transportation (walk, jeepney, bus, tricycle, UV Express, LRT/MRT/PNR, ride-hailing) based on user preference — cheapest, fastest, or fewest transfers
+- Generates corresponding routes using multimodal trip-planning logic
+- Computes estimated fares, with applicable **student, senior citizen, or PWD discounts** (20% off, non-stackable, per RA 11314 / RA 9994 / RA 10754)
+- Provides estimated arrival times based on schedule and average traffic conditions
