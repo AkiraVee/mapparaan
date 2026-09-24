@@ -33,4 +33,11 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 | **Database** | PostgreSQL + PostGIS | Fare tables, cached routes, user data, spatial queries |
 | **Fare & discount logic** | Custom rules engine | Config-driven fare tables (not hardcoded), 0.8 multiplier for eligible discounts |
 | **Hosting** | Single VPS (DigitalOcean/Linode) | Runs OTP + backend + Postgres |
+
+
+ ### Data Sources
  
+- **Sakay.ph GTFS** (GitHub) — jeepney/bus/rail route data, community-maintained
+- **OpenStreetMap** — Metro Manila road network extract, for OTP/OSRM
+- **DOTr/LTFRB fare orders** — manually sourced fare tables
+- **RA 11314 / RA 9994 / RA 10754** — legal basis for discount rules
