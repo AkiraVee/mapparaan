@@ -86,7 +86,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                     onShare: () {
                       // TODO: hook up native share sheet
                     },
-                    onClose: () => Navigator.of(context).maybePop(),
+                    onClose: () => Navigator.of(context)
+                        .popUntil((route) => route.isFirst),
                     onPreferenceSelected: _selectPreference,
                   ),
                 ),

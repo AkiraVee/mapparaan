@@ -11,6 +11,7 @@ class AskMapparaanBar extends StatelessWidget {
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
+  final FocusNode? focusNode;
 
   const AskMapparaanBar({
     super.key,
@@ -21,6 +22,7 @@ class AskMapparaanBar extends StatelessWidget {
     this.onMicTap,
     this.leadingIcon = Icons.search,
     this.onLeadingTap,
+    this.focusNode,
   });
 
   @override
@@ -46,6 +48,7 @@ class AskMapparaanBar extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
+                focusNode: focusNode,
                 autofocus: autofocus,
                 decoration: InputDecoration(
                   hintText: hintText,
