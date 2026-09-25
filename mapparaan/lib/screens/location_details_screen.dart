@@ -239,6 +239,64 @@ class _PlaceDetailsSheet extends StatelessWidget {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+
+          // Route results list — placeholder for now.
+          // TODO: replace with real route options from the routing
+          // engine (OTP/OSRM/Google Routes), once the preference
+          // buttons above are wired to it.
+          const _RouteResultPlaceholder(),
+          const SizedBox(height: 10),
+          const _RouteResultPlaceholder(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Placeholder row standing in for a single route result, matching
+/// the gray-bar placeholders in the wireframe.
+class _RouteResultPlaceholder extends StatelessWidget {
+  const _RouteResultPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 10,
+                  width: double.infinity,
+                  color: Colors.black12,
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 8,
+                  width: 120,
+                  color: Colors.black12,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
