@@ -1,28 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/place_search_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/mapparaan_drawer.dart';
 import 'location_details_screen.dart';
-
-/// A single autocomplete suggestion shown in the search dropdown.
-/// TODO: replace with real results from a Places/geocoding API once
-/// the search is wired to one.
-class _SearchSuggestion {
-  final String name;
-  final String subtitle;
-
-  const _SearchSuggestion(this.name, this.subtitle);
-}
-
-const List<_SearchSuggestion> _mockSuggestions = [
-  _SearchSuggestion('Universidad De Manila', 'Mehan Garden, Manila'),
-  _SearchSuggestion('University of Santo Tomas', 'España Blvd, Manila'),
-  _SearchSuggestion('Rizal Memorial Track and Football Stadium',
-      'Pablo Ocampo Sr. St, Malate, Manila'),
-  _SearchSuggestion('SM Manila', 'Concepcion Aguila St, Manila'),
-  _SearchSuggestion('Manila City Hall', 'Padre Burgos Ave, Manila'),
-  _SearchSuggestion('Robinsons Place Manila', 'Pedro Gil St, Manila'),
-];
 
 class SearchLocationScreen extends StatefulWidget {
   const SearchLocationScreen({super.key});
@@ -36,13 +20,15 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   final TextEditingController _bottomAskController = TextEditingController();
   final FocusNode _topSearchFocusNode = FocusNode();
 
+  MapLibreMapController? mapController;
   bool _isSearchFocused = false;
-
-  // TODO: replace this manual flag with real connectivity detection
-  // (e.g. via the `connectivity_plus` package) once the search is
-  // wired to an actual API. For now this lets us preview/test Frame 7
-  // (No Internet Connection) by flipping it to true.
   bool _hasConnectionError = false;
+  bool _isSearching = false;
+
+  LatLng? _userLocation;
+  List<PlaceResult> _searchResults = [];
+  Timer? _debounce;
+  Symbol? _currentMarker;
 
   @override
   void initState() {
@@ -50,36 +36,126 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _topSearchFocusNode.addListener(() {
       setState(() => _isSearchFocused = _topSearchFocusNode.hasFocus);
     });
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
+
+    final position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _userLocation = LatLng(position.latitude, position.longitude);
+    });
+
+    if (mapController != null && _userLocation != null) {
+      mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_userLocation!, 14),
+      );
+    }
+  }
+
+  void _goToMyLocation() {
+    if (_userLocation != null && mapController != null) {
+      mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_userLocation!, 15),
+      );
+    } else {
+      _getCurrentLocation();
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
+    _debounce = Timer(const Duration(milliseconds: 700), () async {
+      if (query.trim().length < 3) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+        return;
+      }
+
+      setState(() => _isSearching = true);
+
+      final results = await PlaceSearchService.search(query);
+
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+          _hasConnectionError = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _selectPlace(PlaceResult place) async {
+    _topSearchFocusNode.unfocus();
+    _topSearchController.text = place.name;
+
+    if (mapController == null) return;
+
+    // Remove old marker
+    if (_currentMarker != null) {
+      await mapController!.removeSymbol(_currentMarker!);
+    }
+
+    // Move camera
+    await mapController!.animateCamera(
+      CameraUpdate.newLatLngZoom(place.coordinates, 15.5),
+    );
+
+    // Add new marker
+    _currentMarker = await mapController!.addSymbol(
+      SymbolOptions(
+        geometry: place.coordinates,
+        iconImage: "marker-15",
+        iconSize: 1.8,
+        textField: place.name,
+        textSize: 13,
+        textOffset: const Offset(0, 1.8),
+        textAnchor: "top",
+        textColor: "#000000",
+        textHaloColor: "#FFFFFF",
+        textHaloWidth: 1.5,
+      ),
+    );
+
+    // Go to details screen
+    if (mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => LocationDetailsScreen(placeName: place.name),
+        ),
+      );
+    }
+  }
+
+  void _retry() {
+    setState(() => _hasConnectionError = false);
+    _onSearchChanged(_topSearchController.text);
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _topSearchController.dispose();
     _bottomAskController.dispose();
     _topSearchFocusNode.dispose();
     super.dispose();
   }
 
-  void _selectSuggestion(_SearchSuggestion suggestion) {
-    _topSearchFocusNode.unfocus();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) =>
-            LocationDetailsScreen(placeName: suggestion.name),
-      ),
-    );
-  }
-
-  void _retry() {
-    // TODO: re-run the actual search/connectivity check here.
-    setState(() => _hasConnectionError = false);
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Dropdown area is shown whenever the search field is focused.
-    // TODO: once a real API is wired up, only show it when there are
-    // actual results (and show an empty/no-results state otherwise).
     final showDropdownArea = _isSearchFocused;
 
     return Scaffold(
@@ -88,22 +164,26 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
         builder: (context) {
           return Stack(
             children: [
-              // Full-screen map placeholder (base layer).
-              // TODO: replace with GoogleMap widget once the API key is set up.
-              Container(
-                color: const Color(0xFFE0E0E0),
-                width: double.infinity,
-                height: double.infinity,
-                child: const Center(
-                  child: Text(
-                    'Map goes here',
-                    style: TextStyle(color: Colors.black45, fontSize: 16),
-                  ),
+              // ===== MAP =====
+              MapLibreMap(
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(14.5995, 120.9842),
+                  zoom: 12.0,
                 ),
+                styleString: "https://demotiles.maplibre.org/style.json",
+                onMapCreated: (controller) {
+                  mapController = controller;
+                  if (_userLocation != null) {
+                    controller.animateCamera(
+                      CameraUpdate.newLatLngZoom(_userLocation!, 14),
+                    );
+                  }
+                },
+                myLocationEnabled: true,
+                compassEnabled: false,
               ),
 
-              // Top bar + dropdown/error area, grouped in a column so
-              // it sits directly beneath the search bar.
+              // Top bar + results
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -111,16 +191,10 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 8),
-
-                      // Top bar: switches between
-                      // [menu] [search bar] [location]  <- not focused
-                      // [back] [search bar, full width]  <- focused
                       Row(
                         children: [
                           CircleIconButton(
-                            icon: _isSearchFocused
-                                ? Icons.arrow_back
-                                : Icons.menu,
+                            icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
                             onTap: () {
                               if (_isSearchFocused) {
                                 _topSearchFocusNode.unfocus();
@@ -136,34 +210,38 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                               focusNode: _topSearchFocusNode,
                               hintText: 'Search here',
                               leadingIcon: Icons.search,
-                              onSubmitted: (query) {
-                                // TODO: run place search / autocomplete
-                              },
+                              onChanged: _onSearchChanged,
+                              onSubmitted: _onSearchChanged,
                             ),
                           ),
                           if (!_isSearchFocused) ...[
                             const SizedBox(width: 8),
                             CircleIconButton(
                               icon: Icons.my_location,
-                              onTap: () {
-                                // TODO: recenter map on user location
-                              },
+                              onTap: _goToMyLocation,
                             ),
                           ],
                         ],
                       ),
 
-                      // Dropdown area: either results, or the
-                      // no-connection state (Frame 7).
                       if (showDropdownArea) ...[
                         const SizedBox(height: 8),
                         Expanded(
                           child: _hasConnectionError
                               ? _NoConnectionState(onRetry: _retry)
-                              : _SearchDropdown(
-                                  suggestions: _mockSuggestions,
-                                  onSelect: _selectSuggestion,
-                                ),
+                              : _isSearching
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : _searchResults.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            "Type at least 3 characters",
+                                            style: TextStyle(color: Colors.black54),
+                                          ),
+                                        )
+                                      : _SearchDropdown(
+                                          results: _searchResults,
+                                          onSelect: _selectPlace,
+                                        ),
                         ),
                       ],
                     ],
@@ -171,20 +249,14 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                 ),
               ),
 
-              // Bottom "Ask MapParaan" bar (kept consistent with Frame 1).
-              // Hidden while the dropdown/error area is open so it
-              // doesn't compete with it for the user's attention.
+              // Bottom bar
               if (!showDropdownArea)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child:
-                          AskMapparaanBar(controller: _bottomAskController),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: AskMapparaanBar(controller: _bottomAskController),
                     ),
                   ),
                 ),
@@ -197,11 +269,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
 }
 
 class _SearchDropdown extends StatelessWidget {
-  final List<_SearchSuggestion> suggestions;
-  final ValueChanged<_SearchSuggestion> onSelect;
+  final List<PlaceResult> results;
+  final ValueChanged<PlaceResult> onSelect;
 
   const _SearchDropdown({
-    required this.suggestions,
+    required this.results,
     required this.onSelect,
   });
 
@@ -213,29 +285,25 @@ class _SearchDropdown extends StatelessWidget {
       elevation: 4,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: suggestions.length,
-        separatorBuilder: (context, index) => const Divider(
-          height: 1,
-          indent: 16,
-          endIndent: 16,
-        ),
+        itemCount: results.length,
+        separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
         itemBuilder: (context, index) {
-          final suggestion = suggestions[index];
+          final place = results[index];
           return ListTile(
             leading: const Icon(Icons.place_outlined, color: Colors.black54),
             title: Text(
-              suggestion.name,
+              place.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 15),
             ),
             subtitle: Text(
-              suggestion.subtitle,
+              place.subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
-            onTap: () => onSelect(suggestion),
+            onTap: () => onSelect(place),
           );
         },
       ),
@@ -243,11 +311,8 @@ class _SearchDropdown extends StatelessWidget {
   }
 }
 
-/// Frame 7 — shown in place of the dropdown when results can't load
-/// due to a connectivity issue.
 class _NoConnectionState extends StatelessWidget {
   final VoidCallback onRetry;
-
   const _NoConnectionState({required this.onRetry});
 
   @override
@@ -263,10 +328,7 @@ class _NoConnectionState extends StatelessWidget {
           children: [
             const Icon(Icons.wifi_off, size: 40, color: Colors.black45),
             const SizedBox(height: 16),
-            const Text(
-              "Couldn't load results",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            const Text("Couldn't load results", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             const Text(
               'Check your connection. Your search is still here.',
@@ -278,11 +340,8 @@ class _NoConnectionState extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00695C),
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: onRetry,
               child: const Text('Retry'),

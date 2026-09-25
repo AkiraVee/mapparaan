@@ -8,6 +8,7 @@ class AskMapparaanBar extends StatelessWidget {
   final String hintText;
   final bool autofocus;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;          // ← added
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
@@ -19,6 +20,7 @@ class AskMapparaanBar extends StatelessWidget {
     this.hintText = 'Ask MapParaan',
     this.autofocus = false,
     this.onSubmitted,
+    this.onChanged,                               // ← added
     this.onMicTap,
     this.leadingIcon = Icons.search,
     this.onLeadingTap,
@@ -55,6 +57,7 @@ class AskMapparaanBar extends StatelessWidget {
                   border: InputBorder.none,
                 ),
                 onSubmitted: onSubmitted,
+                onChanged: onChanged,             // ← added
               ),
             ),
             IconButton(
