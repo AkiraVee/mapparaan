@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 // TODO: re-enable once the Google Maps API key is set up.
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../widgets/circle_icon_button.dart';
+import '../widgets/ask_mapparaan_bar.dart';
+import '../widgets/mapparaan_drawer.dart';
+import 'search_location_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,19 +16,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  void openMenu() {
-    Scaffold.of(context).openDrawer();
+  void _goToSearchScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const SearchLocationScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Frame 4 (side menu) will hook into this drawer later.
-      drawer: const Drawer(
-        child: SafeArea(
-          child: Center(child: Text('Menu placeholder')),
-        ),
-      ),
+      drawer: const MapparaanDrawer(),
       body: Builder(
         builder: (context) {
           return Stack(
@@ -53,11 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _CircleIconButton(
+                      CircleIconButton(
                         icon: Icons.menu,
                         onTap: () => Scaffold.of(context).openDrawer(),
                       ),
-                      _CircleIconButton(
+                      CircleIconButton(
                         icon: Icons.my_location,
                         onTap: () {
                           // TODO: recenter map on user location
@@ -68,7 +69,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Bottom search / chat bar
+              // Bottom search / chat bar.
+              // Tapping it opens Frame 2 (Search Location).
               Align(
                 alignment: Alignment.bottomCenter,
                 child: SafeArea(
@@ -77,84 +79,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       horizontal: 16,
                       vertical: 12,
                     ),
-                    child: _AskMapparaanBar(controller: _searchController),
+                    child: GestureDetector(
+                      onTap: _goToSearchScreen,
+                      child: AbsorbPointer(
+                        // Absorb taps on the text field itself so the
+                        // whole bar just navigates to the search screen,
+                        // where real typing happens.
+                        child: AskMapparaanBar(controller: _searchController),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-/// Small circular button used for the top-left menu and top-right
-/// location icons.
-class _CircleIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CircleIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      elevation: 3,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: Colors.black87),
-        ),
-      ),
-    );
-  }
-}
-
-/// The pill-shaped "Ask MapParaan" search/voice bar pinned to the
-/// bottom of the screen.
-class _AskMapparaanBar extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _AskMapparaanBar({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            const Icon(Icons.search, color: Colors.black45),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  hintText: 'Ask MapParaan',
-                  border: InputBorder.none,
-                ),
-                onSubmitted: (query) {
-                  // TODO: hand query off to chatbot/NLU layer
-                },
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.mic, color: Colors.black87),
-              onPressed: () {
-                // TODO: hook up voice input
-              },
-            ),
-          ],
-        ),
       ),
     );
   }
