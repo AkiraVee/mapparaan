@@ -132,13 +132,14 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     );
 
     // Go to details screen
+    // Instead of pushing LocationDetailsScreen on top of the search screen,
+    // we use Navigator.pop. Because this screen was opened using await Navigator.push 
+    // from the HomeScreen, passing 'place' here sends the PlaceResult object 
+    // directly back to the HomeScreen's _goToSearchScreen function.
     if (mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => LocationDetailsScreen(placeName: place.name),
-        ),
-      );
+      Navigator.pop(context, place);
     }
+    // [ Note: The above comment explains that instead of pushing a new screen, we pop the current screen and send the selected place back to the previous screen. This is a common pattern in Flutter for returning data from a screen.]
   }
 
   void _retry() {
