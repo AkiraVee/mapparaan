@@ -1,14 +1,15 @@
-import 'dart:async';
+lib/screens/search_location_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
-
 import '../constants.dart';
 import '../services/place_search_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/mapparaan_drawer.dart';
+import 'location_details_screen.dart';
 
 class SearchLocationScreen extends StatefulWidget {
   const SearchLocationScreen({super.key});
@@ -30,6 +31,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   LatLng? _userLocation;
   List<PlaceResult> _searchResults = [];
   Timer? _debounce;
+  Symbol? _currentMarker;
 
   @override
   void initState() {
@@ -41,31 +43,25 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
-      }
-      if (permission == LocationPermission.deniedForever) return;
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
 
-      final position = await Geolocator.getCurrentPosition();
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-      });
+    final position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _userLocation = LatLng(position.latitude, position.longitude);
+    });
 
-      if (mapController != null && _userLocation != null) {
-        mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(_userLocation!, 14),
-        );
-      }
-    } catch (e) {
-      // geolocator_web has a known bug throwing here on some browsers —
-      // safe to ignore, the app just won't auto-center on your location.
-      debugPrint('Location fetch failed: $e');
+    if (mapController != null && _userLocation != null) {
+      mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_userLocation!, 14),
+      );
     }
   }
 
@@ -105,14 +101,46 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     });
   }
 
-  void _selectPlace(PlaceResult place) {
+  Future<void> _selectPlace(PlaceResult place) async {
     _topSearchFocusNode.unfocus();
+    _topSearchController.text = place.name;
 
-    // Hand the selected place straight back to HomeScreen. HomeScreen owns
-    // the persistent map instance, so it's the one that should animate the
-    // camera and draw the marker/bottom sheet — this screen is about to be
-    // popped off the stack entirely.
-    Navigator.of(context).pop(place);
+    if (mapController == null) return;
+
+    // Remove old marker
+    if (_currentMarker != null) {
+      await mapController!.removeSymbol(_currentMarker!);
+    }
+
+    // Move camera
+    await mapController!.animateCamera(
+      CameraUpdate.newLatLngZoom(place.coordinates, 15.5),
+    );
+
+    // Add new marker
+    _currentMarker = await mapController!.addSymbol(
+      SymbolOptions(
+        geometry: place.coordinates,
+        iconImage: "marker-15",
+        iconSize: 1.8,
+        textField: place.name,
+        textSize: 13,
+        textOffset: const Offset(0, 1.8),
+        textAnchor: "top",
+        textColor: "#000000",
+        textHaloColor: "#FFFFFF",
+        textHaloWidth: 1.5,
+      ),
+    );
+
+    // Go to details screen
+    if (mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => LocationDetailsScreen(placeName: place.name),
+        ),
+      );
+    }
   }
 
   void _retry() {
@@ -142,10 +170,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               // ===== MAP =====
               MapLibreMap(
                 initialCameraPosition: const CameraPosition(
-                  target: LatLng(
-                    AppConstants.defaultLat,
-                    AppConstants.defaultLng,
-                  ),
+                  target: LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
                   zoom: AppConstants.defaultZoom,
                 ),
                 styleString: AppConstants.mapStyleUrl,
@@ -173,9 +198,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                       Row(
                         children: [
                           CircleIconButton(
-                            icon: _isSearchFocused
-                                ? Icons.arrow_back
-                                : Icons.menu,
+                            icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
                             onTap: () {
                               if (_isSearchFocused) {
                                 _topSearchFocusNode.unfocus();
@@ -211,18 +234,18 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                           child: _hasConnectionError
                               ? _NoConnectionState(onRetry: _retry)
                               : _isSearching
-                              ? const Center(child: CircularProgressIndicator())
-                              : _searchResults.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    "Type at least 3 characters",
-                                    style: TextStyle(color: Colors.black54),
-                                  ),
-                                )
-                              : _SearchDropdown(
-                                  results: _searchResults,
-                                  onSelect: _selectPlace,
-                                ),
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : _searchResults.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            "Type at least 3 characters",
+                                            style: TextStyle(color: Colors.black54),
+                                          ),
+                                        )
+                                      : _SearchDropdown(
+                                          results: _searchResults,
+                                          onSelect: _selectPlace,
+                                        ),
                         ),
                       ],
                     ],
@@ -236,10 +259,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                   alignment: Alignment.bottomCenter,
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: AskMapparaanBar(controller: _bottomAskController),
                     ),
                   ),
@@ -256,7 +276,10 @@ class _SearchDropdown extends StatelessWidget {
   final List<PlaceResult> results;
   final ValueChanged<PlaceResult> onSelect;
 
-  const _SearchDropdown({required this.results, required this.onSelect});
+  const _SearchDropdown({
+    required this.results,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -267,8 +290,7 @@ class _SearchDropdown extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: results.length,
-        separatorBuilder: (context, index) =>
-            const Divider(height: 1, indent: 16, endIndent: 16),
+        separatorBuilder: (context, index) => const Divider(height: 1, indent: 16, endIndent: 16),
         itemBuilder: (context, index) {
           final place = results[index];
           return ListTile(
@@ -310,10 +332,7 @@ class _NoConnectionState extends StatelessWidget {
           children: [
             const Icon(Icons.wifi_off, size: 40, color: Colors.black45),
             const SizedBox(height: 16),
-            const Text(
-              "Couldn't load results",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            const Text("Couldn't load results", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             const Text(
               'Check your connection. Your search is still here.',
@@ -325,13 +344,8 @@ class _NoConnectionState extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00695C),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: onRetry,
               child: const Text('Retry'),

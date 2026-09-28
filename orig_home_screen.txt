@@ -1,12 +1,11 @@
+lib/screens/home_screen.dart
+
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-
 import '../constants.dart';
-import '../services/place_search_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
-import '../widgets/location_details_sheet.dart';
 import '../widgets/mapparaan_drawer.dart';
 import 'search_location_screen.dart';
 
@@ -20,81 +19,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   MapLibreMapController? mapController;
-  Symbol? _selectedMarker;
 
-  Future<void> _goToSearchScreen() async {
-    // Push the search screen and wait for it to pop back with the place the
-    // user tapped (or null if they backed out without picking anything).
-    final selectedPlace = await Navigator.of(context).push<PlaceResult>(
+  void _goToSearchScreen() {
+    Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const SearchLocationScreen()),
     );
-
-    print('DEBUG: got back from search = ${selectedPlace?.name}');
-    if (selectedPlace != null && mounted) {
-      await _onLocationSelected(selectedPlace);
-    }
-  }
-
-  Future<void> _onLocationSelected(PlaceResult place) async {
-    _searchController.text = place.name;
-
-    // 1. Animate the map camera to the selected coordinates.
-    if (mapController != null) {
-      // Clear any previous marker before dropping a new one.
-      if (_selectedMarker != null) {
-        await mapController!.removeSymbol(_selectedMarker!);
-        _selectedMarker = null;
-      }
-
-      await mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(place.coordinates, 15.5),
-      );
-
-      _selectedMarker = await mapController!.addSymbol(
-        SymbolOptions(
-          geometry: place.coordinates,
-          iconImage: "marker-15",
-          iconSize: 1.8,
-          textField: place.name,
-          textSize: 13,
-          textOffset: const Offset(0, 1.8),
-          textAnchor: "top",
-          textColor: "#000000",
-          textHaloColor: "#FFFFFF",
-          textHaloWidth: 1.5,
-        ),
-      );
-    }
-
-    if (!mounted) return;
-
-    // 2. Show the location details as a modal bottom sheet over the map.
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => LocationDetailsSheet(
-        title: place.name,
-        address: place.subtitle,
-        onClose: () => Navigator.of(sheetContext).pop(),
-        onDirections: () {
-          // TODO: wire up turn-by-turn directions.
-        },
-        onSave: () {
-          // TODO: persist this place to the user's saved locations.
-        },
-        onShare: () {
-          // TODO: share the place (e.g. via share_plus).
-        },
-      ),
-    ).whenComplete(() async {
-      // Clean up the marker once the sheet is dismissed, so the map doesn't
-      // accumulate stale pins if the user searches again.
-      if (_selectedMarker != null && mapController != null) {
-        await mapController!.removeSymbol(_selectedMarker!);
-        _selectedMarker = null;
-      }
-    });
   }
 
   Future<void> _goToMyLocation() async {
@@ -123,9 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission permanently denied'),
-          ),
+          const SnackBar(content: Text('Location permission permanently denied')),
         );
         return;
       }
@@ -146,9 +73,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $e')),
+        );
       }
     }
   }
@@ -164,10 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // ===== MAP =====
               MapLibreMap(
                 initialCameraPosition: const CameraPosition(
-                  target: LatLng(
-                    AppConstants.defaultLat,
-                    AppConstants.defaultLng,
-                  ),
+                  target: LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
                   zoom: AppConstants.defaultZoom,
                 ),
                 styleString: AppConstants.mapStyleUrl,
@@ -183,10 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // ===== TOP BAR =====
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
                       CircleIconButton(
@@ -209,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       CircleIconButton(
                         icon: Icons.my_location,
-                        onTap: _goToMyLocation, // ← only this button has the function
+                        onTap: _goToMyLocation,   // ← only this button has the function
                       ),
                     ],
                   ),
