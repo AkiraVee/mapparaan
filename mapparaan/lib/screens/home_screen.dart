@@ -1,6 +1,7 @@
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../constants.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/mapparaan_drawer.dart';
@@ -26,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _goToMyLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enable location services')),
@@ -36,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (!mounted) return;
         if (permission == LocationPermission.denied) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Location permission denied')),
@@ -44,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
+      if (!mounted) return;
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Location permission permanently denied')),
@@ -52,8 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
+      if (!mounted) return;
 
       final userLatLng = LatLng(position.latitude, position.longitude);
 
@@ -63,9 +70,11 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error getting location: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $e')),
+        );
+      }
     }
   }
 
@@ -73,73 +82,76 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: const MapparaanDrawer(),
-      body: Stack(
-        children: [
-          // ===== MAP =====
-          MapLibreMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(14.5995, 120.9842),
-              zoom: 12.0,
-            ),
-            styleString: "https://demotiles.maplibre.org/style.json",
-            onMapCreated: (controller) {
-              mapController = controller;
-            },
-            myLocationEnabled: true,          // keeps the blue dot only
-            compassEnabled: false,
-            trackCameraPosition: true,
-            // These help hide any remaining default buttons
-            myLocationTrackingMode: MyLocationTrackingMode.none,
-          ),
+      body: Builder(
+        builder: (context) {
+          return Stack(
+            children: [
+              // ===== MAP =====
+              MapLibreMap(
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                  zoom: AppConstants.defaultZoom,
+                ),
+                styleString: AppConstants.mapStyleUrl,
+                onMapCreated: (controller) {
+                  mapController = controller;
+                },
+                myLocationEnabled: true,
+                compassEnabled: false,
+                trackCameraPosition: true,
+                myLocationTrackingMode: MyLocationTrackingMode.none,
+              ),
 
-          // ===== TOP BAR =====
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  CircleIconButton(
-                    icon: Icons.menu,
-                    onTap: () => Scaffold.of(context).openDrawer(),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _goToSearchScreen,
-                      child: AbsorbPointer(
-                        child: AskMapparaanBar(
-                          controller: _searchController,
-                          hintText: 'Search here',
-                          leadingIcon: Icons.search,
+              // ===== TOP BAR =====
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      CircleIconButton(
+                        icon: Icons.menu,
+                        onTap: () => Scaffold.of(context).openDrawer(),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _goToSearchScreen,
+                          child: AbsorbPointer(
+                            child: AskMapparaanBar(
+                              controller: _searchController,
+                              hintText: 'Search here',
+                              leadingIcon: Icons.search,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      CircleIconButton(
+                        icon: Icons.my_location,
+                        onTap: _goToMyLocation,   // ← only this button has the function
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  CircleIconButton(
-                    icon: Icons.my_location,
-                    onTap: _goToMyLocation,   // ← only this button has the function
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ===== BOTTOM BAR =====
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: SafeArea(
-              child: GestureDetector(
-                onTap: _goToSearchScreen,
-                child: AbsorbPointer(
-                  child: AskMapparaanBar(controller: _searchController),
                 ),
               ),
-            ),
-          ),
-        ],
+
+              // ===== BOTTOM BAR =====
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: SafeArea(
+                  child: GestureDetector(
+                    onTap: _goToSearchScreen,
+                    child: AbsorbPointer(
+                      child: AskMapparaanBar(controller: _searchController),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

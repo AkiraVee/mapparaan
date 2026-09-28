@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
+import '../constants.dart';
 import '../services/place_search_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
@@ -167,10 +168,10 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               // ===== MAP =====
               MapLibreMap(
                 initialCameraPosition: const CameraPosition(
-                  target: LatLng(14.5995, 120.9842),
-                  zoom: 12.0,
+                  target: LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                  zoom: AppConstants.defaultZoom,
                 ),
-                styleString: "https://demotiles.maplibre.org/style.json",
+                styleString: AppConstants.mapStyleUrl,
                 onMapCreated: (controller) {
                   mapController = controller;
                   if (_userLocation != null) {
@@ -181,6 +182,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                 },
                 myLocationEnabled: true,
                 compassEnabled: false,
+                myLocationTrackingMode: MyLocationTrackingMode.none,
               ),
 
               // Top bar + results
@@ -286,7 +288,7 @@ class _SearchDropdown extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: results.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+        separatorBuilder: (context, index) => const Divider(height: 1, indent: 16, endIndent: 16),
         itemBuilder: (context, index) {
           final place = results[index];
           return ListTile(

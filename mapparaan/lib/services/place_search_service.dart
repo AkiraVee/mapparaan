@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:maplibre_gl/maplibre_gl.dart';
+import '../constants.dart';
 
 class PlaceResult {
   final String name;
@@ -19,16 +21,16 @@ class PlaceSearchService {
   static const String _userAgent = 'Mapparaan/1.0 (Flutter; Metro Manila Commuter App)';
 
   static Future<List<PlaceResult>> search(String query) async {
-    if (query.trim().length < 3) return [];
+    if (query.trim().length < AppConstants.searchMinQueryLength) return [];
 
     final url = Uri.parse(
       'https://nominatim.openstreetmap.org/search'
       '?q=${Uri.encodeComponent(query)}'
       '&format=json'
       '&addressdetails=1'
-      '&limit=8'
-      '&countrycodes=ph' // prioritize Philippines
-      '&viewbox=120.9,14.4,121.2,14.8' // rough Metro Manila bias
+      '&limit=${AppConstants.searchResultLimit}'
+      '&countrycodes=${AppConstants.searchCountryCodes}'
+      '&viewbox=${AppConstants.searchViewbox}'
       '&bounded=0',
     );
 
@@ -61,7 +63,7 @@ class PlaceSearchService {
         );
       }).toList();
     } catch (e) {
-      print('Search error: $e');
+      debugPrint('Search error: $e');
       return [];
     }
   }
