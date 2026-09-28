@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../screens/drawer_destination_screen.dart';
+
 /// The side menu (drawer) shown across Mapparaan's screens.
-/// Matches Frame 4 of the wireframe: a back arrow, a set of
-/// navigation items, and a larger card at the bottom.
 class MapparaanDrawer extends StatelessWidget {
   const MapparaanDrawer({super.key});
 
@@ -11,61 +11,124 @@ class MapparaanDrawer extends StatelessWidget {
     return Drawer(
       backgroundColor: Colors.white,
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Back arrow to close the menu
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 28),
-                onPressed: () => Navigator.of(context).pop(),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 20),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 23,
+                    backgroundColor: Color(0xFFE0F2F1),
+                    child: Icon(Icons.alt_route, color: Color(0xFF00695C)),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mapparaan',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Your commute, simplified',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close navigation menu',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 8),
-
-              _MenuItem(
-                icon: Icons.person_outline,
-                label: 'My Profile',
-                onTap: () {
-                  // TODO: navigate to profile screen
-                },
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: Text(
+                      'YOUR ACCOUNT',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ),
+                  _MenuItem(
+                    icon: Icons.person_outline,
+                    label: 'My Profile',
+                    onTap: () =>
+                        _openDestination(context, DrawerDestination.profile),
+                  ),
+                  _MenuItem(
+                    icon: Icons.bookmark_border,
+                    label: 'Saved Places',
+                    onTap: () => _openDestination(
+                      context,
+                      DrawerDestination.savedPlaces,
+                    ),
+                  ),
+                  _MenuItem(
+                    icon: Icons.history,
+                    label: 'Trip History',
+                    onTap: () => _openDestination(
+                      context,
+                      DrawerDestination.tripHistory,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 20, 12, 8),
+                    child: Text(
+                      'PREFERENCES',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ),
+                  _MenuItem(
+                    icon: Icons.settings_outlined,
+                    label: 'Settings',
+                    onTap: () =>
+                        _openDestination(context, DrawerDestination.settings),
+                  ),
+                  const SizedBox(height: 20),
+                  _HelpCard(
+                    onTap: () => _openDestination(
+                      context,
+                      DrawerDestination.helpSupport,
+                    ),
+                  ),
+                ],
               ),
-              _MenuItem(
-                icon: Icons.bookmark_border,
-                label: 'Saved Places',
-                onTap: () {
-                  // TODO: navigate to saved places screen
-                },
-              ),
-              _MenuItem(
-                icon: Icons.history,
-                label: 'Trip History',
-                onTap: () {
-                  // TODO: navigate to trip history screen
-                },
-              ),
-              _MenuItem(
-                icon: Icons.settings_outlined,
-                label: 'Settings',
-                onTap: () {
-                  // TODO: navigate to settings screen
-                },
-              ),
-
-              const Spacer(),
-
-              // Larger card at the bottom (help & support)
-              _HelpCard(
-                onTap: () {
-                  // TODO: navigate to help & support screen
-                },
-              ),
-
-              const SizedBox(height: 12),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  void _openDestination(BuildContext context, DrawerDestination destination) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => DrawerDestinationScreen(destination: destination),
       ),
     );
   }
@@ -84,28 +147,12 @@ class _MenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF0F0F0),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          width: double.infinity,
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.black87),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: const TextStyle(fontSize: 15, color: Colors.black87),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      leading: Icon(icon, color: const Color(0xFF00695C)),
+      title: Text(label, style: const TextStyle(fontSize: 15)),
+      trailing: const Icon(Icons.chevron_right, color: Colors.black38),
+      onTap: onTap,
     );
   }
 }
@@ -118,27 +165,18 @@ class _HelpCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF0F0F0),
-      borderRadius: BorderRadius.circular(16),
+      color: const Color(0xFFE0F2F1),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          child: const Row(
-            children: [
-              Icon(Icons.help_outline, color: Colors.black87),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Help & Support',
-                  style: TextStyle(fontSize: 15, color: Colors.black87),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: Colors.black45),
-            ],
+        child: const ListTile(
+          leading: Icon(Icons.help_outline, color: Color(0xFF00695C)),
+          title: Text(
+            'Help & Support',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
+          trailing: Icon(Icons.chevron_right, color: Color(0xFF00695C)),
         ),
       ),
     );
