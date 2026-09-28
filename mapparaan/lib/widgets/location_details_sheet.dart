@@ -1,3 +1,5 @@
+// added a new file for location details bottom sheet UI
+
 import 'package:flutter/material.dart';
 
 /// A reusable Bottom Sheet UI widget that displays location details.
