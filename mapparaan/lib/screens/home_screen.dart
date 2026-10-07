@@ -1,6 +1,7 @@
-import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/place_search_service.dart';
@@ -19,8 +20,16 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
-  MapLibreMapController? mapController;
-  Symbol? _selectedMarker;
+  final MapController _mapController = MapController();
+  Marker? _selectedMarker;
+  LatLng? _userLocation;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
 
   Future<void> _goToSearchScreen() async {
     // Push the search screen and wait for it to pop back with the place the
@@ -29,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (context) => const SearchLocationScreen()),
     );
 
-    print('DEBUG: got back from search = ${selectedPlace?.name}');
     if (selectedPlace != null && mounted) {
       await _onLocationSelected(selectedPlace);
     }
@@ -38,33 +46,47 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onLocationSelected(PlaceResult place) async {
     _searchController.text = place.name;
 
-    // 1. Animate the map camera to the selected coordinates.
-    if (mapController != null) {
-      // Clear any previous marker before dropping a new one.
-      if (_selectedMarker != null) {
-        await mapController!.removeSymbol(_selectedMarker!);
-        _selectedMarker = null;
-      }
+    // 1. Move the map camera to the selected coordinates.
+    _mapController.move(place.coordinates, 15.5);
 
-      await mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(place.coordinates, 15.5),
-      );
-
-      _selectedMarker = await mapController!.addSymbol(
-        SymbolOptions(
-          geometry: place.coordinates,
-          iconImage: "marker-15",
-          iconSize: 1.8,
-          textField: place.name,
-          textSize: 13,
-          textOffset: const Offset(0, 1.8),
-          textAnchor: "top",
-          textColor: "#000000",
-          textHaloColor: "#FFFFFF",
-          textHaloWidth: 1.5,
+    setState(() {
+      _selectedMarker = Marker(
+        point: place.coordinates,
+        width: 140,
+        height: 60,
+        alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_on, color: Colors.red, size: 36),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                place.name,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       );
-    }
+    });
 
     if (!mounted) return;
 
@@ -87,12 +109,12 @@ class _HomeScreenState extends State<HomeScreen> {
           // TODO: share the place (e.g. via share_plus).
         },
       ),
-    ).whenComplete(() async {
-      // Clean up the marker once the sheet is dismissed, so the map doesn't
-      // accumulate stale pins if the user searches again.
-      if (_selectedMarker != null && mapController != null) {
-        await mapController!.removeSymbol(_selectedMarker!);
-        _selectedMarker = null;
+    ).whenComplete(() {
+      // Clean up the marker once the sheet is dismissed.
+      if (mounted) {
+        setState(() {
+          _selectedMarker = null;
+        });
       }
     });
   }
@@ -138,12 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       final userLatLng = LatLng(position.latitude, position.longitude);
-
-      if (mapController != null) {
-        await mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(userLatLng, 15.0),
-        );
-      }
+      setState(() {
+        _userLocation = userLatLng;
+      });
+      _mapController.move(userLatLng, 15.0);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -162,22 +182,52 @@ class _HomeScreenState extends State<HomeScreen> {
           return Stack(
             children: [
               // ===== MAP =====
-              MapLibreMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(
+              FlutterMap(
+                mapController: _mapController,
+                options: const MapOptions(
+                  initialCenter: LatLng(
                     AppConstants.defaultLat,
                     AppConstants.defaultLng,
                   ),
-                  zoom: AppConstants.defaultZoom,
+                  initialZoom: AppConstants.defaultZoom,
                 ),
-                styleString: AppConstants.mapStyleUrl,
-                onMapCreated: (controller) {
-                  mapController = controller;
-                },
-                myLocationEnabled: true,
-                compassEnabled: false,
-                trackCameraPosition: true,
-                myLocationTrackingMode: MyLocationTrackingMode.none,
+                children: [
+                  TileLayer(
+                    urlTemplate: AppConstants.mapTileUrl,
+                    userAgentPackageName: AppConstants.appPackageName,
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      if (_userLocation != null)
+                        Marker(
+                          point: _userLocation!,
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ?_selectedMarker,
+                    ],
+                  ),
+                ],
               ),
 
               // ===== TOP BAR =====
@@ -209,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       CircleIconButton(
                         icon: Icons.my_location,
-                        onTap: _goToMyLocation, // ← only this button has the function
+                        onTap: _goToMyLocation,
                       ),
                     ],
                   ),

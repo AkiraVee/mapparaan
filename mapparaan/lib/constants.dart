@@ -4,18 +4,25 @@ library;
 class AppConstants {
   AppConstants._();
 
-  // ── Map tile style ──────────────────────────────────────────────────────────
-  /// OpenFreeMap liberty style — free, no API key required.
-  /// Attribution is automatically added by MapLibre.
-  /// See: https://openfreemap.org
-  static const String mapStyleUrl =
-      'https://tiles.openfreemap.org/styles/liberty';
+  // ── Map tiles ───────────────────────────────────────────────────────────────
+  /// CARTO "Voyager" raster tiles (OpenStreetMap data) — free, no API key.
+  /// Same basemap used by the AnoTara web app. `{s}` = subdomains a–d,
+  /// `{r}` = "@2x" on high-density screens.
+  static const String mapTileUrl =
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  static const List<String> mapTileSubdomains = ['a', 'b', 'c', 'd'];
+  static const String appPackageName = 'com.example.mapparaan';
+
+  /// Attribution required by OpenStreetMap and CARTO.
+  static const String mapAttribution = '© OpenStreetMap contributors © CARTO';
 
   // ── Default camera ──────────────────────────────────────────────────────────
-  /// Metro Manila center (Luneta Park).
-  static const double defaultLat = 14.5995;
-  static const double defaultLng = 120.9842;
-  static const double defaultZoom = 12.0;
+  /// Central Manila (matches the AnoTara web app).
+  static const double defaultLat = 14.59;
+  static const double defaultLng = 120.976;
+  static const double defaultZoom = 14.0;
+  static const double minZoom = 12.0;
+  static const double maxZoom = 19.0;
 
   // ── Nominatim search ────────────────────────────────────────────────────────
   /// Rough bounding box for Metro Manila (for search bias).

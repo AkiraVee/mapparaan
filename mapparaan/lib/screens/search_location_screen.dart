@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/place_search_service.dart';
@@ -21,8 +22,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   final TextEditingController _topSearchController = TextEditingController();
   final TextEditingController _bottomAskController = TextEditingController();
   final FocusNode _topSearchFocusNode = FocusNode();
+  final MapController _mapController = MapController();
 
-  MapLibreMapController? mapController;
   bool _isSearchFocused = false;
   bool _hasConnectionError = false;
   bool _isSearching = false;
@@ -53,15 +54,12 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       if (permission == LocationPermission.deniedForever) return;
 
       final position = await Geolocator.getCurrentPosition();
+      final userLatLng = LatLng(position.latitude, position.longitude);
       setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
+        _userLocation = userLatLng;
       });
 
-      if (mapController != null && _userLocation != null) {
-        mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(_userLocation!, 14),
-        );
-      }
+      _mapController.move(userLatLng, 14.0);
     } catch (e) {
       // geolocator_web has a known bug throwing here on some browsers —
       // safe to ignore, the app just won't auto-center on your location.
@@ -70,10 +68,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   void _goToMyLocation() {
-    if (_userLocation != null && mapController != null) {
-      mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(_userLocation!, 15),
-      );
+    if (_userLocation != null) {
+      _mapController.move(_userLocation!, 15.0);
     } else {
       _getCurrentLocation();
     }
@@ -126,6 +122,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _topSearchController.dispose();
     _bottomAskController.dispose();
     _topSearchFocusNode.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -140,26 +137,52 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
           return Stack(
             children: [
               // ===== MAP =====
-              MapLibreMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(
-                    AppConstants.defaultLat,
-                    AppConstants.defaultLng,
-                  ),
-                  zoom: AppConstants.defaultZoom,
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _userLocation ??
+                      const LatLng(
+                        AppConstants.defaultLat,
+                        AppConstants.defaultLng,
+                      ),
+                  initialZoom: AppConstants.defaultZoom,
                 ),
-                styleString: AppConstants.mapStyleUrl,
-                onMapCreated: (controller) {
-                  mapController = controller;
-                  if (_userLocation != null) {
-                    controller.animateCamera(
-                      CameraUpdate.newLatLngZoom(_userLocation!, 14),
-                    );
-                  }
-                },
-                myLocationEnabled: true,
-                compassEnabled: false,
-                myLocationTrackingMode: MyLocationTrackingMode.none,
+                children: [
+                  TileLayer(
+                    urlTemplate: AppConstants.mapTileUrl,
+                    userAgentPackageName: AppConstants.appPackageName,
+                  ),
+                  if (_userLocation != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _userLocation!,
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
 
               // Top bar + results
