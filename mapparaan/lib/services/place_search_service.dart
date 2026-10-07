@@ -23,6 +23,8 @@ class PlaceSearchService {
   static Future<List<PlaceResult>> search(String query) async {
     if (query.trim().length < AppConstants.searchMinQueryLength) return [];
 
+    // bounded=1 restricts results to the Manila viewbox (no more results
+    // from elsewhere in the Philippines).
     final url = Uri.parse(
       'https://nominatim.openstreetmap.org/search'
       '?q=${Uri.encodeComponent(query)}'
@@ -31,7 +33,7 @@ class PlaceSearchService {
       '&limit=${AppConstants.searchResultLimit}'
       '&countrycodes=${AppConstants.searchCountryCodes}'
       '&viewbox=${AppConstants.searchViewbox}'
-      '&bounded=0',
+      '&bounded=1',
     );
 
     try {

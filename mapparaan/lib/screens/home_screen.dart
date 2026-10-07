@@ -102,14 +102,18 @@ class _HomeScreenState extends State<HomeScreen> {
               // ===== MAP =====
               FlutterMap(
                 mapController: _mapController,
-                options: const MapOptions(
-                  initialCenter: LatLng(
+                options: MapOptions(
+                  initialCenter: const LatLng(
                     AppConstants.defaultLat,
                     AppConstants.defaultLng,
                   ),
                   initialZoom: AppConstants.defaultZoom,
                   minZoom: AppConstants.minZoom,
                   maxZoom: AppConstants.maxZoom,
+                  // Manila only: can't pan outside the bounds.
+                  cameraConstraint: CameraConstraint.contain(
+                    bounds: AppConstants.manilaBounds,
+                  ),
                 ),
                 children: [
                   const MapparaanTileLayer(),

@@ -42,7 +42,7 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 |---|---|---|
 | **Mobile app** | Flutter (Dart) | Single codebase for Android/iOS (also runs on web for development) |
 | **Map rendering** | `flutter_map` + `latlong2` | Pure-Dart map widget; markers, polylines, route display. No API key or native SDK needed |
-| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. A warm sepia tint is applied in `MapparaanTileLayer` to match the AnoTara look. `flutter_map_cancellable_tile_provider` is used for better web performance |
+| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. A warm sepia tint is applied in `MapparaanTileLayer`. `flutter_map_cancellable_tile_provider` is used for better web performance |
 | **Place search** | Nominatim (OpenStreetMap) | Called from `PlaceSearchService`; limited to the Philippines and biased to Metro Manila. Public instance has usage limits, so self-host or switch providers for production |
 | **User location** | `geolocator` | Requested only when the user taps "my location" |
 | **Driving/walking routing** | OSRM (self-hosted) or Google Routes API | Planned. Traffic-aware ETAs for road-based legs |
