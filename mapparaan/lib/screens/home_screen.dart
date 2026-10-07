@@ -5,10 +5,11 @@ import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/place_search_service.dart';
-import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
+import '../widgets/circle_icon_button.dart';
 import '../widgets/location_details_sheet.dart';
 import '../widgets/mapparaan_drawer.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 import 'search_location_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,8 +22,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
-  Marker? _selectedMarker;
+
   LatLng? _userLocation;
+  PlaceResult? _selectedPlace;
 
   @override
   void dispose() {
@@ -31,124 +33,46 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _goToSearchScreen() async {
-    // Push the search screen and wait for it to pop back with the place the
-    // user tapped (or null if they backed out without picking anything).
-    final selectedPlace = await Navigator.of(context).push<PlaceResult>(
-      MaterialPageRoute(builder: (context) => const SearchLocationScreen()),
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
-
-    if (selectedPlace != null && mounted) {
-      await _onLocationSelected(selectedPlace);
-    }
   }
 
-  Future<void> _onLocationSelected(PlaceResult place) async {
-    _searchController.text = place.name;
+  /// Opens the search screen and, if the user picks a place, drops a pin on
+  /// this screen's map and shows the details sheet.
+  Future<void> _goToSearchScreen() async {
+    final place = await Navigator.of(context).push<PlaceResult>(
+      MaterialPageRoute(builder: (context) => const SearchLocationScreen()),
+    );
+    if (!mounted || place == null) return;
 
-    // 1. Move the map camera to the selected coordinates.
-    _mapController.move(place.coordinates, 15.5);
-
-    setState(() {
-      _selectedMarker = Marker(
-        point: place.coordinates,
-        width: 140,
-        height: 60,
-        alignment: Alignment.topCenter,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.location_on, color: Colors.red, size: 36),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                place.name,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-
-    if (!mounted) return;
-
-    // 2. Show the location details as a modal bottom sheet over the map.
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => LocationDetailsSheet(
-        title: place.name,
-        address: place.subtitle,
-        onClose: () => Navigator.of(sheetContext).pop(),
-        onDirections: () {
-          // TODO: wire up turn-by-turn directions.
-        },
-        onSave: () {
-          // TODO: persist this place to the user's saved locations.
-        },
-        onShare: () {
-          // TODO: share the place (e.g. via share_plus).
-        },
-      ),
-    ).whenComplete(() {
-      // Clean up the marker once the sheet is dismissed.
-      if (mounted) {
-        setState(() {
-          _selectedMarker = null;
-        });
-      }
-    });
+    setState(() => _selectedPlace = place);
+    _mapController.move(place.coordinates, 16.0);
   }
 
   Future<void> _goToMyLocation() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!mounted) return;
       if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enable location services')),
-        );
+        _showMessage('Please enable location services');
         return;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (!mounted) return;
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission denied')),
-          );
+          _showMessage('Location permission denied');
           return;
         }
       }
 
       if (!mounted) return;
       if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission permanently denied'),
-          ),
-        );
+        _showMessage('Location permission permanently denied');
         return;
       }
 
@@ -160,16 +84,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       final userLatLng = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _userLocation = userLatLng;
-      });
+      setState(() => _userLocation = userLatLng);
       _mapController.move(userLatLng, 15.0);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
-      }
+      if (mounted) _showMessage('Error getting location: $e');
     }
   }
 
@@ -190,12 +108,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     AppConstants.defaultLng,
                   ),
                   initialZoom: AppConstants.defaultZoom,
+                  minZoom: AppConstants.minZoom,
+                  maxZoom: AppConstants.maxZoom,
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate: AppConstants.mapTileUrl,
-                    userAgentPackageName: AppConstants.appPackageName,
-                  ),
+                  const MapparaanTileLayer(),
                   MarkerLayer(
                     markers: [
                       if (_userLocation != null)
@@ -224,7 +141,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                      ?_selectedMarker,
+                      if (_selectedPlace != null)
+                        Marker(
+                          point: _selectedPlace!.coordinates,
+                          width: 40,
+                          height: 40,
+                          // Anchor the pin's tip on the coordinate.
+                          alignment: Alignment.topCenter,
+                          child: const Icon(
+                            Icons.location_on,
+                            size: 40,
+                            color: Color(0xFFD32F2F),
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -233,10 +162,8 @@ class _HomeScreenState extends State<HomeScreen> {
               // ===== TOP BAR =====
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
                       CircleIconButton(
@@ -266,19 +193,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // ===== BOTTOM BAR =====
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 16,
-                child: SafeArea(
-                  child: GestureDetector(
-                    onTap: _goToSearchScreen,
-                    child: AbsorbPointer(
-                      child: AskMapparaanBar(controller: _searchController),
-                    ),
-                  ),
-                ),
+              // ===== BOTTOM: details sheet or Ask bar =====
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _selectedPlace != null
+                    ? LocationDetailsSheet(
+                        title: _selectedPlace!.name,
+                        address: _selectedPlace!.subtitle,
+                        onClose: () => setState(() => _selectedPlace = null),
+                        // TODO: hook up routing, saved places, and sharing.
+                      )
+                    : SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: GestureDetector(
+                            onTap: _goToSearchScreen,
+                            child: AbsorbPointer(
+                              child: AskMapparaanBar(
+                                controller: _searchController,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ],
           );
