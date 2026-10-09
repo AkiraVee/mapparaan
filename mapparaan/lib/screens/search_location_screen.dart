@@ -6,13 +6,23 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
+import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
-import '../widgets/circle_icon_button.dart';
 import '../widgets/ask_mapparaan_bar.dart';
+import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 
 class SearchLocationScreen extends StatefulWidget {
-  const SearchLocationScreen({super.key});
+  final String? initialQuery;
+  final bool showMap;
+  final PlaceSearch searchPlaces;
+
+  const SearchLocationScreen({
+    super.key,
+    this.initialQuery,
+    this.showMap = true,
+    this.searchPlaces = PlaceSearchService.search,
+  });
 
   @override
   State<SearchLocationScreen> createState() => _SearchLocationScreenState();
@@ -27,6 +37,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   bool _isSearchFocused = false;
   bool _hasConnectionError = false;
   bool _isSearching = false;
+  bool _isAiResolving = false;
 
   LatLng? _userLocation;
   List<PlaceResult> _searchResults = [];
@@ -35,18 +46,24 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _topSearchController.text = widget.initialQuery!;
+    }
     _topSearchFocusNode.addListener(() {
       setState(() => _isSearchFocused = _topSearchFocusNode.hasFocus);
     });
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _onSearchChanged(widget.initialQuery!);
+    }
     _getCurrentLocation();
   }
 
   Future<void> _getCurrentLocation() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return;
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) return;
@@ -55,14 +72,10 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
 
       final position = await Geolocator.getCurrentPosition();
       final userLatLng = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _userLocation = userLatLng;
-      });
-
+      if (!mounted) return;
+      setState(() => _userLocation = userLatLng);
       _mapController.move(userLatLng, 14.0);
     } catch (e) {
-      // geolocator_web has a known bug throwing here on some browsers —
-      // safe to ignore, the app just won't auto-center on your location.
       debugPrint('Location fetch failed: $e');
     }
   }
@@ -79,23 +92,34 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 700), () async {
-      if (query.trim().length < 3) {
+      final trimmed = query.trim();
+      if (trimmed.length < 3) {
+        if (!mounted) return;
         setState(() {
           _searchResults = [];
           _isSearching = false;
+          _hasConnectionError = false;
         });
         return;
       }
 
+      if (!mounted) return;
       setState(() => _isSearching = true);
 
-      final results = await PlaceSearchService.search(query);
-
-      if (mounted) {
+      try {
+        final results = await widget.searchPlaces(trimmed);
+        if (!mounted) return;
         setState(() {
           _searchResults = results;
           _isSearching = false;
           _hasConnectionError = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _searchResults = const [];
+          _isSearching = false;
+          _hasConnectionError = true;
         });
       }
     });
@@ -103,12 +127,54 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
 
   void _selectPlace(PlaceResult place) {
     _topSearchFocusNode.unfocus();
+    Navigator.of(context).pop(
+      SearchSelection(
+        place: place,
+        resolution: AiQueryResolution.fromQuery(_topSearchController.text.trim()),
+      ),
+    );
+  }
 
-    // Hand the selected place straight back to HomeScreen. HomeScreen owns
-    // the persistent map instance, so it's the one that should animate the
-    // camera and draw the marker/bottom sheet — this screen is about to be
-    // popped off the stack entirely.
-    Navigator.of(context).pop(place);
+  Future<void> _handleAiQuery(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() {
+      _isAiResolving = true;
+      _isSearching = true;
+    });
+
+    try {
+      final results = await AiAssistantService.resolveQuery(trimmed);
+      if (!mounted) return;
+      if (results.isEmpty) {
+        setState(() {
+          _searchResults = const [];
+          _isSearching = false;
+          _isAiResolving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No matching place found for that request.')),
+        );
+        return;
+      }
+
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+        _isAiResolving = false;
+      });
+
+      final selected = results.first;
+      Future.microtask(() => _selectPlace(selected));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSearching = false;
+        _isAiResolving = false;
+        _hasConnectionError = true;
+      });
+    }
   }
 
   void _retry() {
@@ -128,148 +194,137 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showDropdownArea = _isSearchFocused;
+    final showDropdownArea = _isSearchFocused || _searchResults.isNotEmpty;
 
     return Scaffold(
       drawer: const MapparaanDrawer(),
-      body: Builder(
-        builder: (context) {
-          return Stack(
-            children: [
-              // ===== MAP =====
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _userLocation ??
-                      const LatLng(
-                        AppConstants.defaultLat,
-                        AppConstants.defaultLng,
-                      ),
-                  initialZoom: AppConstants.defaultZoom,
+      body: Stack(
+        children: [
+          if (widget.showMap)
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter:
+                    _userLocation ?? const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                initialZoom: AppConstants.defaultZoom,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: AppConstants.mapTileUrl,
+                  userAgentPackageName: AppConstants.appPackageName,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: AppConstants.mapTileUrl,
-                    userAgentPackageName: AppConstants.appPackageName,
-                  ),
-                  if (_userLocation != null)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: _userLocation!,
-                          width: 24,
-                          height: 24,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.3),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: 14,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: Colors.blueAccent,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2.5,
-                                  ),
+                if (_userLocation != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _userLocation!,
+                        width: 24,
+                        height: 24,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.blueAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2.5,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                ],
-              ),
-
-              // Top bar + results
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          CircleIconButton(
-                            icon: _isSearchFocused
-                                ? Icons.arrow_back
-                                : Icons.menu,
-                            onTap: () {
-                              if (_isSearchFocused) {
-                                _topSearchFocusNode.unfocus();
-                              } else {
-                                Scaffold.of(context).openDrawer();
-                              }
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: AskMapparaanBar(
-                              controller: _topSearchController,
-                              focusNode: _topSearchFocusNode,
-                              hintText: 'Search here',
-                              leadingIcon: Icons.search,
-                              onChanged: _onSearchChanged,
-                              onSubmitted: _onSearchChanged,
-                            ),
-                          ),
-                          if (!_isSearchFocused) ...[
-                            const SizedBox(width: 8),
-                            CircleIconButton(
-                              icon: Icons.my_location,
-                              onTap: _goToMyLocation,
-                            ),
-                          ],
-                        ],
                       ),
-
-                      if (showDropdownArea) ...[
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: _hasConnectionError
-                              ? _NoConnectionState(onRetry: _retry)
-                              : _isSearching
-                              ? const Center(child: CircularProgressIndicator())
-                              : _searchResults.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    "Type at least 3 characters",
-                                    style: TextStyle(color: Colors.black54),
-                                  ),
-                                )
-                              : _SearchDropdown(
-                                  results: _searchResults,
-                                  onSelect: _selectPlace,
-                                ),
+                    ],
+                  ),
+              ],
+            )
+          else
+            const Positioned.fill(child: ColoredBox(color: Color(0xFFF3F5F3))),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      CircleIconButton(
+                        icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
+                        onTap: () {
+                          if (_isSearchFocused) {
+                            _topSearchFocusNode.unfocus();
+                          } else {
+                            Scaffold.of(context).openDrawer();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AskMapparaanBar(
+                          controller: _topSearchController,
+                          focusNode: _topSearchFocusNode,
+                          hintText: 'Search here',
+                          leadingIcon: Icons.search,
+                          onChanged: _onSearchChanged,
+                          onSubmitted: _onSearchChanged,
+                        ),
+                      ),
+                      if (!_isSearchFocused) ...[
+                        const SizedBox(width: 8),
+                        CircleIconButton(
+                          icon: Icons.my_location,
+                          onTap: _goToMyLocation,
                         ),
                       ],
                     ],
                   ),
-                ),
-              ),
-
-              // Bottom bar
-              if (!showDropdownArea)
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: AskMapparaanBar(controller: _bottomAskController),
+                  if (showDropdownArea) ...[
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: _hasConnectionError
+                          ? _NoConnectionState(onRetry: _retry)
+                          : _isAiResolving || _isSearching
+                              ? const Center(child: CircularProgressIndicator())
+                              : _searchResults.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'Type at least 3 characters',
+                                        style: TextStyle(color: Colors.black54),
+                                      ),
+                                    )
+                                  : _SearchDropdown(
+                                      results: _searchResults,
+                                      onSelect: _selectPlace,
+                                    ),
                     ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (!showDropdownArea)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: AskMapparaanBar(
+                    controller: _bottomAskController,
+                    hintText: 'Ask MapParaan',
+                    onSubmitted: _handleAiQuery,
                   ),
                 ),
-            ],
-          );
-        },
+              ),
+            ),
+        ],
       ),
     );
   }

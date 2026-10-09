@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+
 import '../constants.dart';
 
 class PlaceResult {
@@ -9,16 +10,19 @@ class PlaceResult {
   final String subtitle;
   final LatLng coordinates;
 
-  PlaceResult({
+  const PlaceResult({
     required this.name,
     required this.subtitle,
     required this.coordinates,
   });
 }
 
+typedef PlaceSearch = Future<List<PlaceResult>> Function(String query);
+
 class PlaceSearchService {
   // Important: Nominatim requires a proper User-Agent
-  static const String _userAgent = 'Mapparaan/1.0 (Flutter; Metro Manila Commuter App)';
+  static const String _userAgent =
+      'Mapparaan/1.0 (Flutter; Metro Manila Commuter App)';
 
   static Future<List<PlaceResult>> search(String query) async {
     if (query.trim().length < AppConstants.searchMinQueryLength) return [];
@@ -36,37 +40,43 @@ class PlaceSearchService {
       '&bounded=1',
     );
 
-    try {
-      final response = await http.get(
+    final response = await http
+        .get(url, headers: {'User-Agent': _userAgent})
+        .timeout(const Duration(seconds: 12));
+
+    if (response.statusCode != 200) {
+      throw http.ClientException(
+        'Place search returned HTTP ${response.statusCode}.',
         url,
-        headers: {
-          'User-Agent': _userAgent,
-        },
       );
-
-      if (response.statusCode != 200) return [];
-
-      final List data = json.decode(response.body);
-
-      return data.map((item) {
-        final lat = double.parse(item['lat']);
-        final lon = double.parse(item['lon']);
-        final displayName = item['display_name'] as String;
-
-        // Make a cleaner name + subtitle
-        final parts = displayName.split(', ');
-        final name = parts.isNotEmpty ? parts[0] : displayName;
-        final subtitle = parts.length > 1 ? parts.sublist(1).join(', ') : '';
-
-        return PlaceResult(
-          name: name,
-          subtitle: subtitle,
-          coordinates: LatLng(lat, lon),
-        );
-      }).toList();
-    } catch (e) {
-      debugPrint('Search error: $e');
-      return [];
     }
+
+    final decoded = json.decode(response.body);
+    if (decoded is! List) {
+      throw const FormatException('Place search returned an invalid response.');
+    }
+
+    return decoded.map((item) {
+      if (item is! Map<String, dynamic>) {
+        throw const FormatException('Place search returned an invalid result.');
+      }
+      final latitude = double.tryParse(item['lat']?.toString() ?? '');
+      final longitude = double.tryParse(item['lon']?.toString() ?? '');
+      final displayName = item['display_name'];
+      if (latitude == null || longitude == null || displayName is! String) {
+        throw const FormatException(
+          'Place search returned an incomplete result.',
+        );
+      }
+
+      final parts = displayName.split(', ');
+      final name = parts.isNotEmpty ? parts.first : displayName;
+      final subtitle = parts.length > 1 ? parts.skip(1).join(', ') : '';
+      return PlaceResult(
+        name: name,
+        subtitle: subtitle,
+        coordinates: LatLng(latitude, longitude),
+      );
+    }).toList();
   }
 }

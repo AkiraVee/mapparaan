@@ -8,7 +8,8 @@ class AskMapparaanBar extends StatelessWidget {
   final String hintText;
   final bool autofocus;
   final ValueChanged<String>? onSubmitted;
-  final ValueChanged<String>? onChanged;          // ← added
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onTap;
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
@@ -20,7 +21,8 @@ class AskMapparaanBar extends StatelessWidget {
     this.hintText = 'Ask MapParaan',
     this.autofocus = false,
     this.onSubmitted,
-    this.onChanged,                               // ← added
+    this.onChanged,
+    this.onTap,
     this.onMicTap,
     this.leadingIcon = Icons.search,
     this.onLeadingTap,
@@ -29,7 +31,7 @@ class AskMapparaanBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final content = Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(28),
       elevation: 4,
@@ -39,7 +41,7 @@ class AskMapparaanBar extends StatelessWidget {
           children: [
             const SizedBox(width: 4),
             InkWell(
-              onTap: onLeadingTap,
+              onTap: onLeadingTap ?? onTap,
               customBorder: const CircleBorder(),
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -52,21 +54,39 @@ class AskMapparaanBar extends StatelessWidget {
                 controller: controller,
                 focusNode: focusNode,
                 autofocus: autofocus,
+                textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: hintText,
                   border: InputBorder.none,
                 ),
                 onSubmitted: onSubmitted,
-                onChanged: onChanged,             // ← added
+                onChanged: onChanged,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.mic, color: Colors.black87),
-              onPressed: onMicTap,
+              tooltip: onSubmitted == null ? 'Voice search' : 'Search',
+              icon: Icon(
+                onSubmitted == null ? Icons.mic : Icons.send,
+                color: Colors.black87,
+              ),
+              onPressed: () {
+                final value = controller.text.trim();
+                if (onSubmitted != null) {
+                  if (value.isNotEmpty) {
+                    onSubmitted!(value);
+                  }
+                  FocusScope.of(context).unfocus();
+                  return;
+                }
+                onMicTap?.call();
+              },
             ),
           ],
         ),
       ),
     );
+
+    return content;
   }
 }

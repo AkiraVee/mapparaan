@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../services/ai_assistant_service.dart';
+import '../services/saved_places_service.dart';
+import '../services/trip_history_service.dart';
 import 'search_location_screen.dart';
 
 enum DrawerDestination {
@@ -79,32 +82,113 @@ class _ProfilePage extends StatelessWidget {
   }
 }
 
-class _SavedPlacesPage extends StatelessWidget {
+class _SavedPlacesPage extends StatefulWidget {
   const _SavedPlacesPage();
 
   @override
+  State<_SavedPlacesPage> createState() => _SavedPlacesPageState();
+}
+
+class _SavedPlacesPageState extends State<_SavedPlacesPage> {
+  late Future<List<SavedPlace>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = SavedPlacesService.load();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _EmptyState(
-      icon: Icons.bookmark_border,
-      title: 'No saved places yet',
-      message: 'Save places you visit often to find them quickly. Saved places will appear here.',
-      actionLabel: 'Find a place',
-      onAction: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const SearchLocationScreen()),
-      ),
+    return FutureBuilder<List<SavedPlace>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <SavedPlace>[];
+        if (items.isEmpty) {
+          return _EmptyState(
+            icon: Icons.bookmark_border,
+            title: 'No saved places yet',
+            message: 'Save places you visit often to find them quickly.',
+            actionLabel: 'Find a place',
+            onAction: () => Navigator.of(context).push(
+              MaterialPageRoute<SearchSelection>(
+                builder: (_) => const SearchLocationScreen(),
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final place = items[index];
+            return ListTile(
+              leading: const Icon(
+                Icons.place_outlined,
+                color: Color(0xFF00695C),
+              ),
+              title: Text(place.name),
+              subtitle: Text(
+                place.subtitle.isEmpty ? 'Saved place' : place.subtitle,
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
 
-class _TripHistoryPage extends StatelessWidget {
+class _TripHistoryPage extends StatefulWidget {
   const _TripHistoryPage();
 
   @override
+  State<_TripHistoryPage> createState() => _TripHistoryPageState();
+}
+
+class _TripHistoryPageState extends State<_TripHistoryPage> {
+  late Future<List<TripHistoryEntry>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = TripHistoryService.load();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _EmptyState(
-      icon: Icons.route_outlined,
-      title: 'Your trips will show up here',
-      message: 'Once trip planning and history are available, you can review your past commutes here.',
+    return FutureBuilder<List<TripHistoryEntry>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <TripHistoryEntry>[];
+        if (items.isEmpty) {
+          return const _EmptyState(
+            icon: Icons.route_outlined,
+            title: 'Your trips will show up here',
+            message:
+                'Once you plan a route, your recent trips will appear here.',
+          );
+        }
+
+        return ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final trip = items[index];
+            return ListTile(
+              leading: const Icon(
+                Icons.directions_transit,
+                color: Color(0xFF00695C),
+              ),
+              title: Text('${trip.origin} → ${trip.destination}'),
+              subtitle: Text(
+                '${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -175,7 +259,7 @@ class _HelpSupportPage extends StatelessWidget {
         ),
         _HelpQuestion(
           question: 'Can I plan a transit route?',
-          answer: 'Transit route planning is being developed and is not available yet.',
+          answer: 'Transit route planning is available as a front-end MVP and is still separate from the production backend.',
         ),
       ],
     );

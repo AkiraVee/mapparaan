@@ -5,12 +5,13 @@ import 'package:flutter/material.dart';
 /// A reusable Bottom Sheet UI widget that displays location details.
 /// We use a StatefulWidget here because the "Bookmark" icon needs to toggle
 /// its own state (filled vs outlined) when tapped.
-class LocationDetailsSheet extends StatefulWidget {
+class LocationDetailsSheet extends StatelessWidget {
   // Required data to display the location
   final String title;
   
   // Optional address (subtitle from PlaceResult)
   final String? address;
+  final bool isSaved;
   
   // Callbacks for the action buttons so the parent screen (HomeScreen) 
   // can handle the actual business logic (navigation, API calls, etc.)
@@ -23,19 +24,12 @@ class LocationDetailsSheet extends StatefulWidget {
     super.key,
     required this.title,
     this.address,
+    this.isSaved = false,
     required this.onClose,
     this.onDirections,
     this.onSave,
     this.onShare,
   });
-
-  @override
-  State<LocationDetailsSheet> createState() => _LocationDetailsSheetState();
-}
-
-class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
-  // Tracks whether this location is bookmarked locally in the UI
-  bool _isBookmarked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +84,7 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                   children: [
                     // Location Title
                     Text(
-                      widget.title,
+                      title,
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -100,10 +94,10 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                       overflow: TextOverflow.ellipsis, // Adds "..." if it's too long
                     ),
                     // Only render the address Text widget if an address was provided
-                    if (widget.address != null && widget.address!.isNotEmpty) ...[
+                    if (address != null && address!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        widget.address!,
+                        address!,
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.black54,
@@ -127,28 +121,21 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                   IconButton(
                     // Dynamically swap icon and color based on state
                     icon: Icon(
-                      _isBookmarked ? Icons.bookmark : Icons.bookmark_add_outlined,
-                      color: _isBookmarked ? const Color(0xFF00695C) : Colors.black87,
+                      isSaved ? Icons.bookmark : Icons.bookmark_add_outlined,
+                      color: isSaved ? const Color(0xFF00695C) : Colors.black87,
                     ),
-                    onPressed: () {
-                      // Trigger a UI rebuild to update the icon
-                      setState(() {
-                        _isBookmarked = !_isBookmarked;
-                      });
-                      // If a parent provided an onSave callback, execute it
-                      if (widget.onSave != null) widget.onSave!();
-                    },
+                    onPressed: onSave,
                   ),
                   // Share Icon Button
                   IconButton(
                     icon: const Icon(Icons.ios_share, color: Colors.black87),
-                    onPressed: widget.onShare,
+                    onPressed: onShare,
                   ),
                   // Close Icon Button
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: Colors.black87),
                     // Triggers the onClose callback passed from HomeScreen
-                    onPressed: widget.onClose,
+                    onPressed: onClose,
                   ),
                 ],
               ),
@@ -169,27 +156,21 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                   label: "Directions",
                   color: const Color(0xFF00695C), // MapParaan primary dark green
                   textColor: Colors.white,
-                  onTap: widget.onDirections,
+                  onTap: onDirections,
                 ),
                 const SizedBox(width: 8),
                 _buildPillButton(
                   label: "Save",
                   color: const Color(0xFFB3E5FC), // Light blue from reference image
                   textColor: Colors.black87,
-                  onTap: () {
-                    // Syncs with the top-right bookmark icon logic
-                    setState(() {
-                      _isBookmarked = !_isBookmarked;
-                    });
-                    if (widget.onSave != null) widget.onSave!();
-                  },
+                  onTap: onSave,
                 ),
                 const SizedBox(width: 8),
                 _buildPillButton(
                   label: "Share",
                   color: const Color(0xFFB3E5FC),
                   textColor: Colors.black87,
-                  onTap: widget.onShare,
+                  onTap: onShare,
                 ),
               ],
             ),
