@@ -12,6 +12,7 @@ import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 
+/// Screen for searching place coordinates or issuing natural-language queries.
 class SearchLocationScreen extends StatefulWidget {
   final String? initialQuery;
   final bool showMap;
@@ -49,9 +50,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _topSearchController.text = widget.initialQuery!;
     }
+
     _topSearchFocusNode.addListener(() {
       setState(() => _isSearchFocused = _topSearchFocusNode.hasFocus);
     });
+
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _onSearchChanged(widget.initialQuery!);
     }
@@ -88,6 +91,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     }
   }
 
+  /// Debounces user input typing to query nominatim search API
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -125,6 +129,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     });
   }
 
+  /// Selects place and pops search screen back to caller
   void _selectPlace(PlaceResult place) {
     _topSearchFocusNode.unfocus();
     Navigator.of(context).pop(
@@ -135,6 +140,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     );
   }
 
+  /// Processes natural language transit intent via AI assistant
   Future<void> _handleAiQuery(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
@@ -200,6 +206,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       drawer: const MapparaanDrawer(),
       body: Stack(
         children: [
+          // FlutterMap Background
           if (widget.showMap)
             FlutterMap(
               mapController: _mapController,
@@ -247,69 +254,83 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
             )
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF3F5F3))),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      CircleIconButton(
-                        icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
-                        onTap: () {
-                          if (_isSearchFocused) {
-                            _topSearchFocusNode.unfocus();
-                          } else {
-                            Scaffold.of(context).openDrawer();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: AskMapparaanBar(
-                          controller: _topSearchController,
-                          focusNode: _topSearchFocusNode,
-                          hintText: 'Search here',
-                          leadingIcon: Icons.search,
-                          onChanged: _onSearchChanged,
-                          onSubmitted: _onSearchChanged,
-                        ),
-                      ),
-                      if (!_isSearchFocused) ...[
-                        const SizedBox(width: 8),
-                        CircleIconButton(
-                          icon: Icons.my_location,
-                          onTap: _goToMyLocation,
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (showDropdownArea) ...[
+
+          // Bound Fill Positioned Container to prevent vertical overflow layout errors
+          Positioned.fill(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     const SizedBox(height: 8),
-                    Expanded(
-                      child: _hasConnectionError
-                          ? _NoConnectionState(onRetry: _retry)
-                          : _isAiResolving || _isSearching
-                              ? const Center(child: CircularProgressIndicator())
-                              : _searchResults.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        'Type at least 3 characters',
-                                        style: TextStyle(color: Colors.black54),
-                                      ),
-                                    )
-                                  : _SearchDropdown(
-                                      results: _searchResults,
-                                      onSelect: _selectPlace,
-                                    ),
+                    // Top Header Row (Back/Menu Button, Search Input, Location Button)
+                    Row(
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            return CircleIconButton(
+                              icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
+                              onTap: () {
+                                if (_isSearchFocused) {
+                                  _topSearchFocusNode.unfocus();
+                                } else {
+                                  Scaffold.of(context).openDrawer();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AskMapparaanBar(
+                            controller: _topSearchController,
+                            focusNode: _topSearchFocusNode,
+                            hintText: 'Search here',
+                            autofocus: true,
+                            leadingIcon: Icons.search,
+                            onChanged: _onSearchChanged,
+                            onSubmitted: _onSearchChanged,
+                          ),
+                        ),
+                        if (!_isSearchFocused) ...[
+                          const SizedBox(width: 8),
+                          CircleIconButton(
+                            icon: Icons.my_location,
+                            onTap: _goToMyLocation,
+                          ),
+                        ],
+                      ],
                     ),
+
+                    // Search Results Dropdown List
+                    if (showDropdownArea) ...[
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _hasConnectionError
+                            ? _NoConnectionState(onRetry: _retry)
+                            : _isAiResolving || _isSearching
+                                ? const Center(child: CircularProgressIndicator())
+                                : _searchResults.isEmpty
+                                    ? const Center(
+                                        child: Text(
+                                          'Type at least 3 characters',
+                                          style: TextStyle(color: Colors.black54),
+                                        ),
+                                      )
+                                    : _SearchDropdown(
+                                        results: _searchResults,
+                                        onSelect: _selectPlace,
+                                      ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
+
+          // Bottom Prompt Bar
           if (!showDropdownArea)
             Align(
               alignment: Alignment.bottomCenter,
@@ -384,7 +405,7 @@ class _NoConnectionState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: Checkbox.width == 0 ? MainAxisAlignment.start : MainAxisAlignment.center,
           children: [
             const Icon(Icons.wifi_off, size: 40, color: Colors.black45),
             const SizedBox(height: 16),

@@ -19,6 +19,7 @@ import 'location_details_screen.dart';
 import 'location_disabled_screen.dart';
 import 'search_location_screen.dart';
 
+/// Main landing home screen displaying interactive basemap and search controls.
 class HomeScreen extends StatefulWidget {
   final bool showMap;
   final PlaceSearch searchPlaces;
@@ -56,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Opens full search screen overlay and updates home screen when place is selected
   Future<void> _goToSearchScreen([String? prefilledQuery]) async {
     final selection = await Navigator.of(context).push<SearchSelection>(
       MaterialPageRoute(
@@ -69,6 +71,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted || selection == null) return;
 
     final place = selection.place;
+    _searchController.text = place.name;
+
     setState(() {
       _selectedPlace = place;
       _selectedResolution = selection.resolution;
@@ -79,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.showMap) _mapController.move(place.coordinates, 16.0);
   }
 
+  /// Checks if selected place is stored in local saved places
   Future<void> _loadSelectedPlaceSavedState(PlaceResult place) async {
     try {
       final savedPlaces = await SavedPlacesService.load();
@@ -97,24 +102,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _savedPlaceId(PlaceResult place) =>
       '${place.coordinates.latitude}_${place.coordinates.longitude}';
 
-  Future<void> _submitHomeSearch(String value) async {
-    final query = value.trim();
-    if (query.isEmpty) return;
-
-    try {
-      final results = await widget.searchPlaces(query);
-      if (!mounted) return;
-      setState(() {
-        _searchResults = results;
-        _selectedPlace = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _searchResults = const []);
-    }
-  }
-
   Future<void> _selectHomeSearchResult(PlaceResult place) async {
+    _searchController.text = place.name;
     setState(() {
       _selectedPlace = place;
       _searchResults = const [];
@@ -124,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadSelectedPlaceSavedState(place);
   }
 
+  /// Handles AI query input from bottom prompt bar
   Future<void> _handleAiQuery(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
@@ -138,6 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final place = results.first;
       _bottomAskController.clear();
+      _searchController.text = place.name;
+
       setState(() {
         _selectedPlace = place;
         _searchResults = const [];
@@ -161,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _mapController.move(location, 15.0);
   }
 
+  /// Centers map view on current GPS coordinates
   Future<void> _goToMyLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -256,6 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const MapparaanDrawer(),
       body: Stack(
         children: [
+          // FlutterMap rendering layer
           if (widget.showMap)
             FlutterMap(
               mapController: _mapController,
@@ -316,24 +310,30 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF2F5F4))),
+
+          // Top Header Row (Menu, Search Bar, Location Button)
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  CircleIconButton(
-                    icon: Icons.menu,
-                    onTap: () => Scaffold.of(context).openDrawer(),
+                  Builder(
+                    builder: (context) {
+                      return CircleIconButton(
+                        icon: Icons.menu,
+                        onTap: () => Scaffold.of(context).openDrawer(),
+                      );
+                    },
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AskMapparaanBar(
                       controller: _searchController,
                       hintText: 'Search here',
+                      readOnly: true,
                       leadingIcon: Icons.search,
                       onTap: () => _goToSearchScreen(_searchController.text),
-                      onSubmitted: _submitHomeSearch,
-                      onChanged: (_) {},
+                      onSubmitted: (value) => _goToSearchScreen(value),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -345,22 +345,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 16, 112),
-              child: CircleIconButton(
-                icon: Icons.settings_outlined,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => DrawerDestinationScreen(
-                      destination: DrawerDestination.settings,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+
+          // Search Auto-complete Overlay
           if (_searchResults.isNotEmpty)
             Positioned(
               top: 90,
@@ -388,6 +374,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+
+          // Bottom Sheet or Bottom "Ask MapParaan" Bar
           Align(
             alignment: Alignment.bottomCenter,
             child: _selectedPlace != null
@@ -399,6 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _selectedPlace = null;
                       _selectedResolution = null;
                       _isSelectedPlaceSaved = false;
+                      _searchController.clear();
                     }),
                     onDirections: _openSelectedRouteDetails,
                     onSave: _saveSelectedPlace,

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// The pill-shaped "Ask MapParaan" search/voice bar reused across
-/// Mapparaan's screens (bottom bar on the homepage, top bar on the
-/// search screen, etc.).
+/// Reusable pill-shaped search input bar across Mapparaan screens.
 class AskMapparaanBar extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final bool autofocus;
+  final bool readOnly; // Read-only flag when used as a button to trigger navigation
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap; // Callback when the search bar field is tapped
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
@@ -20,6 +19,7 @@ class AskMapparaanBar extends StatelessWidget {
     required this.controller,
     this.hintText = 'Ask MapParaan',
     this.autofocus = false,
+    this.readOnly = false, // Defaults to editable text field
     this.onSubmitted,
     this.onChanged,
     this.onTap,
@@ -31,7 +31,8 @@ class AskMapparaanBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Material(
+    // Material wrapper provides background color and rounded elevation
+    return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(28),
       elevation: 4,
@@ -40,6 +41,7 @@ class AskMapparaanBar extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 4),
+            // Leading Icon (Magnifying glass search icon)
             InkWell(
               onTap: onLeadingTap ?? onTap,
               customBorder: const CircleBorder(),
@@ -49,11 +51,14 @@ class AskMapparaanBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
+            // Search Text Input Field
             Expanded(
               child: TextField(
                 controller: controller,
                 focusNode: focusNode,
                 autofocus: autofocus,
+                readOnly: readOnly, // Prevents soft keyboard when readOnly is true
+                onTap: onTap, // Triggers navigation when tapped
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: hintText,
@@ -64,6 +69,7 @@ class AskMapparaanBar extends StatelessWidget {
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
+            // Trailing Action Button (Send Arrow or Microphone)
             IconButton(
               tooltip: onSubmitted == null ? 'Voice search' : 'Search',
               icon: Icon(
@@ -86,7 +92,5 @@ class AskMapparaanBar extends StatelessWidget {
         ),
       ),
     );
-
-    return content;
   }
 }
