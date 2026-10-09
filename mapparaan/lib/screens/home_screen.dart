@@ -14,12 +14,9 @@ import '../widgets/circle_icon_button.dart';
 import '../widgets/location_details_sheet.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
-// import 'drawer_destination_screen.dart';
-import 'location_details_screen.dart';
 import 'location_disabled_screen.dart';
 import 'search_location_screen.dart';
 
-/// Main landing home screen displaying interactive basemap and search controls.
 class HomeScreen extends StatefulWidget {
   final bool showMap;
   final PlaceSearch searchPlaces;
@@ -45,6 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
   AiQueryResolution? _selectedResolution;
   bool _isSelectedPlaceSaved = false;
 
+  List<LatLng> _routePoints = [];
+  bool _isLoadingRoute = false;
+  String _activeRouteProfile = 'foot';
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -57,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// Opens full search screen overlay and updates home screen when place is selected
   Future<void> _goToSearchScreen([String? prefilledQuery]) async {
     final selection = await Navigator.of(context).push<SearchSelection>(
       MaterialPageRoute(
@@ -77,22 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedPlace = place;
       _selectedResolution = selection.resolution;
       _isSelectedPlaceSaved = false;
+      _routePoints = [];
     });
     await _loadSelectedPlaceSavedState(place);
     if (!mounted) return;
     if (widget.showMap) _mapController.move(place.coordinates, 16.0);
   }
 
-  /// Checks if selected place is stored in local saved places
   Future<void> _loadSelectedPlaceSavedState(PlaceResult place) async {
     try {
       final savedPlaces = await SavedPlacesService.load();
       if (!mounted || _selectedPlace?.coordinates != place.coordinates) return;
       final id = _savedPlaceId(place);
       setState(() {
-        _isSelectedPlaceSaved = savedPlaces.any(
-          (savedPlace) => savedPlace.id == id,
-        );
+        _isSelectedPlaceSaved = savedPlaces.any((s) => s.id == id);
       });
     } catch (error) {
       if (mounted) _showMessage('Could not load saved places: $error');
@@ -109,11 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _searchResults = const [];
       _selectedResolution = AiQueryResolution.fromQuery(place.name);
       _isSelectedPlaceSaved = false;
+      _routePoints = [];
     });
     await _loadSelectedPlaceSavedState(place);
   }
 
-  /// Handles AI query input from bottom prompt bar
   Future<void> _handleAiQuery(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
@@ -135,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _searchResults = const [];
         _selectedResolution = AiQueryResolution.fromQuery(query);
         _isSelectedPlaceSaved = false;
+        _routePoints = [];
       });
       await _loadSelectedPlaceSavedState(place);
       if (!mounted) return;
@@ -153,7 +152,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _mapController.move(location, 15.0);
   }
 
-  /// Centers map view on current GPS coordinates
   Future<void> _goToMyLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -227,20 +225,72 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openSelectedRouteDetails() async {
+  Future<void> _showRouteOnMap({String profile = 'foot'}) async {
     final place = _selectedPlace;
     if (place == null) return;
-    final resolution = _selectedResolution;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LocationDetailsScreen(
-          place: place,
-          origin: resolution?.origin ?? 'Current location',
-          initialPreference: resolution?.preference ?? RoutePreference.fastest,
-          passengerType: resolution?.passengerType ?? PassengerType.general,
-        ),
+
+    final origin = _userLocation ?? const LatLng(14.5943, 120.9721);
+
+    setState(() {
+      _isLoadingRoute = true;
+      _activeRouteProfile = profile;
+      _routePoints = [];
+    });
+
+    final geometry = await RoutePlannerService.fetchRoute(
+      origin: origin,
+      destination: place.coordinates,
+      profile: profile,
+    );
+
+    if (!mounted) return;
+
+    if (geometry == null || geometry.points.isEmpty) {
+      setState(() => _isLoadingRoute = false);
+      _showMessage('Could not find a route. Try again.');
+      return;
+    }
+
+    setState(() {
+      _routePoints = geometry.points;
+      _isLoadingRoute = false;
+    });
+
+    final bounds = LatLngBounds.fromPoints(geometry.points);
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.fromLTRB(40, 120, 40, 280),
       ),
     );
+
+    final mins = (geometry.durationSeconds / 60).round();
+    final km = (geometry.distanceMeters / 1000).toStringAsFixed(1);
+    _showMessage(
+      '${profile == 'foot' ? 'Walking' : 'Driving'} route: $km km • ~$mins min',
+    );
+  }
+
+  Future<void> _onDirectionsPressed() async {
+    await _showRouteOnMap(profile: 'foot');
+  }
+
+  void _onModeSelected(TransportMode mode) {
+    // Future: switch real routing based on mode
+    print('Selected transport mode: $mode');
+
+    switch (mode) {
+      case TransportMode.walking:
+        _showRouteOnMap(profile: 'foot');
+        break;
+      case TransportMode.jeep:
+      case TransportMode.bus:
+      case TransportMode.uv:
+      case TransportMode.lrtMrt:
+        // For now still show walking/driving as placeholder
+        _showRouteOnMap(profile: 'driving');
+        break;
+    }
   }
 
   @override
@@ -249,12 +299,15 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const MapparaanDrawer(),
       body: Stack(
         children: [
-          // FlutterMap rendering layer
+          // ===== MAP =====
           if (widget.showMap)
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                initialCenter: const LatLng(
+                  AppConstants.defaultLat,
+                  AppConstants.defaultLng,
+                ),
                 initialZoom: AppConstants.defaultZoom,
                 minZoom: AppConstants.minZoom,
                 maxZoom: AppConstants.maxZoom,
@@ -264,6 +317,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               children: [
                 const MapparaanTileLayer(),
+
+                if (_routePoints.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _routePoints,
+                        color: const Color(0xFF00695C),
+                        strokeWidth: 5,
+                        borderStrokeWidth: 2,
+                        borderColor: Colors.white,
+                      ),
+                    ],
+                  ),
+
                 MarkerLayer(
                   markers: [
                     if (_userLocation != null)
@@ -283,10 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.blueAccent,
                                 shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2.5,
-                                ),
+                                border: Border.all(color: Colors.white, width: 2.5),
                               ),
                             ),
                           ),
@@ -311,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> {
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF2F5F4))),
 
-          // Top Header Row (Menu, Search Bar, Location Button)
+          // ===== TOP BAR =====
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -346,66 +410,50 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Search Auto-complete Overlay
-          if (_searchResults.isNotEmpty)
-            Positioned(
-              top: 90,
-              left: 16,
-              right: 16,
-              child: Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                elevation: 4,
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: _searchResults.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final place = _searchResults[index];
-                    return ListTile(
-                      title: Text(place.name),
-                      subtitle: place.subtitle.isNotEmpty
-                          ? Text(place.subtitle)
-                          : null,
-                      onTap: () => _selectHomeSearchResult(place),
-                    );
-                  },
+          if (_isLoadingRoute)
+            const Positioned(
+              top: 100,
+              left: 0,
+              right: 0,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+
+          // ===== BOTTOM SHEET or ASK BAR =====
+          if (_selectedPlace != null)
+            LocationDetailsSheet(
+              title: _selectedPlace!.name,
+              address: _selectedPlace!.subtitle,
+              isSaved: _isSelectedPlaceSaved,
+              onClose: () {
+                setState(() {
+                  _selectedPlace = null;
+                  _selectedResolution = null;
+                  _isSelectedPlaceSaved = false;
+                  _searchController.clear();
+                  _routePoints = [];
+                });
+              },
+              onDirections: _onDirectionsPressed,
+              onSave: _saveSelectedPlace,
+              onShare: _shareSelectedPlace,
+              onModeSelected: _onModeSelected,
+            )
+          else
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: AskMapparaanBar(
+                    controller: _bottomAskController,
+                    hintText: 'Ask MapParaan',
+                    onTap: () => _goToSearchScreen(_bottomAskController.text),
+                    onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
+                    onSubmitted: _handleAiQuery,
+                  ),
                 ),
               ),
             ),
-
-          // Bottom Sheet or Bottom "Ask MapParaan" Bar
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: _selectedPlace != null
-                ? LocationDetailsSheet(
-                    title: _selectedPlace!.name,
-                    address: _selectedPlace!.subtitle,
-                    isSaved: _isSelectedPlaceSaved,
-                    onClose: () => setState(() {
-                      _selectedPlace = null;
-                      _selectedResolution = null;
-                      _isSelectedPlaceSaved = false;
-                      _searchController.clear();
-                    }),
-                    onDirections: _openSelectedRouteDetails,
-                    onSave: _saveSelectedPlace,
-                    onShare: _shareSelectedPlace,
-                  )
-                : SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: AskMapparaanBar(
-                        controller: _bottomAskController,
-                        hintText: 'Ask MapParaan',
-                        onTap: () => _goToSearchScreen(_bottomAskController.text),
-                        onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
-                        onSubmitted: _handleAiQuery,
-                      ),
-                    ),
-                  ),
-          ),
         ],
       ),
     );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 enum RoutePreference { fastest, cheapest, fewestTransfers }
@@ -22,9 +24,67 @@ class RouteOption {
   });
 }
 
+/// Real route geometry returned by OSRM
+class RouteGeometry {
+  final List<LatLng> points;
+  final double distanceMeters;
+  final double durationSeconds;
+  final String profile; // "foot" or "driving"
+
+  const RouteGeometry({
+    required this.points,
+    required this.distanceMeters,
+    required this.durationSeconds,
+    required this.profile,
+  });
+}
+
 class RoutePlannerService {
   const RoutePlannerService._();
 
+  // Public demo OSRM server (free, no key needed)
+  static const String _osrmBase = 'https://router.project-osrm.org';
+
+  /// Fetches a real walking or driving route
+  static Future<RouteGeometry?> fetchRoute({
+    required LatLng origin,
+    required LatLng destination,
+    required String profile, // "foot" or "driving"
+  }) async {
+    final url = Uri.parse(
+      '$_osrmBase/route/v1/$profile/'
+      '${origin.longitude},${origin.latitude};'
+      '${destination.longitude},${destination.latitude}'
+      '?overview=full&geometries=geojson',
+    );
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode != 200) return null;
+
+      final data = json.decode(response.body);
+      if (data['code'] != 'Ok') return null;
+
+      final route = data['routes'][0];
+      final coordinates = route['geometry']['coordinates'] as List;
+
+      final points = coordinates
+          .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
+          .toList();
+
+      return RouteGeometry(
+        points: points,
+        distanceMeters: (route['distance'] as num).toDouble(),
+        durationSeconds: (route['duration'] as num).toDouble(),
+        profile: profile,
+      );
+    } catch (e) {
+      print('OSRM error: $e');
+      return null;
+    }
+  }
+
+  /// Mock multimodal options (we will improve these later)
   static List<RouteOption> generateRouteOptions({
     required LatLng destination,
     required LatLng? userLocation,
@@ -79,18 +139,6 @@ class RoutePlannerService {
         break;
     }
 
-    return options
-        .map(
-          (option) => RouteOption(
-            title: option.title,
-            summary: option.summary,
-            modeLabel: option.modeLabel,
-            etaMinutes: option.etaMinutes,
-            fare: option.fare,
-            transfers: option.transfers,
-            preference: preference,
-          ),
-        )
-        .toList();
+    return options;
   }
 }
