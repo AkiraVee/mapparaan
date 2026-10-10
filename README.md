@@ -25,15 +25,18 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 
 | Feature | Status |
 |---|---|
-| Interactive map (CARTO Voyager tiles, warm tint, Metro Manila default view) | Done |
+| Interactive map (CARTO Voyager tiles, configurable color tint, Metro Manila default view) | Done |
 | Place search (Nominatim, debounced, Metro Manila-biased) | Done |
-| "My location" button with permission handling | Done |
-| Selected-place pin and location details sheet | Done (Directions / Save / Share not wired yet) |
-| Side drawer (Profile, Saved Places, Trip History, Settings, Help) | Done (placeholder pages) |
-| Location-disabled and location-details screens | UI only, not yet connected to the map |
-| Route preference buttons (fastest / cheapest / fewest transfers) | UI only |
-| Chatbot / NLU | Planned |
-| Transit and road routing | Planned |
+| "My location" button with permission handling, incl. dedicated location-disabled flow | Done |
+| Selected-place pin and location details sheet | Done — Directions, Save, and Share are wired up |
+| Walking/driving directions on the map (real routing via OSRM) | Done (public demo server; self-hosting planned for production) |
+| Saved places (persisted locally) | Done |
+| Trip history (persisted locally, surfaced in drawer) | Partial — storage and UI are done, but nothing currently writes a trip entry after a completed route |
+| Side drawer (Profile, Saved Places, Trip History, Settings, Help) | Done |
+| Location-details screen with route preference buttons (fastest / cheapest / fewest transfers) | Done — uses mocked multimodal fare/ETA data, not yet wired into the main home flow |
+| Basic natural-language query parsing ("from X to Y", preference keywords) | Done (regex-based) |
+| Chatbot / full NLU | Planned (regex parser above is a placeholder for this) |
+| Transit (jeep/bus/UV/LRT-MRT) routing | Planned — currently mocked fare/ETA estimates only |
 | Fare and discount engine | Planned |
 
 ## Tech Stack
@@ -42,12 +45,14 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 |---|---|---|
 | **Mobile app** | Flutter (Dart) | Single codebase for Android/iOS (also runs on web for development) |
 | **Map rendering** | `flutter_map` + `latlong2` | Pure-Dart map widget; markers, polylines, route display. No API key or native SDK needed |
-| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. A warm sepia tint is applied in `MapparaanTileLayer`. `flutter_map_cancellable_tile_provider` is used for better web performance |
+| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. `MapparaanTileLayer` applies a configurable color wash (`MapTint`: none / warm / teal / faded — teal by default) as a cheap overlay rather than a per-pixel filter, so panning/zooming stays fast. `flutter_map_cancellable_tile_provider` is used for better web performance |
 | **Place search** | Nominatim (OpenStreetMap) | Called from `PlaceSearchService`; limited to the Philippines and biased to Metro Manila. Public instance has usage limits, so self-host or switch providers for production |
-| **User location** | `geolocator` | Requested only when the user taps "my location" |
-| **Driving/walking routing** | OSRM (self-hosted) or Google Routes API | Planned. Traffic-aware ETAs for road-based legs |
-| **Transit routing** | OpenTripPlanner (OTP) | Planned. Multimodal (walk + transit) routing, self-hosted, ingests GTFS + OSM |
-| **Chatbot / NLU** | Claude or GPT API (tool-calling / function-calling) | Planned. Parses Taglish natural language into structured intent (origin, destination, preference, passenger type); does not compute routes itself |
+| **User location** | `geolocator` | Requested when the user taps "my location"; a dedicated `LocationDisabledScreen` walks the user through enabling it |
+| **Local persistence** | `shared_preferences` | Backs `SavedPlacesService` and `TripHistoryService` |
+| **Sharing** | `share_plus` | Used to share a selected place |
+| **Driving/walking routing** | OSRM public demo server (`router.project-osrm.org`) | Live — `RoutePlannerService.fetchRoute` fetches real walking/driving geometry for the "Directions" action. Self-hosted OSRM or Google Routes API planned for production/traffic-aware ETAs |
+| **Transit routing** | OpenTripPlanner (OTP) | Planned. Multimodal (walk + transit) routing, self-hosted, ingests GTFS + OSM. The current mode cards and route-preference options use mocked fare/ETA data (`RoutePlannerService.generateRouteOptions`) as a placeholder |
+| **Chatbot / NLU** | Claude or GPT API (tool-calling / function-calling) | Planned. A lightweight regex-based parser (`AiAssistantService`) already extracts origin/destination/preference from Taglish queries like "from X to Y" as a placeholder; does not compute routes itself |
 | **Backend** | FastAPI (Python) or NestJS (Node.js) | Planned. Orchestrates chatbot → intent → routing engine → response |
 | **Database** | PostgreSQL + PostGIS | Planned. Fare tables, cached routes, user data, spatial queries |
 | **Fare & discount logic** | Custom rules engine | Planned. Config-driven fare tables (not hardcoded), 0.8 multiplier for eligible discounts |
@@ -58,21 +63,25 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 ```
 lib/
 ├── main.dart
-├── constants.dart                  # tile URL, default camera, search settings
+├── constants.dart                     # tile URL, default camera, Manila bounds, search settings
 ├── screens/
-│   ├── home_screen.dart            # main map, search bar, selected-place sheet
-│   ├── search_location_screen.dart
-│   ├── location_details_screen.dart
-│   ├── location_disabled_screen.dart
-│   └── drawer_destination_screen.dart
+│   ├── home_screen.dart               # main map, search bar, selected-place sheet, directions
+│   ├── search_location_screen.dart    # full search screen with debounce + AI query bar
+│   ├── location_details_screen.dart   # standalone place/route details screen
+│   ├── location_disabled_screen.dart  # map + prompt to enable location services
+│   └── drawer_destination_screen.dart # profile, saved places, trip history, settings, help
 ├── services/
-│   └── place_search_service.dart   # Nominatim search
+│   ├── ai_assistant_service.dart      # regex-based Taglish query parsing (origin/destination/preference)
+│   ├── place_search_service.dart      # Nominatim search
+│   ├── route_planner_service.dart     # OSRM walking/driving routes + mocked multimodal options
+│   ├── saved_places_service.dart      # persisted saved places (shared_preferences)
+│   └── trip_history_service.dart      # persisted trip history (shared_preferences)
 └── widgets/
-    ├── ask_mapparaan_bar.dart
-    ├── circle_icon_button.dart
-    ├── location_details_sheet.dart
-    ├── mapparaan_drawer.dart
-    └── mapparaan_tile_layer.dart   # CARTO Voyager + warm tint
+    ├── ask_mapparaan_bar.dart         # reusable pill-shaped search/ask input
+    ├── circle_icon_button.dart        # circular overlay button (menu, back, location, etc.)
+    ├── location_details_sheet.dart    # draggable bottom sheet with transport mode picker
+    ├── mapparaan_drawer.dart          # side navigation menu
+    └── mapparaan_tile_layer.dart      # CARTO Voyager tiles + configurable color tint
 ```
 
 ### Data Sources
@@ -80,6 +89,7 @@ lib/
 - **Sakay.ph GTFS** (GitHub) — jeepney/bus/rail route data, community-maintained
 - **OpenStreetMap** — Metro Manila road network extract for OTP/OSRM, plus the map data behind the tiles and Nominatim search
 - **CARTO Voyager** — basemap tiles built on OpenStreetMap data
+- **OSRM** (`router.project-osrm.org`) — real walking/driving route geometry, distance, and duration
 - **DOTr/LTFRB fare orders** — manually sourced fare tables
 - **RA 11314 / RA 9994 / RA 10754** — legal basis for discount rules
 
