@@ -11,6 +11,7 @@ import '../services/place_search_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 
 /// Screen for searching place coordinates or issuing natural-language queries.
 class SearchLocationScreen extends StatefulWidget {
@@ -214,12 +215,14 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                 initialCenter:
                     _userLocation ?? const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
                 initialZoom: AppConstants.defaultZoom,
+                minZoom: AppConstants.minZoom,
+                maxZoom: AppConstants.maxZoom,
+                cameraConstraint: CameraConstraint.contain(
+                  bounds: AppConstants.manilaBounds,
+                ),
               ),
               children: [
-                TileLayer(
-                  urlTemplate: AppConstants.mapTileUrl,
-                  userAgentPackageName: AppConstants.appPackageName,
-                ),
+                const MapparaanTileLayer(),
                 if (_userLocation != null)
                   MarkerLayer(
                     markers: [
@@ -405,7 +408,7 @@ class _NoConnectionState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Column(
-          mainAxisAlignment: Checkbox.width == 0 ? MainAxisAlignment.start : MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.wifi_off, size: 40, color: Colors.black45),
             const SizedBox(height: 16),
