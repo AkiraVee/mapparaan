@@ -204,7 +204,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     final showDropdownArea = _isSearchFocused || _searchResults.isNotEmpty;
 
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
           // FlutterMap Background

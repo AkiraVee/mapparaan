@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/ai_assistant_service.dart';
+import '../services/place_search_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/trip_history_service.dart';
 import 'search_location_screen.dart';
@@ -110,11 +111,16 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
             title: 'No saved places yet',
             message: 'Save places you visit often to find them quickly.',
             actionLabel: 'Find a place',
-            onAction: () => Navigator.of(context).push(
-              MaterialPageRoute<SearchSelection>(
-                builder: (_) => const SearchLocationScreen(),
-              ),
-            ),
+            onAction: () async {
+              final selection = await Navigator.of(context).push<SearchSelection>(
+                MaterialPageRoute<SearchSelection>(
+                  builder: (_) => const SearchLocationScreen(),
+                ),
+              );
+              if (context.mounted && selection != null) {
+                Navigator.of(context).pop(selection.place);
+              }
+            },
           );
         }
 
@@ -132,6 +138,29 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
               subtitle: Text(
                 place.subtitle.isEmpty ? 'Saved place' : place.subtitle,
               ),
+              trailing: IconButton(
+                icon: const Icon(
+                  Icons.bookmark_remove_outlined,
+                  color: Colors.black45,
+                ),
+                tooltip: 'Remove from saved',
+                onPressed: () async {
+                  await SavedPlacesService.toggle(place);
+                  if (!context.mounted) return;
+                  setState(() {
+                    _future = SavedPlacesService.load();
+                  });
+                },
+              ),
+              onTap: () {
+                Navigator.of(context).pop(
+                  PlaceResult(
+                    name: place.name,
+                    subtitle: place.subtitle,
+                    coordinates: place.coordinates,
+                  ),
+                );
+              },
             );
           },
         );
@@ -171,22 +200,70 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
           );
         }
 
-        return ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final trip = items[index];
-            return ListTile(
-              leading: const Icon(
-                Icons.directions_transit,
-                color: Color(0xFF00695C),
+        return Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${items.length} ${items.length == 1 ? 'trip' : 'trips'} recorded',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                  label: const Text('Clear all'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                  ),
+                  onPressed: () async {
+                    await TripHistoryService.clear();
+                    if (!context.mounted) return;
+                    setState(() {
+                      _future = TripHistoryService.load();
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final trip = items[items.length - 1 - index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Color(0xFFE0F2F1),
+                      child: Icon(
+                        Icons.directions_transit,
+                        color: Color(0xFF00695C),
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      '${trip.origin} → ${trip.destination}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      '${trip.routeSummary ?? 'Route'} • ${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    trailing: Text(
+                      trip.etaText,
+                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                    ),
+                  );
+                },
               ),
-              title: Text('${trip.origin} → ${trip.destination}'),
-              subtitle: Text(
-                '${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
-              ),
-            );
-          },
+            ),
+          ],
         );
       },
     );

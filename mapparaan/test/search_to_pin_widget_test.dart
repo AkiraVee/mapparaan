@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mapparaan/screens/home_screen.dart';
+import 'package:mapparaan/screens/search_location_screen.dart';
 import 'package:mapparaan/services/place_search_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,10 +33,18 @@ void main() {
       ),
     );
 
+    // Tap top search bar to open SearchLocationScreen
     await tester.tap(find.byType(TextField).first);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'Santa Ana');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
+
+    // Type into SearchLocationScreen's search input
+    final searchInput = find.descendant(
+      of: find.byType(SearchLocationScreen),
+      matching: find.byType(TextField),
+    ).first;
+    await tester.enterText(searchInput, 'Santa Ana');
+    // Allow the 700ms debounce timer to fire
+    await tester.pump(const Duration(milliseconds: 750));
     await tester.pumpAndSettle();
 
     expect(searchedQueries, ['Santa Ana']);

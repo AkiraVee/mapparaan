@@ -23,12 +23,12 @@ class TripHistoryEntry {
     DateTime? createdAt,
     this.routeSummary,
     this.etaLabel,
-  })  : id = id ?? '${origin}::${destination}::${DateTime.now().toUtc().toIso8601String()}',
+  })  : id = id ?? '$origin::$destination::${DateTime.now().toUtc().toIso8601String()}',
         createdAt = createdAt ?? DateTime.now();
 
   String get summary => routeSummary ?? '$origin → $destination';
 
-  String get etaText => etaLabel ?? '${createdAt.toLocal().toString().substring(0, 16)}';
+  String get etaText => etaLabel ?? createdAt.toLocal().toString().substring(0, 16);
 
   static String _escapeField(String value) => value.replaceAll('::', '\u0000');
 
@@ -62,7 +62,7 @@ class TripHistoryEntry {
   }
 
   String serialize() =>
-      '$id::${_escapeField(origin)}::${_escapeField(destination)}::${preference?.name ?? RoutePreference.fastest.name}::${durationMinutes}::${fareEstimate}::${createdAt.toUtc().toIso8601String()}';
+      '$id::${_escapeField(origin)}::${_escapeField(destination)}::${preference?.name ?? RoutePreference.fastest.name}::$durationMinutes::$fareEstimate::${createdAt.toUtc().toIso8601String()}';
 }
 
 class TripHistoryService {
@@ -92,5 +92,11 @@ class TripHistoryService {
     _entries
       ..clear()
       ..addAll(updated);
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+    _entries.clear();
   }
 }

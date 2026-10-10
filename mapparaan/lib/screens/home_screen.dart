@@ -38,13 +38,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   LatLng? _userLocation;
   PlaceResult? _selectedPlace;
-  List<PlaceResult> _searchResults = [];
-  AiQueryResolution? _selectedResolution;
   bool _isSelectedPlaceSaved = false;
 
   List<LatLng> _routePoints = [];
   bool _isLoadingRoute = false;
-  String _activeRouteProfile = 'foot';
 
   @override
   void dispose() {
@@ -69,13 +66,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (!mounted || selection == null) return;
+    await _selectPlace(selection.place);
+  }
 
-    final place = selection.place;
+  Future<void> _selectPlace(PlaceResult place) async {
     _searchController.text = place.name;
 
     setState(() {
       _selectedPlace = place;
-      _selectedResolution = selection.resolution;
       _isSelectedPlaceSaved = false;
       _routePoints = [];
     });
@@ -100,18 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _savedPlaceId(PlaceResult place) =>
       '${place.coordinates.latitude}_${place.coordinates.longitude}';
 
-  Future<void> _selectHomeSearchResult(PlaceResult place) async {
-    _searchController.text = place.name;
-    setState(() {
-      _selectedPlace = place;
-      _searchResults = const [];
-      _selectedResolution = AiQueryResolution.fromQuery(place.name);
-      _isSelectedPlaceSaved = false;
-      _routePoints = [];
-    });
-    await _loadSelectedPlaceSavedState(place);
-  }
-
   Future<void> _handleAiQuery(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
@@ -130,8 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _selectedPlace = place;
-        _searchResults = const [];
-        _selectedResolution = AiQueryResolution.fromQuery(query);
         _isSelectedPlaceSaved = false;
         _routePoints = [];
       });
@@ -233,7 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _isLoadingRoute = true;
-      _activeRouteProfile = profile;
       _routePoints = [];
     });
 
@@ -277,7 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onModeSelected(TransportMode mode) {
     // Future: switch real routing based on mode
-    print('Selected transport mode: $mode');
+    debugPrint('Selected transport mode: $mode');
 
     switch (mode) {
       case TransportMode.walking:
@@ -296,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
           // ===== MAP =====
@@ -427,7 +410,6 @@ class _HomeScreenState extends State<HomeScreen> {
               onClose: () {
                 setState(() {
                   _selectedPlace = null;
-                  _selectedResolution = null;
                   _isSelectedPlaceSaved = false;
                   _searchController.clear();
                   _routePoints = [];

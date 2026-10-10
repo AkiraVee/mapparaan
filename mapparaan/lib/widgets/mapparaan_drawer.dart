@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../screens/drawer_destination_screen.dart';
+import '../services/place_search_service.dart';
 
 /// The side menu (drawer) shown across Mapparaan's screens.
 class MapparaanDrawer extends StatelessWidget {
-  const MapparaanDrawer({super.key});
+  final ValueChanged<PlaceResult>? onPlaceSelected;
+
+  const MapparaanDrawer({super.key, this.onPlaceSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -123,14 +126,22 @@ class MapparaanDrawer extends StatelessWidget {
     );
   }
 
-  void _openDestination(BuildContext context, DrawerDestination destination) {
+  Future<void> _openDestination(
+    BuildContext context,
+    DrawerDestination destination,
+  ) async {
     final navigator = Navigator.of(context);
     navigator.pop();
-    navigator.push(
-      MaterialPageRoute<void>(
-        builder: (_) => DrawerDestinationScreen(destination: destination),
+    final selected = await navigator.push<PlaceResult>(
+      MaterialPageRoute<PlaceResult>(
+        builder: (_) => DrawerDestinationScreen(
+          destination: destination,
+        ),
       ),
     );
+    if (selected != null) {
+      onPlaceSelected?.call(selected);
+    }
   }
 }
 
