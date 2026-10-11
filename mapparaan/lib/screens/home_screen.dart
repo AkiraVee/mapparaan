@@ -9,6 +9,7 @@ import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
+import '../services/trip_history_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/location_details_sheet.dart';
@@ -249,9 +250,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final mins = (geometry.durationSeconds / 60).round();
     final km = (geometry.distanceMeters / 1000).toStringAsFixed(1);
-    _showMessage(
-      '${profile == 'foot' ? 'Walking' : 'Driving'} route: $km km • ~$mins min',
+    final modeLabel = profile == 'foot' ? 'Walking' : 'Driving';
+
+    // Record the trip so it actually shows up in the drawer's Trip History
+    // list instead of staying permanently empty.
+    await TripHistoryService.addEntry(
+      TripHistoryEntry(
+        origin: _userLocation != null ? 'Your location' : 'Default location',
+        destination: place.name,
+        durationMinutes: mins,
+        routeSummary: '$modeLabel • $km km',
+      ),
     );
+
+    if (!mounted) return;
+    _showMessage('$modeLabel route: $km km • ~$mins min');
   }
 
   Future<void> _onDirectionsPressed() async {

@@ -202,6 +202,15 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   @override
   Widget build(BuildContext context) {
     final showDropdownArea = _isSearchFocused || _searchResults.isNotEmpty;
+    // Only reserve space for the results panel when there's something to
+    // actually show (an error, a loading spinner, or results) — not just
+    // because the search bar is focused with an empty/short query. This is
+    // what stops "Type at least 3 characters" from showing up as soon as you
+    // tap the search bar.
+    final showResultsPanel = _hasConnectionError ||
+        _isAiResolving ||
+        _isSearching ||
+        _searchResults.isNotEmpty;
 
     return Scaffold(
       drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
@@ -307,24 +316,17 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                     ),
 
                     // Search Results Dropdown List
-                    if (showDropdownArea) ...[
+                    if (showResultsPanel) ...[
                       const SizedBox(height: 8),
                       Expanded(
                         child: _hasConnectionError
                             ? _NoConnectionState(onRetry: _retry)
                             : _isAiResolving || _isSearching
                                 ? const Center(child: CircularProgressIndicator())
-                                : _searchResults.isEmpty
-                                    ? const Center(
-                                        child: Text(
-                                          'Type at least 3 characters',
-                                          style: TextStyle(color: Colors.black54),
-                                        ),
-                                      )
-                                    : _SearchDropdown(
-                                        results: _searchResults,
-                                        onSelect: _selectPlace,
-                                      ),
+                                : _SearchDropdown(
+                                    results: _searchResults,
+                                    onSelect: _selectPlace,
+                                  ),
                       ),
                     ],
                   ],
