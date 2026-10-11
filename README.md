@@ -30,10 +30,10 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 | "My location" button with permission handling, incl. dedicated location-disabled flow | Done |
 | Selected-place pin and location details sheet | Done — Directions, Save, and Share are wired up |
 | Walking/driving directions on the map (real routing via OSRM) | Done (public demo server; self-hosting planned for production) |
-| Saved places (persisted locally) | Done |
-| Trip history (persisted locally, surfaced in drawer) | Partial — storage and UI are done, but nothing currently writes a trip entry after a completed route |
+| Saved places (persisted locally) | Done — tapping a saved place in the drawer re-centers the map on it; each entry can also be removed from the list directly |
+| Trip history (persisted locally, surfaced in drawer) | Partial — storage, listing, and a "Clear all" action are done, but no route completion currently writes a new entry, so the list stays empty in practice |
 | Side drawer (Profile, Saved Places, Trip History, Settings, Help) | Done |
-| Location-details screen with route preference buttons (fastest / cheapest / fewest transfers) | Done — uses mocked multimodal fare/ETA data, not yet wired into the main home flow |
+| Location-details screen with route preference buttons (fastest / cheapest / fewest transfers) | Built but **orphaned** — `location_details_screen.dart` has richer route/fare UI than the bottom sheet but isn't linked from any navigation flow |
 | Basic natural-language query parsing ("from X to Y", preference keywords) | Done (regex-based) |
 | Chatbot / full NLU | Planned (regex parser above is a placeholder for this) |
 | Transit (jeep/bus/UV/LRT-MRT) routing | Planned — currently mocked fare/ETA estimates only |
@@ -45,13 +45,13 @@ This is a deliberate scoping decision: no public live-GPS feed currently exists 
 |---|---|---|
 | **Mobile app** | Flutter (Dart) | Single codebase for Android/iOS (also runs on web for development) |
 | **Map rendering** | `flutter_map` + `latlong2` | Pure-Dart map widget; markers, polylines, route display. No API key or native SDK needed |
-| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. `MapparaanTileLayer` applies a configurable color wash (`MapTint`: none / warm / teal / faded — teal by default) as a cheap overlay rather than a per-pixel filter, so panning/zooming stays fast. `flutter_map_cancellable_tile_provider` is used for better web performance |
+| **Map tiles** | CARTO Voyager raster tiles (OpenStreetMap data) | Free, no API key. `MapparaanTileLayer` applies a configurable color wash (`MapTint`: none / warm / teal / faded — teal by default) as a cheap overlay rather than a per-pixel filter, so panning/zooming stays fast. Used consistently on both HomeScreen and SearchLocationScreen, each with the same Metro Manila camera bounds. `flutter_map_cancellable_tile_provider` is used for better web performance |
 | **Place search** | Nominatim (OpenStreetMap) | Called from `PlaceSearchService`; limited to the Philippines and biased to Metro Manila. Public instance has usage limits, so self-host or switch providers for production |
 | **User location** | `geolocator` | Requested when the user taps "my location"; a dedicated `LocationDisabledScreen` walks the user through enabling it |
-| **Local persistence** | `shared_preferences` | Backs `SavedPlacesService` and `TripHistoryService` |
+| **Local persistence** | `shared_preferences` | Backs `SavedPlacesService` and `TripHistoryService` (including clearing trip history) |
 | **Sharing** | `share_plus` | Used to share a selected place |
 | **Driving/walking routing** | OSRM public demo server (`router.project-osrm.org`) | Live — `RoutePlannerService.fetchRoute` fetches real walking/driving geometry for the "Directions" action. Self-hosted OSRM or Google Routes API planned for production/traffic-aware ETAs |
-| **Transit routing** | OpenTripPlanner (OTP) | Planned. Multimodal (walk + transit) routing, self-hosted, ingests GTFS + OSM. The current mode cards and route-preference options use mocked fare/ETA data (`RoutePlannerService.generateRouteOptions`) as a placeholder |
+| **Transit routing** | OpenTripPlanner (OTP) | Planned. Multimodal (walk + transit) routing, self-hosted, ingests GTFS + OSM. The current mode cards and route-preference options use mocked fare/ETA data (`RoutePlannerService.generateRouteOptions`) as a placeholder, reachable today only through the orphaned `LocationDetailsScreen` |
 | **Chatbot / NLU** | Claude or GPT API (tool-calling / function-calling) | Planned. A lightweight regex-based parser (`AiAssistantService`) already extracts origin/destination/preference from Taglish queries like "from X to Y" as a placeholder; does not compute routes itself |
 | **Backend** | FastAPI (Python) or NestJS (Node.js) | Planned. Orchestrates chatbot → intent → routing engine → response |
 | **Database** | PostgreSQL + PostGIS | Planned. Fare tables, cached routes, user data, spatial queries |
@@ -67,20 +67,20 @@ lib/
 ├── screens/
 │   ├── home_screen.dart               # main map, search bar, selected-place sheet, directions
 │   ├── search_location_screen.dart    # full search screen with debounce + AI query bar
-│   ├── location_details_screen.dart   # standalone place/route details screen
+│   ├── location_details_screen.dart   # richer route/fare screen — not wired into navigation yet
 │   ├── location_disabled_screen.dart  # map + prompt to enable location services
-│   └── drawer_destination_screen.dart # profile, saved places, trip history, settings, help
+│   └── drawer_destination_screen.dart # profile, saved places (tap to select/remove), trip history, settings, help
 ├── services/
 │   ├── ai_assistant_service.dart      # regex-based Taglish query parsing (origin/destination/preference)
 │   ├── place_search_service.dart      # Nominatim search
 │   ├── route_planner_service.dart     # OSRM walking/driving routes + mocked multimodal options
 │   ├── saved_places_service.dart      # persisted saved places (shared_preferences)
-│   └── trip_history_service.dart      # persisted trip history (shared_preferences)
+│   └── trip_history_service.dart      # persisted trip history, incl. clear() (shared_preferences)
 └── widgets/
     ├── ask_mapparaan_bar.dart         # reusable pill-shaped search/ask input
     ├── circle_icon_button.dart        # circular overlay button (menu, back, location, etc.)
     ├── location_details_sheet.dart    # draggable bottom sheet with transport mode picker
-    ├── mapparaan_drawer.dart          # side navigation menu
+    ├── mapparaan_drawer.dart          # side navigation menu; forwards a tapped saved place back to the caller
     └── mapparaan_tile_layer.dart      # CARTO Voyager tiles + configurable color tint
 ```
 
