@@ -59,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _selectPlace(
     PlaceResult place, {
     RoutePreference? preference,
+    PassengerType? passengerType,
   }) async {
     _searchController.text = place.name;
     if (widget.showMap) _mapController.move(place.coordinates, 16.0);
@@ -69,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
           place: place,
           userLocation: _userLocation,
           initialPreference: preference ?? RoutePreference.fastest,
+          passengerType: passengerType ?? PassengerType.general,
         ),
       ),
     );
@@ -94,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await _selectPlace(
       selection.place,
       preference: selection.resolution?.preference,
+      passengerType: selection.resolution?.passengerType,
     );
   }
 
@@ -109,10 +112,12 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
+      final resolution = AiQueryResolution.fromQuery(query);
       _bottomAskController.clear();
       await _selectPlace(
         results.first,
-        preference: AiQueryResolution.fromQuery(query).preference,
+        preference: resolution.preference,
+        passengerType: resolution.passengerType,
       );
     } catch (_) {
       if (mounted) _showMessage('Could not process your request.');

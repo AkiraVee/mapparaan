@@ -39,8 +39,22 @@ class AiQueryResolution {
       origin: parsed.origin,
       destination: parsed.destination,
       preference: _preferenceFromString(parsed.preference),
-      passengerType: PassengerType.general,
+      passengerType: _passengerTypeFromQuery(rawQuery),
     );
+  }
+
+  static PassengerType _passengerTypeFromQuery(String query) {
+    final lower = query.toLowerCase();
+    if (lower.contains('student') || lower.contains('estudyante')) {
+      return PassengerType.student;
+    }
+    if (lower.contains('senior') || lower.contains('elderly') || lower.contains('matanda')) {
+      return PassengerType.senior;
+    }
+    if (lower.contains('pwd') || lower.contains('disab')) {
+      return PassengerType.pwd;
+    }
+    return PassengerType.general;
   }
 
   static RoutePreference? _preferenceFromString(String? value) {

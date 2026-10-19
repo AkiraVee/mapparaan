@@ -50,4 +50,11 @@ class AppConstants {
   static const String searchCountryCodes = 'ph';
   static const int searchResultLimit = 8;
   static const int searchMinQueryLength = 3;
+
+  // ── Transit Planner API ────────────────────────────────────────────────────
+  /// Base URL for the local transit planner API (backend/planner/api.py).
+  /// - Web (Chrome): 'http://localhost:8080' or 'http://127.0.0.1:8080'
+  /// - Android emulator: 'http://10.0.2.2:8080'
+  /// - Physical device: 'http://`YOUR_PC_IP`:8080' (e.g. 'http://192.168.1.100:8080')
+  static const String transitApiBaseUrl = 'http://10.0.2.2:8080';
 }

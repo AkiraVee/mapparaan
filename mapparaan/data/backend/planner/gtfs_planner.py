@@ -75,7 +75,9 @@ def read_csv(path):
 class Planner:
     def __init__(self, data_dir):
         gtfs = os.path.join(data_dir, "gtfs")
-        ref = os.path.join(data_dir, "reference")
+        ref = os.path.join(data_dir, "references")
+        if not os.path.isdir(ref):
+            ref = os.path.join(data_dir, "reference")
 
         with open(os.path.join(ref, "fare_config.json"), encoding="utf-8") as f:
             self.fares = json.load(f)
@@ -366,8 +368,11 @@ class Planner:
     def plan(self, origin, dest, passenger="general", when=None):
         """origin/dest = (lat, lon). Returns a list of route options."""
         when = when or datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        passenger_norm = (passenger or "general").lower().strip()
+        if passenger_norm in ("senior", "senior_citizen"):
+            passenger_norm = "senior_citizen"
         discount = (self.fares["discount"]["multiplier"]
-                    if passenger in self.fares["discount"]["eligible_groups"] else 1.0)
+                    if passenger_norm in self.fares["discount"]["eligible_groups"] else 1.0)
         options, seen = [], set()
 
         direct_m = hav_m(origin[0], origin[1], dest[0], dest[1])
