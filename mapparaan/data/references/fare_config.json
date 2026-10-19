@@ -1,0 +1,64 @@
+{
+  "_note": "PLACEHOLDER VALUES - NOT OFFICIAL. Replace with the current LTFRB / DOTr fare orders before showing fares as real.",
+  "currency": "PHP",
+  "discount": {
+    "eligible_groups": [
+      "student",
+      "senior_citizen",
+      "pwd"
+    ],
+    "multiplier": 0.8,
+    "stackable": false,
+    "legal_basis": [
+      "RA 11314",
+      "RA 9994",
+      "RA 10754"
+    ]
+  },
+  "modes": {
+    "jeepney": {
+      "verified": false,
+      "base_fare": 13.0,
+      "base_km": 4,
+      "per_km": 1.8
+    },
+    "bus": {
+      "verified": false,
+      "base_fare": 13.0,
+      "base_km": 5,
+      "per_km": 2.25
+    },
+    "uv_express": {
+      "verified": false,
+      "base_fare": 15.0,
+      "base_km": 5,
+      "per_km": 2.5
+    },
+    "lrt1": {
+      "verified": false,
+      "type": "stored_value_by_distance",
+      "table": null
+    },
+    "lrt2": {
+      "verified": false,
+      "type": "stored_value_by_distance",
+      "table": null
+    },
+    "mrt3": {
+      "verified": false,
+      "type": "stored_value_by_distance",
+      "table": null
+    },
+    "pnr": {
+      "verified": false,
+      "type": "stored_value_by_distance",
+      "table": null
+    },
+    "fort_bus": {
+      "verified": false,
+      "base_fare": null,
+      "base_km": null,
+      "per_km": null
+    }
+  }
+}
