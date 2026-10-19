@@ -37,6 +37,51 @@ class _HomeScreenState extends State<HomeScreen> {
   LatLng? _userLocation;
 
   @override
+  void initState() {
+    super.initState();
+    _initUserLocation();
+  }
+
+  // Automatically fetches live location on startup or prompts the user if disabled.
+Future<void> _initUserLocation() async {
+  try {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
+    if (!serviceEnabled) {
+      await _openLocationHelp();
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (!mounted) return;
+      if (permission == LocationPermission.denied) {
+        await _openLocationHelp();
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    if (permission == LocationPermission.deniedForever) {
+      await _openLocationHelp();
+      return;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    if (!mounted) return;
+
+    final userLatLng = LatLng(position.latitude, position.longitude);
+    setState(() => _userLocation = userLatLng);
+    _mapController.move(userLatLng, 15.0);
+  } catch (e) {
+    if (mounted) debugPrint('Auto-location error: $e');
+  }
+}
+
+  @override
   void dispose() {
     _searchController.dispose();
     _bottomAskController.dispose();

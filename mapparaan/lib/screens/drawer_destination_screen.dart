@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/commuter_preference_service.dart';
+
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../services/saved_places_service.dart';
@@ -270,6 +272,7 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
   }
 }
 
+// ── REPLACE FROM HERE ──
 class _SettingsPage extends StatefulWidget {
   const _SettingsPage();
 
@@ -278,31 +281,143 @@ class _SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<_SettingsPage> {
-  bool _useMetricUnits = true;
+  CommuterPreferences _prefs = const CommuterPreferences();
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  /// Loads stored theme and color settings when opening the settings drawer.
+  Future<void> _loadPreferences() async {
+    final loaded = await CommuterPreferencesService.load();
+    if (!mounted) return;
+    setState(() {
+      _prefs = loaded;
+      _isLoading = false;
+    });
+  }
+
+  /// Updates state and persists choice to disk when a user picks a new palette or theme.
+  Future<void> _updatePreferences(CommuterPreferences newPrefs) async {
+    setState(() => _prefs = newPrefs);
+    await CommuterPreferencesService.save(newPrefs);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final activeColor = _prefs.colorPalette.primary;
+
     return ListView(
       children: [
+        // ── 1. THEME MODE SELECTOR ──
         const Text(
-          'Travel preferences',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          'Appearance & Theme Mode',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<AppThemeMode>(
+          segments: const [
+            ButtonSegment(
+              value: AppThemeMode.system,
+              label: Text('System'),
+              icon: Icon(Icons.settings_suggest_outlined),
+            ),
+            ButtonSegment(
+              value: AppThemeMode.light,
+              label: Text('Light'),
+              icon: Icon(Icons.wb_sunny_outlined),
+            ),
+            ButtonSegment(
+              value: AppThemeMode.dark,
+              label: Text('Dark'),
+              icon: Icon(Icons.dark_mode_outlined),
+            ),
+          ],
+          selected: {_prefs.themeMode},
+          onSelectionChanged: (set) {
+            _updatePreferences(_prefs.copyWith(themeMode: set.first));
+          },
+        ),
+
+        const Divider(height: 32),
+
+        // ── 2. MANILA LANDMARK COLOR PALETTES ──
+        const Text(
+          'Color Palette Accent',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Personalize main branding inspired by famous Manila landmarks.',
+          style: TextStyle(fontSize: 13, color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: ColorPalette.values.map((palette) {
+            final isSelected = _prefs.colorPalette == palette;
+            return ChoiceChip(
+              avatar: CircleAvatar(
+                backgroundColor: palette.primary,
+                radius: 10,
+              ),
+              label: Text(palette.label),
+              selected: isSelected,
+              selectedColor: palette.container,
+              onSelected: (_) {
+                _updatePreferences(_prefs.copyWith(colorPalette: palette));
+              },
+            );
+          }).toList(),
+        ),
+
+        const Divider(height: 32),
+
+        // ── 3. DISPLAY CONTROLS ──
+        const Text(
+          'Display & Map Controls',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Metric units'),
-          subtitle: const Text('Show distances in kilometers'),
-          value: _useMetricUnits,
-          activeTrackColor: const Color(0xFF00695C),
-          onChanged: (value) => setState(() => _useMetricUnits = value),
+          title: const Text('High-Contrast Map Shading'),
+          subtitle: const Text('Enhances baseline legibility for visual clarity'),
+          value: _prefs.highContrastMap,
+          activeTrackColor: activeColor,
+          onChanged: (val) => _updatePreferences(_prefs.copyWith(highContrastMap: val)),
         ),
-        const Divider(height: 24),
-        const ListTile(
+        SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.privacy_tip_outlined),
-          title: Text('Privacy'),
-          subtitle: Text('Location is used to center the map when requested.'),
+          title: const Text('Compact Sheet View'),
+          subtitle: const Text('Reduces bottom sheet height for maximum map space'),
+          value: _prefs.compactUi,
+          activeTrackColor: activeColor,
+          onChanged: (val) => _updatePreferences(_prefs.copyWith(compactUi: val)),
+        ),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Metric Units'),
+          subtitle: const Text('Display distances in meters and kilometers'),
+          value: _prefs.useMetricUnits,
+          activeTrackColor: activeColor,
+          onChanged: (val) => _updatePreferences(_prefs.copyWith(useMetricUnits: val)),
+        ),
+
+        const Divider(height: 32),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.privacy_tip_outlined, color: activeColor),
+          title: const Text('Privacy & Location Access'),
+          subtitle: const Text('Location permission is used strictly to calculate live routes and center the map on request.'),
         ),
       ],
     );

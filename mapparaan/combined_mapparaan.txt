@@ -53,6 +53,7 @@ lib/
     place_search_service.dart
     route_planner_service.dart
     saved_places_service.dart
+    transit_planner_service.dart
     trip_history_service.dart
   widgets/
     ask_mapparaan_bar.dart
@@ -63,11 +64,8 @@ lib/
   constants.dart
   main.dart
 test/
-  ai_assistant_service_test.dart
-  local_persistence_test.dart
-  route_planner_service_test.dart
-  search_to_pin_widget_test.dart
-  widget_test.dart
+  location_details_screen_test.dart
+  transit_planner_test.dart
 pubspec.yaml
 </directory_structure>
 
@@ -78,6 +76,7 @@ This section contains the contents of the repository's files.
 import 'package:flutter/material.dart';
 
 import '../services/ai_assistant_service.dart';
+import '../services/place_search_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/trip_history_service.dart';
 import 'search_location_screen.dart';
@@ -187,11 +186,16 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
             title: 'No saved places yet',
             message: 'Save places you visit often to find them quickly.',
             actionLabel: 'Find a place',
-            onAction: () => Navigator.of(context).push(
-              MaterialPageRoute<SearchSelection>(
-                builder: (_) => const SearchLocationScreen(),
-              ),
-            ),
+            onAction: () async {
+              final selection = await Navigator.of(context).push<SearchSelection>(
+                MaterialPageRoute<SearchSelection>(
+                  builder: (_) => const SearchLocationScreen(),
+                ),
+              );
+              if (context.mounted && selection != null) {
+                Navigator.of(context).pop(selection.place);
+              }
+            },
           );
         }
 
@@ -209,6 +213,29 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
               subtitle: Text(
                 place.subtitle.isEmpty ? 'Saved place' : place.subtitle,
               ),
+              trailing: IconButton(
+                icon: const Icon(
+                  Icons.bookmark_remove_outlined,
+                  color: Colors.black45,
+                ),
+                tooltip: 'Remove from saved',
+                onPressed: () async {
+                  await SavedPlacesService.toggle(place);
+                  if (!context.mounted) return;
+                  setState(() {
+                    _future = SavedPlacesService.load();
+                  });
+                },
+              ),
+              onTap: () {
+                Navigator.of(context).pop(
+                  PlaceResult(
+                    name: place.name,
+                    subtitle: place.subtitle,
+                    coordinates: place.coordinates,
+                  ),
+                );
+              },
             );
           },
         );
@@ -248,22 +275,70 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
           );
         }
 
-        return ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final trip = items[index];
-            return ListTile(
-              leading: const Icon(
-                Icons.directions_transit,
-                color: Color(0xFF00695C),
+        return Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${items.length} ${items.length == 1 ? 'trip' : 'trips'} recorded',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                  label: const Text('Clear all'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                  ),
+                  onPressed: () async {
+                    await TripHistoryService.clear();
+                    if (!context.mounted) return;
+                    setState(() {
+                      _future = TripHistoryService.load();
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final trip = items[items.length - 1 - index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Color(0xFFE0F2F1),
+                      child: Icon(
+                        Icons.directions_transit,
+                        color: Color(0xFF00695C),
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      '${trip.origin} → ${trip.destination}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      '${trip.routeSummary ?? 'Route'} • ${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    trailing: Text(
+                      trip.etaText,
+                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                    ),
+                  );
+                },
               ),
-              title: Text('${trip.origin} → ${trip.destination}'),
-              subtitle: Text(
-                '${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
-              ),
-            );
-          },
+            ),
+          ],
         );
       },
     );
@@ -434,19 +509,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
-import '../services/saved_places_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
-import '../widgets/location_details_sheet.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
-import 'drawer_destination_screen.dart';
 import 'location_details_screen.dart';
 import 'location_disabled_screen.dart';
 import 'search_location_screen.dart';
@@ -471,10 +542,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
 
   LatLng? _userLocation;
-  PlaceResult? _selectedPlace;
-  List<PlaceResult> _searchResults = [];
-  AiQueryResolution? _selectedResolution;
-  bool _isSelectedPlaceSaved = false;
 
   @override
   void dispose() {
@@ -486,6 +553,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// The one and only way a place gets "selected" in the app. Plain search,
+  /// an "Ask MapParaan" query, and tapping a saved place in the drawer all
+  /// end up here, so they always open the same full details screen (real
+  /// map, route options, Save / Share) instead of behaving differently
+  /// depending on how the place was picked.
+  ///
+  /// [preference] is whatever the person asked for ("cheapest route to X");
+  /// when they didn't name one it defaults to fastest.
+  Future<void> _selectPlace(
+    PlaceResult place, {
+    RoutePreference? preference,
+    PassengerType? passengerType,
+  }) async {
+    _searchController.text = place.name;
+    if (widget.showMap) _mapController.move(place.coordinates, 16.0);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LocationDetailsScreen(
+          place: place,
+          userLocation: _userLocation,
+          initialPreference: preference ?? RoutePreference.fastest,
+          passengerType: passengerType ?? PassengerType.general,
+        ),
+      ),
+    );
+
+    // Back on the home screen: clear the search text so it doesn't keep
+    // showing the place we just left.
+    if (!mounted) return;
+    _searchController.clear();
   }
 
   Future<void> _goToSearchScreen([String? prefilledQuery]) async {
@@ -500,60 +600,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted || selection == null) return;
 
-    final place = selection.place;
-    setState(() {
-      _selectedPlace = place;
-      _selectedResolution = selection.resolution;
-      _isSelectedPlaceSaved = false;
-    });
-    await _loadSelectedPlaceSavedState(place);
-    if (!mounted) return;
-    if (widget.showMap) _mapController.move(place.coordinates, 16.0);
-  }
-
-  Future<void> _loadSelectedPlaceSavedState(PlaceResult place) async {
-    try {
-      final savedPlaces = await SavedPlacesService.load();
-      if (!mounted || _selectedPlace?.coordinates != place.coordinates) return;
-      final id = _savedPlaceId(place);
-      setState(() {
-        _isSelectedPlaceSaved = savedPlaces.any(
-          (savedPlace) => savedPlace.id == id,
-        );
-      });
-    } catch (error) {
-      if (mounted) _showMessage('Could not load saved places: $error');
-    }
-  }
-
-  String _savedPlaceId(PlaceResult place) =>
-      '${place.coordinates.latitude}_${place.coordinates.longitude}';
-
-  Future<void> _submitHomeSearch(String value) async {
-    final query = value.trim();
-    if (query.isEmpty) return;
-
-    try {
-      final results = await widget.searchPlaces(query);
-      if (!mounted) return;
-      setState(() {
-        _searchResults = results;
-        _selectedPlace = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _searchResults = const []);
-    }
-  }
-
-  Future<void> _selectHomeSearchResult(PlaceResult place) async {
-    setState(() {
-      _selectedPlace = place;
-      _searchResults = const [];
-      _selectedResolution = AiQueryResolution.fromQuery(place.name);
-      _isSelectedPlaceSaved = false;
-    });
-    await _loadSelectedPlaceSavedState(place);
+    await _selectPlace(
+      selection.place,
+      preference: selection.resolution?.preference,
+      passengerType: selection.resolution?.passengerType,
+    );
   }
 
   Future<void> _handleAiQuery(String rawQuery) async {
@@ -568,17 +619,13 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      final place = results.first;
+      final resolution = AiQueryResolution.fromQuery(query);
       _bottomAskController.clear();
-      setState(() {
-        _selectedPlace = place;
-        _searchResults = const [];
-        _selectedResolution = AiQueryResolution.fromQuery(query);
-        _isSelectedPlaceSaved = false;
-      });
-      await _loadSelectedPlaceSavedState(place);
-      if (!mounted) return;
-      if (widget.showMap) _mapController.move(place.coordinates, 16.0);
+      await _selectPlace(
+        results.first,
+        preference: resolution.preference,
+        passengerType: resolution.passengerType,
+      );
     } catch (_) {
       if (mounted) _showMessage('Could not process your request.');
     }
@@ -631,68 +678,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _saveSelectedPlace() async {
-    final selectedPlace = _selectedPlace;
-    if (selectedPlace == null) return;
-    try {
-      final added = await SavedPlacesService.toggle(
-        SavedPlace(
-          id: _savedPlaceId(selectedPlace),
-          name: selectedPlace.name,
-          subtitle: selectedPlace.subtitle,
-          latitude: selectedPlace.coordinates.latitude,
-          longitude: selectedPlace.coordinates.longitude,
-        ),
-      );
-      if (!mounted || _selectedPlace?.coordinates != selectedPlace.coordinates) {
-        return;
-      }
-      setState(() => _isSelectedPlaceSaved = added);
-      _showMessage(added ? 'Saved place' : 'Removed from saved places');
-    } catch (error) {
-      if (mounted) _showMessage('Could not save place: $error');
-    }
-  }
-
-  Future<void> _shareSelectedPlace() async {
-    final place = _selectedPlace;
-    if (place == null) return;
-    try {
-      await SharePlus.instance.share(
-        ShareParams(text: '${place.name} — ${place.subtitle}'),
-      );
-    } catch (error) {
-      if (mounted) _showMessage('Could not share place: $error');
-    }
-  }
-
-  Future<void> _openSelectedRouteDetails() async {
-    final place = _selectedPlace;
-    if (place == null) return;
-    final resolution = _selectedResolution;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LocationDetailsScreen(
-          place: place,
-          origin: resolution?.origin ?? 'Current location',
-          initialPreference: resolution?.preference ?? RoutePreference.fastest,
-          passengerType: resolution?.passengerType ?? PassengerType.general,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
+          // ===== MAP =====
           if (widget.showMap)
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                initialCenter: const LatLng(
+                  AppConstants.defaultLat,
+                  AppConstants.defaultLng,
+                ),
                 initialZoom: AppConstants.defaultZoom,
                 minZoom: AppConstants.minZoom,
                 maxZoom: AppConstants.maxZoom,
@@ -702,9 +702,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               children: [
                 const MapparaanTileLayer(),
-                MarkerLayer(
-                  markers: [
-                    if (_userLocation != null)
+                if (_userLocation != null)
+                  MarkerLayer(
+                    markers: [
                       Marker(
                         point: _userLocation!,
                         width: 24,
@@ -721,51 +721,42 @@ class _HomeScreenState extends State<HomeScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.blueAccent,
                                 shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2.5,
-                                ),
+                                border: Border.all(color: Colors.white, width: 2.5),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    if (_selectedPlace != null)
-                      Marker(
-                        point: _selectedPlace!.coordinates,
-                        width: 40,
-                        height: 40,
-                        alignment: Alignment.topCenter,
-                        child: const Icon(
-                          Icons.location_on,
-                          size: 40,
-                          color: Color(0xFFD32F2F),
-                        ),
-                      ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             )
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF2F5F4))),
+
+          // ===== TOP BAR =====
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  CircleIconButton(
-                    icon: Icons.menu,
-                    onTap: () => Scaffold.of(context).openDrawer(),
+                  Builder(
+                    builder: (context) {
+                      return CircleIconButton(
+                        icon: Icons.menu,
+                        onTap: () => Scaffold.of(context).openDrawer(),
+                      );
+                    },
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AskMapparaanBar(
                       controller: _searchController,
                       hintText: 'Search here',
+                      readOnly: true,
                       leadingIcon: Icons.search,
                       onTap: () => _goToSearchScreen(_searchController.text),
-                      onSubmitted: _submitHomeSearch,
-                      onChanged: (_) {},
+                      onSubmitted: (value) => _goToSearchScreen(value),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -777,77 +768,22 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 16, 112),
-              child: CircleIconButton(
-                icon: Icons.settings_outlined,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => DrawerDestinationScreen(
-                      destination: DrawerDestination.settings,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (_searchResults.isNotEmpty)
-            Positioned(
-              top: 90,
-              left: 16,
-              right: 16,
-              child: Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                elevation: 4,
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: _searchResults.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final place = _searchResults[index];
-                    return ListTile(
-                      title: Text(place.name),
-                      subtitle: place.subtitle.isNotEmpty
-                          ? Text(place.subtitle)
-                          : null,
-                      onTap: () => _selectHomeSearchResult(place),
-                    );
-                  },
-                ),
-              ),
-            ),
+
+          // ===== ASK BAR =====
           Align(
             alignment: Alignment.bottomCenter,
-            child: _selectedPlace != null
-                ? LocationDetailsSheet(
-                    title: _selectedPlace!.name,
-                    address: _selectedPlace!.subtitle,
-                    isSaved: _isSelectedPlaceSaved,
-                    onClose: () => setState(() {
-                      _selectedPlace = null;
-                      _selectedResolution = null;
-                      _isSelectedPlaceSaved = false;
-                    }),
-                    onDirections: _openSelectedRouteDetails,
-                    onSave: _saveSelectedPlace,
-                    onShare: _shareSelectedPlace,
-                  )
-                : SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: AskMapparaanBar(
-                        controller: _bottomAskController,
-                        hintText: 'Ask MapParaan',
-                        onTap: () => _goToSearchScreen(_bottomAskController.text),
-                        onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
-                        onSubmitted: _handleAiQuery,
-                      ),
-                    ),
-                  ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: AskMapparaanBar(
+                  controller: _bottomAskController,
+                  hintText: 'Ask MapParaan',
+                  onTap: () => _goToSearchScreen(_bottomAskController.text),
+                  onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
+                  onSubmitted: _handleAiQuery,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -858,15 +794,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
 <file path="lib/screens/location_details_screen.dart">
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../constants.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
+import '../services/saved_places_service.dart';
+import '../services/transit_planner_service.dart';
+import '../services/trip_history_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 
+/// The single, consistent "I picked a place" screen. Every place selection
+/// in the app — plain search, an "Ask MapParaan" query, or tapping a saved
+/// place from the drawer — ends up here.
+///
+/// It connects to the local GTFS transit planner API (backend/planner/api.py),
+/// showing real Metro Manila routes, individual legs, ETAs, and fares with
+/// legal discounts (RA 11314 / RA 9994 / RA 10754) for students, seniors, and PWDs.
+/// If the local API server isn't running, it seamlessly falls back to mocked
+/// estimates and OSRM walking paths.
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
   final String placeName;
@@ -888,6 +839,7 @@ class LocationDetailsScreen extends StatefulWidget {
   });
 
   String get resolvedPlaceName => place?.name ?? placeName;
+  String get resolvedSubtitle => place?.subtitle ?? origin;
   LatLng get resolvedDestination =>
       place?.coordinates ?? destinationCoordinates ?? const LatLng(14.5995, 120.9842);
 
@@ -896,71 +848,349 @@ class LocationDetailsScreen extends StatefulWidget {
 }
 
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
+  final MapController _mapController = MapController();
+
   bool _isSaved = false;
-  RoutePreference _selectedPreference = RoutePreference.fastest;
-  List<RouteOption> _routeOptions = const [];
+  bool _isLoadingRoute = false;
+  bool _tripLogged = false;
+  bool _isOfflineFallback = false;
+
+  late RoutePreference _selectedPreference;
+  late PassengerType _passengerType;
+
+  List<TransitPlanOption> _routeOptions = const [];
+  TransitPlanOption? _selectedOption;
+  List<LatLng> _routePoints = [];
 
   @override
   void initState() {
     super.initState();
     _selectedPreference = widget.initialPreference;
-    _refreshRouteOptions();
+    _passengerType = widget.passengerType;
+    _loadSavedState();
+    _refreshRoute();
   }
 
-  void _refreshRouteOptions() {
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  String get _savedPlaceId {
+    final destination = widget.resolvedDestination;
+    return '${destination.latitude}_${destination.longitude}';
+  }
+
+  Future<void> _loadSavedState() async {
+    try {
+      final savedPlaces = await SavedPlacesService.load();
+      if (!mounted) return;
+      setState(() {
+        _isSaved = savedPlaces.any((s) => s.id == _savedPlaceId);
+      });
+    } catch (_) {
+      // Saved-state check failing shouldn't block showing the screen.
+    }
+  }
+
+  /// Refreshes transit routes from the local GTFS planner API. If the API is
+  /// unreachable, it falls back to mocked options + OSRM walking path.
+  Future<void> _refreshRoute() async {
     final destination = widget.resolvedDestination;
     final userLocation = widget.userLocation ?? const LatLng(14.5943, 120.9721);
 
-    setState(() {
-      _routeOptions = RoutePlannerService.generateRouteOptions(
+    setState(() => _isLoadingRoute = true);
+
+    // 1. Attempt to fetch real multimodal options from the local planner API
+    final realPlans = await TransitPlannerService.planTransit(
+      origin: userLocation,
+      destination: destination,
+      passengerType: _passengerType,
+    );
+
+    if (!mounted) return;
+
+    if (realPlans != null && realPlans.isNotEmpty) {
+      // Find option matching current preference, or fallback to first
+      final matching = realPlans.where((o) => o.routePreference == _selectedPreference);
+      final selected = matching.isNotEmpty ? matching.first : realPlans.first;
+      final points = selected.allPoints;
+
+      setState(() {
+        _isOfflineFallback = false;
+        _routeOptions = realPlans;
+        _selectedOption = selected;
+        _routePoints = points;
+        _isLoadingRoute = false;
+      });
+
+      _fitCameraToBounds(points);
+    } else {
+      // 2. Local API offline: Fall back to mocked estimates and OSRM walking route
+      final geometry = await RoutePlannerService.fetchRoute(
+        origin: userLocation,
+        destination: destination,
+        profile: 'foot',
+      );
+
+      if (!mounted) return;
+
+      final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
+          ? geometry.points
+          : [userLocation, destination];
+
+      final fallbackOptions = TransitPlannerService.getFallbackOptions(
         destination: destination,
         userLocation: userLocation,
         preference: _selectedPreference,
+        passengerType: _passengerType,
+        fallbackPath: fallbackPoints,
       );
-    });
+
+      final selected = fallbackOptions.isNotEmpty ? fallbackOptions.first : null;
+
+      setState(() {
+        _isOfflineFallback = true;
+        _routeOptions = fallbackOptions;
+        _selectedOption = selected;
+        _routePoints = fallbackPoints;
+        _isLoadingRoute = false;
+      });
+
+      _fitCameraToBounds(fallbackPoints);
+    }
+
+    // Log trip once per visit to this screen
+    if (!_tripLogged && _routeOptions.isNotEmpty) {
+      _tripLogged = true;
+      final topOption = _selectedOption ?? _routeOptions.first;
+      await TripHistoryService.addEntry(
+        TripHistoryEntry(
+          origin: widget.userLocation != null ? 'Your location' : 'Default location',
+          destination: widget.resolvedPlaceName,
+          preference: _selectedPreference,
+          durationMinutes: topOption.etaMinutes,
+          routeSummary: topOption.summary.isNotEmpty
+              ? topOption.summary
+              : '${topOption.title} (₱${topOption.effectiveFare(_passengerType)})',
+        ),
+      );
+    }
+  }
+
+  void _fitCameraToBounds(List<LatLng> points) {
+    if (points.length < 2) return;
+    try {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.fromLTRB(40, 100, 40, 360),
+        ),
+      );
+    } catch (_) {
+      // Avoid crash if bounds calculation fails on identical points
+    }
   }
 
   void _selectPreference(RoutePreference preference) {
+    if (preference == _selectedPreference) return;
+    setState(() => _selectedPreference = preference);
+
+    // Look for an existing loaded option matching the selected preference
+    final matching = _routeOptions.where((o) => o.routePreference == preference);
+    if (matching.isNotEmpty) {
+      _selectOption(matching.first);
+    } else {
+      _refreshRoute();
+    }
+  }
+
+  void _selectPassengerType(PassengerType type) {
+    if (type == _passengerType) return;
+    setState(() => _passengerType = type);
+    _refreshRoute();
+  }
+
+  void _selectOption(TransitPlanOption option) {
     setState(() {
-      _selectedPreference = preference;
+      _selectedOption = option;
+      _selectedPreference = option.routePreference;
+      _routePoints = option.allPoints;
     });
-    _refreshRouteOptions();
+
+    if (_routePoints.length >= 2) {
+      _fitCameraToBounds(_routePoints);
+    }
+  }
+
+  Future<void> _handleSaveToggle() async {
+    try {
+      final destination = widget.resolvedDestination;
+      final added = await SavedPlacesService.toggle(
+        SavedPlace(
+          id: _savedPlaceId,
+          name: widget.resolvedPlaceName,
+          subtitle: widget.resolvedSubtitle,
+          latitude: destination.latitude,
+          longitude: destination.longitude,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _isSaved = added);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(added ? 'Saved place' : 'Removed from saved places')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save place: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _handleShare() async {
-    final text = 'Mapparaan route to ${widget.resolvedPlaceName}';
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Route summary copied to clipboard')),
-    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: '${widget.resolvedPlaceName} — ${widget.resolvedSubtitle}',
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share place: $error')),
+        );
+      }
+    }
+  }
+
+  void _centerOnMyLocation() {
+    final location = widget.userLocation;
+    if (location == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Location isn't available. Enable it from the home screen."),
+        ),
+      );
+      return;
+    }
+    _mapController.move(location, 15.0);
   }
 
   @override
   Widget build(BuildContext context) {
+    final destination = widget.resolvedDestination;
+
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(
+        onPlaceSelected: (selected) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LocationDetailsScreen(
+                place: selected,
+                userLocation: widget.userLocation,
+                passengerType: _passengerType,
+              ),
+            ),
+          );
+        },
+      ),
       body: Builder(
         builder: (context) {
           return Stack(
             children: [
-              Container(
-                color: const Color(0xFFE0E0E0),
-                width: double.infinity,
-                height: double.infinity,
-                child: const Center(
-                  child: Text(
-                    'Map goes here',
-                    style: TextStyle(color: Colors.black45, fontSize: 16),
+              // ===== INTERACTIVE MAP =====
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: widget.userLocation ?? destination,
+                  initialZoom: AppConstants.defaultZoom,
+                  minZoom: AppConstants.minZoom,
+                  maxZoom: AppConstants.maxZoom,
+                  cameraConstraint: CameraConstraint.contain(
+                    bounds: AppConstants.manilaBounds,
                   ),
                 ),
+                children: [
+                  const MapparaanTileLayer(),
+
+                  // Draw real multi-leg route (walk, jeepney, bus, rail) with distinctive colors
+                  if (_selectedOption != null && _selectedOption!.legs.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        for (final leg in _selectedOption!.legs)
+                          if (leg.path.length >= 2)
+                            Polyline(
+                              points: leg.path,
+                              color: leg.color,
+                              strokeWidth: leg.isWalk ? 4.5 : 6.0,
+                              borderStrokeWidth: leg.isWalk ? 0.0 : 2.0,
+                              borderColor: Colors.white,
+                            ),
+                      ],
+                    )
+                  else if (_routePoints.length >= 2)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _routePoints,
+                          color: const Color(0xFF00695C),
+                          strokeWidth: 5,
+                          borderStrokeWidth: 2,
+                          borderColor: Colors.white,
+                        ),
+                      ],
+                    ),
+
+                  // Map markers for origin and destination
+                  MarkerLayer(
+                    markers: [
+                      if (widget.userLocation != null)
+                        Marker(
+                          point: widget.userLocation!,
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Marker(
+                        point: destination,
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.topCenter,
+                        child: const Icon(
+                          Icons.location_on,
+                          size: 40,
+                          color: Color(0xFFD32F2F),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
+
+              // Top action bar (menu + my location)
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -970,16 +1200,45 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       ),
                       CircleIconButton(
                         icon: Icons.my_location,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Centering on your location')),
-                          );
-                        },
+                        onTap: _centerOnMyLocation,
                       ),
                     ],
                   ),
                 ),
               ),
+
+              if (_isLoadingRoute)
+                const Positioned(
+                  top: 90,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Card(
+                      elevation: 4,
+                      shape: StadiumBorder(),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Finding best transit routes...',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Bottom details sheet
               Align(
                 alignment: Alignment.bottomCenter,
                 child: SafeArea(
@@ -987,12 +1246,17 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   child: _PlaceDetailsSheet(
                     placeName: widget.resolvedPlaceName,
                     isSaved: _isSaved,
+                    isOfflineFallback: _isOfflineFallback,
                     selectedPreference: _selectedPreference,
+                    passengerType: _passengerType,
                     routeOptions: _routeOptions,
-                    onSaveToggle: () => setState(() => _isSaved = !_isSaved),
+                    selectedOption: _selectedOption,
+                    onSaveToggle: _handleSaveToggle,
                     onShare: _handleShare,
                     onClose: () => Navigator.of(context).pop(),
                     onPreferenceSelected: _selectPreference,
+                    onPassengerTypeSelected: _selectPassengerType,
+                    onOptionSelected: _selectOption,
                   ),
                 ),
               ),
@@ -1007,36 +1271,49 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 class _PlaceDetailsSheet extends StatelessWidget {
   final String placeName;
   final bool isSaved;
+  final bool isOfflineFallback;
   final RoutePreference selectedPreference;
-  final List<RouteOption> routeOptions;
+  final PassengerType passengerType;
+  final List<TransitPlanOption> routeOptions;
+  final TransitPlanOption? selectedOption;
   final VoidCallback onSaveToggle;
   final VoidCallback onShare;
   final VoidCallback onClose;
   final ValueChanged<RoutePreference> onPreferenceSelected;
+  final ValueChanged<PassengerType> onPassengerTypeSelected;
+  final ValueChanged<TransitPlanOption> onOptionSelected;
 
   const _PlaceDetailsSheet({
     required this.placeName,
     required this.isSaved,
+    required this.isOfflineFallback,
     required this.selectedPreference,
+    required this.passengerType,
     required this.routeOptions,
+    required this.selectedOption,
     required this.onSaveToggle,
     required this.onShare,
     required this.onClose,
     required this.onPreferenceSelected,
+    required this.onPassengerTypeSelected,
+    required this.onOptionSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.58;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
-            blurRadius: 12,
-            offset: Offset(0, -2),
+            blurRadius: 14,
+            offset: Offset(0, -3),
           ),
         ],
       ),
@@ -1044,46 +1321,63 @@ class _PlaceDetailsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Drag handle
           Center(
             child: Container(
-              width: 40,
+              width: 36,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: Colors.black12,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
+
+          // Header title and action buttons
           Row(
             children: [
               Expanded(
                 child: Text(
                   placeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               IconButton(
+                visualDensity: VisualDensity.compact,
                 icon: Icon(
                   isSaved ? Icons.bookmark : Icons.bookmark_border,
-                  color: Colors.black87,
+                  color: isSaved ? const Color(0xFF00695C) : Colors.black87,
                 ),
                 onPressed: onSaveToggle,
               ),
               IconButton(
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.share, color: Colors.black87),
                 onPressed: onShare,
               ),
               IconButton(
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.close, color: Colors.black87),
                 onPressed: onClose,
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+
+          // Passenger Category Selector (General / Student / Senior / PWD)
+          _PassengerTypeSelector(
+            selectedType: passengerType,
+            onSelected: onPassengerTypeSelected,
+          ),
+          const SizedBox(height: 10),
+
+          // Route preference selector (Fastest / Cheapest / Fewest Transfers)
           Row(
             children: [
               _PreferenceButton(
@@ -1096,27 +1390,140 @@ class _PlaceDetailsSheet extends StatelessWidget {
               _PreferenceButton(
                 label: 'Cheapest',
                 active: selectedPreference == RoutePreference.cheapest,
-                accent: const Color(0xFFB2EBF2),
+                accent: const Color(0xFF00796B),
                 onPressed: () => onPreferenceSelected(RoutePreference.cheapest),
               ),
               const SizedBox(width: 8),
               _PreferenceButton(
                 label: 'Fewest\nTransfers',
                 active: selectedPreference == RoutePreference.fewestTransfers,
-                accent: const Color(0xFFE0F7FA),
-                onPressed: () =>
-                    onPreferenceSelected(RoutePreference.fewestTransfers),
+                accent: const Color(0xFF00897B),
+                onPressed: () => onPreferenceSelected(RoutePreference.fewestTransfers),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          ...routeOptions.map(
-            (route) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _RouteResultCard(route: route),
+
+          // Offline fallback notice banner
+          if (isOfflineFallback)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFE0B2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 14, color: Color(0xFFE65100)),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'API offline: showing mock estimates. Start backend/planner/api.py for real routes.',
+                      style: TextStyle(fontSize: 10, color: Color(0xFFBF360C)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          // Scrollable route options list
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: routeOptions.map(
+                  (route) {
+                    final isSelected = selectedOption == route ||
+                        (selectedOption == null && route == routeOptions.first);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _RouteResultCard(
+                        route: route,
+                        isSelected: isSelected,
+                        passengerType: passengerType,
+                        onTap: () => onOptionSelected(route),
+                      ),
+                    );
+                  },
+                ).toList(),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Category selector allowing commuters to switch between General, Student, Senior, and PWD
+class _PassengerTypeSelector extends StatelessWidget {
+  final PassengerType selectedType;
+  final ValueChanged<PassengerType> onSelected;
+
+  const _PassengerTypeSelector({
+    required this.selectedType,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4F4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        children: PassengerType.values.map((type) {
+          final isSelected = type == selectedType;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onSelected(type),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: isSelected
+                      ? const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      type.label,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? const Color(0xFF00695C) : Colors.black87,
+                      ),
+                    ),
+                    if (type.isDiscounted)
+                      Text(
+                        '20% off',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? const Color(0xFF00897B) : Colors.teal.shade800,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1145,96 +1552,241 @@ class _PreferenceButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: background,
           foregroundColor: foreground,
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          elevation: active ? 2 : 0,
+          padding: const EdgeInsets.symmetric(vertical: 10),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         onPressed: onPressed,
         child: Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         ),
       ),
     );
   }
 }
 
+/// Rich card showing real legs, ETA, fare, and statutory discount
 class _RouteResultCard extends StatelessWidget {
-  final RouteOption route;
+  final TransitPlanOption route;
+  final bool isSelected;
+  final PassengerType passengerType;
+  final VoidCallback onTap;
 
-  const _RouteResultCard({required this.route});
+  const _RouteResultCard({
+    required this.route,
+    required this.isSelected,
+    required this.passengerType,
+    required this.onTap,
+  });
+
+  IconData _getLeadingIcon() {
+    if (route.transfers == 0) {
+      if (route.modes.contains('jeepney')) return Icons.airport_shuttle;
+      if (route.modes.contains('bus')) return Icons.directions_bus;
+      if (route.modes.any((m) => m.startsWith('lrt') || m.startsWith('mrt') || m == 'pnr')) {
+        return Icons.train;
+      }
+      return Icons.directions_walk;
+    }
+    return Icons.alt_route;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD7F3F1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              route.transfers == 0 ? Icons.directions_car : Icons.directions_bus,
-              color: const Color(0xFF00695C),
-            ),
+    final isDiscounted = passengerType.isDiscounted;
+    final effectiveFare = route.effectiveFare(passengerType);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0FDFB) : const Color(0xFFF7F9F9),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF00695C) : const Color(0xFFE2E8E8),
+            width: isSelected ? 2 : 1,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  route.title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${route.modeLabel} • ${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  route.summary,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '₱${route.fare}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF00695C),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Mode icon container
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFD7F3F1) : const Color(0xFFE6EEEE),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _getLeadingIcon(),
+                size: 22,
+                color: const Color(0xFF00695C),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+
+            // Route summary & legs details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        route.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (isSelected) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00695C),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Active map route',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black54,
+                    ),
+                  ),
+
+                  // Individual leg badges if available
+                  if (route.legs.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: route.legs.map((leg) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: leg.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: leg.color.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                leg.isWalk ? Icons.directions_walk : Icons.directions_bus,
+                                size: 11,
+                                color: leg.color,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                leg.isWalk
+                                    ? '${leg.minutes}m'
+                                    : '${leg.modeLabel ?? 'Ride'} ${leg.routeCode ?? ''} (${leg.minutes}m)',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: leg.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+
+                  if (route.summary.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      route.summary,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Fare section with student/senior/PWD discount display
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDDE6E6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '₱$effectiveFare',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF00695C),
+                    ),
+                  ),
+                  if (isDiscounted) ...[
+                    Text(
+                      '₱${route.fare}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black38,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0F2F1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '-20%',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF00695C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1535,7 +2087,9 @@ import '../services/place_search_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 
+/// Screen for searching place coordinates or issuing natural-language queries.
 class SearchLocationScreen extends StatefulWidget {
   final String? initialQuery;
   final bool showMap;
@@ -1573,9 +2127,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _topSearchController.text = widget.initialQuery!;
     }
+
     _topSearchFocusNode.addListener(() {
       setState(() => _isSearchFocused = _topSearchFocusNode.hasFocus);
     });
+
     if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
       _onSearchChanged(widget.initialQuery!);
     }
@@ -1612,6 +2168,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     }
   }
 
+  /// Debounces user input typing to query nominatim search API
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -1649,6 +2206,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     });
   }
 
+  /// Selects place and pops search screen back to caller
   void _selectPlace(PlaceResult place) {
     _topSearchFocusNode.unfocus();
     Navigator.of(context).pop(
@@ -1659,6 +2217,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     );
   }
 
+  /// Processes natural language transit intent via AI assistant
   Future<void> _handleAiQuery(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
@@ -1719,11 +2278,21 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   @override
   Widget build(BuildContext context) {
     final showDropdownArea = _isSearchFocused || _searchResults.isNotEmpty;
+    // Only reserve space for the results panel when there's something to
+    // actually show (an error, a loading spinner, or results) — not just
+    // because the search bar is focused with an empty/short query. This is
+    // what stops "Type at least 3 characters" from showing up as soon as you
+    // tap the search bar.
+    final showResultsPanel = _hasConnectionError ||
+        _isAiResolving ||
+        _isSearching ||
+        _searchResults.isNotEmpty;
 
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
+          // FlutterMap Background
           if (widget.showMap)
             FlutterMap(
               mapController: _mapController,
@@ -1731,12 +2300,14 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                 initialCenter:
                     _userLocation ?? const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
                 initialZoom: AppConstants.defaultZoom,
+                minZoom: AppConstants.minZoom,
+                maxZoom: AppConstants.maxZoom,
+                cameraConstraint: CameraConstraint.contain(
+                  bounds: AppConstants.manilaBounds,
+                ),
               ),
               children: [
-                TileLayer(
-                  urlTemplate: AppConstants.mapTileUrl,
-                  userAgentPackageName: AppConstants.appPackageName,
-                ),
+                const MapparaanTileLayer(),
                 if (_userLocation != null)
                   MarkerLayer(
                     markers: [
@@ -1771,69 +2342,76 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
             )
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF3F5F3))),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      CircleIconButton(
-                        icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
-                        onTap: () {
-                          if (_isSearchFocused) {
-                            _topSearchFocusNode.unfocus();
-                          } else {
-                            Scaffold.of(context).openDrawer();
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: AskMapparaanBar(
-                          controller: _topSearchController,
-                          focusNode: _topSearchFocusNode,
-                          hintText: 'Search here',
-                          leadingIcon: Icons.search,
-                          onChanged: _onSearchChanged,
-                          onSubmitted: _onSearchChanged,
-                        ),
-                      ),
-                      if (!_isSearchFocused) ...[
-                        const SizedBox(width: 8),
-                        CircleIconButton(
-                          icon: Icons.my_location,
-                          onTap: _goToMyLocation,
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (showDropdownArea) ...[
+
+          // Bound Fill Positioned Container to prevent vertical overflow layout errors
+          Positioned.fill(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     const SizedBox(height: 8),
-                    Expanded(
-                      child: _hasConnectionError
-                          ? _NoConnectionState(onRetry: _retry)
-                          : _isAiResolving || _isSearching
-                              ? const Center(child: CircularProgressIndicator())
-                              : _searchResults.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        'Type at least 3 characters',
-                                        style: TextStyle(color: Colors.black54),
-                                      ),
-                                    )
-                                  : _SearchDropdown(
-                                      results: _searchResults,
-                                      onSelect: _selectPlace,
-                                    ),
+                    // Top Header Row (Back/Menu Button, Search Input, Location Button)
+                    Row(
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            return CircleIconButton(
+                              icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
+                              onTap: () {
+                                if (_isSearchFocused) {
+                                  _topSearchFocusNode.unfocus();
+                                } else {
+                                  Scaffold.of(context).openDrawer();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AskMapparaanBar(
+                            controller: _topSearchController,
+                            focusNode: _topSearchFocusNode,
+                            hintText: 'Search here',
+                            autofocus: true,
+                            leadingIcon: Icons.search,
+                            onChanged: _onSearchChanged,
+                            onSubmitted: _onSearchChanged,
+                          ),
+                        ),
+                        if (!_isSearchFocused) ...[
+                          const SizedBox(width: 8),
+                          CircleIconButton(
+                            icon: Icons.my_location,
+                            onTap: _goToMyLocation,
+                          ),
+                        ],
+                      ],
                     ),
+
+                    // Search Results Dropdown List
+                    if (showResultsPanel) ...[
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _hasConnectionError
+                            ? _NoConnectionState(onRetry: _retry)
+                            : _isAiResolving || _isSearching
+                                ? const Center(child: CircularProgressIndicator())
+                                : _SearchDropdown(
+                                    results: _searchResults,
+                                    onSelect: _selectPlace,
+                                  ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
+
+          // Bottom Prompt Bar
           if (!showDropdownArea)
             Align(
               alignment: Alignment.bottomCenter,
@@ -1988,8 +2566,22 @@ class AiQueryResolution {
       origin: parsed.origin,
       destination: parsed.destination,
       preference: _preferenceFromString(parsed.preference),
-      passengerType: PassengerType.general,
+      passengerType: _passengerTypeFromQuery(rawQuery),
     );
+  }
+
+  static PassengerType _passengerTypeFromQuery(String query) {
+    final lower = query.toLowerCase();
+    if (lower.contains('student') || lower.contains('estudyante')) {
+      return PassengerType.student;
+    }
+    if (lower.contains('senior') || lower.contains('elderly') || lower.contains('matanda')) {
+      return PassengerType.senior;
+    }
+    if (lower.contains('pwd') || lower.contains('disab')) {
+      return PassengerType.pwd;
+    }
+    return PassengerType.general;
   }
 
   static RoutePreference? _preferenceFromString(String? value) {
@@ -2199,6 +2791,10 @@ class PlaceSearchService {
 </file>
 
 <file path="lib/services/route_planner_service.dart">
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 enum RoutePreference { fastest, cheapest, fewestTransfers }
@@ -2223,9 +2819,67 @@ class RouteOption {
   });
 }
 
+/// Real route geometry returned by OSRM
+class RouteGeometry {
+  final List<LatLng> points;
+  final double distanceMeters;
+  final double durationSeconds;
+  final String profile; // "foot" or "driving"
+
+  const RouteGeometry({
+    required this.points,
+    required this.distanceMeters,
+    required this.durationSeconds,
+    required this.profile,
+  });
+}
+
 class RoutePlannerService {
   const RoutePlannerService._();
 
+  // Public demo OSRM server (free, no key needed)
+  static const String _osrmBase = 'https://router.project-osrm.org';
+
+  /// Fetches a real walking or driving route
+  static Future<RouteGeometry?> fetchRoute({
+    required LatLng origin,
+    required LatLng destination,
+    required String profile, // "foot" or "driving"
+  }) async {
+    final url = Uri.parse(
+      '$_osrmBase/route/v1/$profile/'
+      '${origin.longitude},${origin.latitude};'
+      '${destination.longitude},${destination.latitude}'
+      '?overview=full&geometries=geojson',
+    );
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode != 200) return null;
+
+      final data = json.decode(response.body);
+      if (data['code'] != 'Ok') return null;
+
+      final route = data['routes'][0];
+      final coordinates = route['geometry']['coordinates'] as List;
+
+      final points = coordinates
+          .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
+          .toList();
+
+      return RouteGeometry(
+        points: points,
+        distanceMeters: (route['distance'] as num).toDouble(),
+        durationSeconds: (route['duration'] as num).toDouble(),
+        profile: profile,
+      );
+    } catch (e) {
+      debugPrint('OSRM error: $e');
+      return null;
+    }
+  }
+
+  /// Mock multimodal options (we will improve these later)
   static List<RouteOption> generateRouteOptions({
     required LatLng destination,
     required LatLng? userLocation,
@@ -2280,19 +2934,7 @@ class RoutePlannerService {
         break;
     }
 
-    return options
-        .map(
-          (option) => RouteOption(
-            title: option.title,
-            summary: option.summary,
-            modeLabel: option.modeLabel,
-            etaMinutes: option.etaMinutes,
-            fare: option.fare,
-            transfers: option.transfers,
-            preference: preference,
-          ),
-        )
-        .toList();
+    return options;
   }
 }
 </file>
@@ -2448,6 +3090,345 @@ class SavedPlacesService {
 }
 </file>
 
+<file path="lib/services/transit_planner_service.dart">
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/material.dart' show Color;
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
+
+import '../constants.dart';
+import 'ai_assistant_service.dart';
+import 'route_planner_service.dart';
+
+extension PassengerTypeExt on PassengerType {
+  String get apiValue {
+    switch (this) {
+      case PassengerType.general:
+        return 'general';
+      case PassengerType.student:
+        return 'student';
+      case PassengerType.senior:
+        return 'senior';
+      case PassengerType.pwd:
+        return 'pwd';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case PassengerType.general:
+        return 'Regular';
+      case PassengerType.student:
+        return 'Student';
+      case PassengerType.senior:
+        return 'Senior';
+      case PassengerType.pwd:
+        return 'PWD';
+    }
+  }
+
+  bool get isDiscounted => this != PassengerType.general;
+}
+
+/// Represents an individual leg of a transit journey (walk or ride).
+class TransitLeg {
+  final String type; // 'walk' or 'ride'
+  final String from;
+  final String to;
+  final int minutes;
+  final int? meters;
+  final String? mode; // 'jeepney', 'bus', 'lrt1', 'lrt2', 'mrt3', 'pnr', etc.
+  final String? modeLabel;
+  final String? routeId;
+  final String? routeCode;
+  final String? routeName;
+  final int? stops;
+  final int? waitMinutes;
+  final double? km;
+  final int? fare;
+  final List<LatLng> path;
+
+  const TransitLeg({
+    required this.type,
+    required this.from,
+    required this.to,
+    required this.minutes,
+    this.meters,
+    this.mode,
+    this.modeLabel,
+    this.routeId,
+    this.routeCode,
+    this.routeName,
+    this.stops,
+    this.waitMinutes,
+    this.km,
+    this.fare,
+    this.path = const [],
+  });
+
+  bool get isWalk => type == 'walk';
+  bool get isRide => type == 'ride';
+
+  Color get color {
+    if (isWalk) return const Color(0xFF78909C); // Slate grey
+    switch (mode?.toLowerCase()) {
+      case 'jeepney':
+        return const Color(0xFFF57F17); // Jeepney amber/orange
+      case 'bus':
+        return const Color(0xFFE65100); // Deep bus orange
+      case 'lrt1':
+      case 'lrt2':
+      case 'mrt3':
+      case 'pnr':
+        return const Color(0xFF0288D1); // Rail blue
+      case 'uv_express':
+        return const Color(0xFF5E35B1); // Purple
+      default:
+        return const Color(0xFF00695C); // MapParaan teal
+    }
+  }
+
+  factory TransitLeg.fromJson(Map<String, dynamic> json) {
+    final rawPath = json['path'] as List? ?? [];
+    final points = <LatLng>[];
+    for (final pt in rawPath) {
+      if (pt is List && pt.length >= 2) {
+        final lat = (pt[0] as num).toDouble();
+        final lon = (pt[1] as num).toDouble();
+        points.add(LatLng(lat, lon));
+      }
+    }
+
+    return TransitLeg(
+      type: json['type'] as String? ?? 'walk',
+      from: json['from'] as String? ?? '',
+      to: json['to'] as String? ?? '',
+      minutes: (json['minutes'] as num?)?.toInt() ?? 0,
+      meters: (json['meters'] as num?)?.toInt(),
+      mode: json['mode'] as String?,
+      modeLabel: json['mode_label'] as String?,
+      routeId: json['route_id'] as String?,
+      routeCode: json['route_code'] as String?,
+      routeName: json['route_name'] as String?,
+      stops: (json['stops'] as num?)?.toInt(),
+      waitMinutes: (json['wait_minutes'] as num?)?.toInt(),
+      km: (json['km'] as num?)?.toDouble(),
+      fare: (json['fare'] as num?)?.toInt(),
+      path: points,
+    );
+  }
+}
+
+/// A complete route option (fastest / cheapest / fewest transfers) returned by the transit planner.
+class TransitPlanOption {
+  final String preference;
+  final String title;
+  final String summary;
+  final int etaMinutes;
+  final int fare;
+  final int fareDiscounted;
+  final int transfers;
+  final List<String> modes;
+  final List<TransitLeg> legs;
+  final bool isMock;
+
+  const TransitPlanOption({
+    required this.preference,
+    required this.title,
+    required this.summary,
+    required this.etaMinutes,
+    required this.fare,
+    required this.fareDiscounted,
+    required this.transfers,
+    this.modes = const [],
+    this.legs = const [],
+    this.isMock = false,
+  });
+
+  /// Returns the applicable fare based on passenger category
+  int effectiveFare(PassengerType passengerType) {
+    return passengerType.isDiscounted ? fareDiscounted : fare;
+  }
+
+  /// Maps string preference to RoutePreference enum
+  RoutePreference get routePreference {
+    switch (preference.toLowerCase()) {
+      case 'cheapest':
+        return RoutePreference.cheapest;
+      case 'fewest_transfers':
+      case 'fewest':
+        return RoutePreference.fewestTransfers;
+      case 'fastest':
+      default:
+        return RoutePreference.fastest;
+    }
+  }
+
+  /// All consecutive points forming the path for map rendering
+  List<LatLng> get allPoints {
+    final points = <LatLng>[];
+    for (final leg in legs) {
+      points.addAll(leg.path);
+    }
+    return points;
+  }
+
+  factory TransitPlanOption.fromJson(Map<String, dynamic> json) {
+    final rawLegs = json['legs'] as List? ?? [];
+    final parsedLegs = rawLegs
+        .map((l) => TransitLeg.fromJson(l as Map<String, dynamic>))
+        .toList();
+
+    final rawModes = json['modes'] as List? ?? [];
+    final parsedModes = rawModes.map((m) => m.toString()).toList();
+
+    return TransitPlanOption(
+      preference: json['preference'] as String? ?? 'fastest',
+      title: json['title'] as String? ?? 'Route option',
+      summary: json['summary'] as String? ?? '',
+      etaMinutes: (json['eta_minutes'] as num?)?.toInt() ?? 0,
+      fare: (json['fare'] as num?)?.toInt() ?? 0,
+      fareDiscounted: (json['fare_discounted'] as num?)?.toInt() ??
+          ((json['fare'] as num?)?.toInt() ?? 0),
+      transfers: (json['transfers'] as num?)?.toInt() ?? 0,
+      modes: parsedModes,
+      legs: parsedLegs,
+      isMock: false,
+    );
+  }
+
+  /// Converts a legacy RouteOption to TransitPlanOption fallback
+  factory TransitPlanOption.fromMock(
+    RouteOption mock, {
+    required LatLng origin,
+    required LatLng destination,
+    PassengerType passengerType = PassengerType.general,
+    List<LatLng>? fallbackPath,
+  }) {
+    final discounted = (mock.fare * 0.8).round();
+    final prefString = mock.preference == RoutePreference.cheapest
+        ? 'cheapest'
+        : mock.preference == RoutePreference.fewestTransfers
+            ? 'fewest_transfers'
+            : 'fastest';
+
+    return TransitPlanOption(
+      preference: prefString,
+      title: mock.title,
+      summary: mock.summary,
+      etaMinutes: mock.etaMinutes,
+      fare: mock.fare,
+      fareDiscounted: discounted,
+      transfers: mock.transfers,
+      modes: [mock.modeLabel],
+      legs: [
+        TransitLeg(
+          type: 'ride',
+          from: 'Your origin',
+          to: 'Destination',
+          minutes: mock.etaMinutes,
+          modeLabel: mock.modeLabel,
+          fare: mock.fare,
+          path: fallbackPath ?? [origin, destination],
+        ),
+      ],
+      isMock: true,
+    );
+  }
+}
+
+/// Service that coordinates with the backend transit planner API,
+/// falling back to local mocked calculations if the server is unreachable.
+class TransitPlannerService {
+  TransitPlannerService._();
+
+  /// Resolves the API base URL based on runtime platform
+  static String get effectiveBaseUrl {
+    final configured = AppConstants.transitApiBaseUrl.trim();
+    // In web browsers, 10.0.2.2 cannot be reached; translate to localhost automatically
+    if (kIsWeb && configured.contains('10.0.2.2')) {
+      return configured.replaceAll('10.0.2.2', 'localhost');
+    }
+    return configured;
+  }
+
+  /// Calls the local Python transit planner API:
+  /// `GET /plan?from=lat,lon&to=lat,lon&passenger=student`
+  ///
+  /// Returns a list of real options on success, or `null` if the API is offline
+  /// or unreachable.
+  static Future<List<TransitPlanOption>?> planTransit({
+    required LatLng origin,
+    required LatLng destination,
+    PassengerType passengerType = PassengerType.general,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final baseUrl = effectiveBaseUrl.replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.parse(
+      '$baseUrl/plan'
+      '?from=${origin.latitude},${origin.longitude}'
+      '&to=${destination.latitude},${destination.longitude}'
+      '&passenger=${passengerType.apiValue}',
+    );
+
+    try {
+      final response = await http.get(uri).timeout(timeout);
+      if (response.statusCode != 200) {
+        debugPrint('Transit planner API returned HTTP ${response.statusCode}');
+        return null;
+      }
+
+      final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));
+      final List rawOptions;
+      if (decoded is List) {
+        rawOptions = decoded;
+      } else if (decoded is Map<String, dynamic> && decoded['options'] is List) {
+        rawOptions = decoded['options'] as List;
+      } else {
+        return null;
+      }
+
+      return rawOptions
+          .map((item) => TransitPlanOption.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Transit planner API offline or unreachable ($baseUrl): $e');
+      return null;
+    }
+  }
+
+  /// Builds fallback options using RoutePlannerService when API is offline
+  static List<TransitPlanOption> getFallbackOptions({
+    required LatLng destination,
+    required LatLng? userLocation,
+    RoutePreference preference = RoutePreference.fastest,
+    PassengerType passengerType = PassengerType.general,
+    List<LatLng>? fallbackPath,
+  }) {
+    final origin = userLocation ?? const LatLng(14.5943, 120.9721);
+    final mocked = RoutePlannerService.generateRouteOptions(
+      destination: destination,
+      userLocation: userLocation,
+      preference: preference,
+    );
+
+    return mocked
+        .map(
+          (m) => TransitPlanOption.fromMock(
+            m,
+            origin: origin,
+            destination: destination,
+            passengerType: passengerType,
+            fallbackPath: fallbackPath,
+          ),
+        )
+        .toList();
+  }
+}
+</file>
+
 <file path="lib/services/trip_history_service.dart">
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -2474,12 +3455,12 @@ class TripHistoryEntry {
     DateTime? createdAt,
     this.routeSummary,
     this.etaLabel,
-  })  : id = id ?? '${origin}::${destination}::${DateTime.now().toUtc().toIso8601String()}',
+  })  : id = id ?? '$origin::$destination::${DateTime.now().toUtc().toIso8601String()}',
         createdAt = createdAt ?? DateTime.now();
 
   String get summary => routeSummary ?? '$origin → $destination';
 
-  String get etaText => etaLabel ?? '${createdAt.toLocal().toString().substring(0, 16)}';
+  String get etaText => etaLabel ?? createdAt.toLocal().toString().substring(0, 16);
 
   static String _escapeField(String value) => value.replaceAll('::', '\u0000');
 
@@ -2513,7 +3494,7 @@ class TripHistoryEntry {
   }
 
   String serialize() =>
-      '$id::${_escapeField(origin)}::${_escapeField(destination)}::${preference?.name ?? RoutePreference.fastest.name}::${durationMinutes}::${fareEstimate}::${createdAt.toUtc().toIso8601String()}';
+      '$id::${_escapeField(origin)}::${_escapeField(destination)}::${preference?.name ?? RoutePreference.fastest.name}::$durationMinutes::$fareEstimate::${createdAt.toUtc().toIso8601String()}';
 }
 
 class TripHistoryService {
@@ -2544,22 +3525,27 @@ class TripHistoryService {
       ..clear()
       ..addAll(updated);
   }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+    _entries.clear();
+  }
 }
 </file>
 
 <file path="lib/widgets/ask_mapparaan_bar.dart">
 import 'package:flutter/material.dart';
 
-/// The pill-shaped "Ask MapParaan" search/voice bar reused across
-/// Mapparaan's screens (bottom bar on the homepage, top bar on the
-/// search screen, etc.).
+/// Reusable pill-shaped search input bar across Mapparaan screens.
 class AskMapparaanBar extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final bool autofocus;
+  final bool readOnly; // Read-only flag when used as a button to trigger navigation
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap; // Callback when the search bar field is tapped
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
@@ -2570,6 +3556,7 @@ class AskMapparaanBar extends StatelessWidget {
     required this.controller,
     this.hintText = 'Ask MapParaan',
     this.autofocus = false,
+    this.readOnly = false, // Defaults to editable text field
     this.onSubmitted,
     this.onChanged,
     this.onTap,
@@ -2581,7 +3568,8 @@ class AskMapparaanBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Material(
+    // Material wrapper provides background color and rounded elevation
+    return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(28),
       elevation: 4,
@@ -2590,6 +3578,7 @@ class AskMapparaanBar extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 4),
+            // Leading Icon (Magnifying glass search icon)
             InkWell(
               onTap: onLeadingTap ?? onTap,
               customBorder: const CircleBorder(),
@@ -2599,11 +3588,14 @@ class AskMapparaanBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
+            // Search Text Input Field
             Expanded(
               child: TextField(
                 controller: controller,
                 focusNode: focusNode,
                 autofocus: autofocus,
+                readOnly: readOnly, // Prevents soft keyboard when readOnly is true
+                onTap: onTap, // Triggers navigation when tapped
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: hintText,
@@ -2614,6 +3606,7 @@ class AskMapparaanBar extends StatelessWidget {
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
+            // Trailing Action Button (Send Arrow or Microphone)
             IconButton(
               tooltip: onSubmitted == null ? 'Voice search' : 'Search',
               icon: Icon(
@@ -2636,8 +3629,6 @@ class AskMapparaanBar extends StatelessWidget {
         ),
       ),
     );
-
-    return content;
   }
 }
 </file>
@@ -2677,27 +3668,19 @@ class CircleIconButton extends StatelessWidget {
 </file>
 
 <file path="lib/widgets/location_details_sheet.dart">
-// added a new file for location details bottom sheet UI
-
 import 'package:flutter/material.dart';
 
-/// A reusable Bottom Sheet UI widget that displays location details.
-/// We use a StatefulWidget here because the "Bookmark" icon needs to toggle
-/// its own state (filled vs outlined) when tapped.
-class LocationDetailsSheet extends StatelessWidget {
-  // Required data to display the location
+enum TransportMode { walking, jeep, bus, uv, lrtMrt }
+
+class LocationDetailsSheet extends StatefulWidget {
   final String title;
-  
-  // Optional address (subtitle from PlaceResult)
   final String? address;
   final bool isSaved;
-  
-  // Callbacks for the action buttons so the parent screen (HomeScreen) 
-  // can handle the actual business logic (navigation, API calls, etc.)
   final VoidCallback onClose;
   final VoidCallback? onDirections;
   final VoidCallback? onSave;
   final VoidCallback? onShare;
+  final ValueChanged<TransportMode>? onModeSelected;
 
   const LocationDetailsSheet({
     super.key,
@@ -2708,180 +3691,280 @@ class LocationDetailsSheet extends StatelessWidget {
     this.onDirections,
     this.onSave,
     this.onShare,
+    this.onModeSelected,
   });
 
   @override
+  State<LocationDetailsSheet> createState() => _LocationDetailsSheetState();
+}
+
+class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
+  TransportMode? _selectedMode;
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      // Styling the container to look like a bottom sheet floating over the map
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        // Rounds only the top-left and top-right corners
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        // Adds a soft shadow pointing upwards to separate it from the map
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      // Padding inside the sheet. Bottom padding is extra large (32) to account 
-      // for device safe areas (like the iOS home indicator)
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      child: Column(
-        // mainAxisSize: MainAxisSize.min ensures the sheet only takes up 
-        // as much vertical space as its children need, rather than the whole screen.
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ---------------------------------------------------------
-          // 1. TOP DRAG HANDLE (Purely visual indicator)
-          // ---------------------------------------------------------
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          
-          // ---------------------------------------------------------
-          // 2. HEADER ROW (Title, Subtitle, and Top Right Icons)
-          // ---------------------------------------------------------
-          Row(
-            // Align to start so the title is at the top left of this row
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Expanded forces the text column to take up remaining horizontal space,
-              // pushing the icon buttons to the far right and preventing text overflow.
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Location Title
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 2, // Limits title to 2 lines
-                      overflow: TextOverflow.ellipsis, // Adds "..." if it's too long
-                    ),
-                    // Only render the address Text widget if an address was provided
-                    if (address != null && address!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        address!,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black54,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8), // Spacing between text and icons
-              
-              // ---------------------------------------------------------
-              // 3. TOP RIGHT ICON BUTTONS (Bookmark, Share, Close)
-              // ---------------------------------------------------------
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Bookmark Icon Button
-                  IconButton(
-                    // Dynamically swap icon and color based on state
-                    icon: Icon(
-                      isSaved ? Icons.bookmark : Icons.bookmark_add_outlined,
-                      color: isSaved ? const Color(0xFF00695C) : Colors.black87,
-                    ),
-                    onPressed: onSave,
-                  ),
-                  // Share Icon Button
-                  IconButton(
-                    icon: const Icon(Icons.ios_share, color: Colors.black87),
-                    onPressed: onShare,
-                  ),
-                  // Close Icon Button
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.black87),
-                    // Triggers the onClose callback passed from HomeScreen
-                    onPressed: onClose,
-                  ),
-                ],
+    return DraggableScrollableSheet(
+      controller: _sheetController,
+      initialChildSize: 0.30,
+      minChildSize: 0.22,
+      maxChildSize: 0.75,
+      snap: true,
+      snapSizes: const [0.30, 0.55, 0.75],
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 16,
+                offset: Offset(0, -4),
               ),
             ],
           ),
-          const SizedBox(height: 20), // Spacing before the pills
-          
-          // ---------------------------------------------------------
-          // 4. ACTION PILLS ROW (Directions, Save, Share)
-          // ---------------------------------------------------------
-          // Wrapping in SingleChildScrollView allows users on small screens 
-          // to swipe left/right if the buttons take up too much horizontal space.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildPillButton(
-                  label: "Directions",
-                  color: const Color(0xFF00695C), // MapParaan primary dark green
-                  textColor: Colors.white,
-                  onTap: onDirections,
+          child: Column(
+            children: [
+              // Drag handle
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: (details) {
+                  final newSize = _sheetController.size -
+                      details.delta.dy / MediaQuery.of(context).size.height;
+                  _sheetController.jumpTo(newSize.clamp(0.22, 0.75));
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _buildPillButton(
-                  label: "Save",
-                  color: const Color(0xFFB3E5FC), // Light blue from reference image
-                  textColor: Colors.black87,
-                  onTap: onSave,
+              ),
+
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  children: [
+                    // Header (only title + close)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (widget.address != null &&
+                                  widget.address!.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.address!,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black54,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: widget.onClose,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Action pills
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _pill('Directions', const Color(0xFF00695C), Colors.white,
+                              widget.onDirections),
+                          const SizedBox(width: 8),
+                          _pill('Save', const Color(0xFFB3E5FC), Colors.black87,
+                              widget.onSave),
+                          const SizedBox(width: 8),
+                          _pill('Share', const Color(0xFFB3E5FC), Colors.black87,
+                              widget.onShare),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    const Text(
+                      'Choose transport mode',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ===== Transport mode cards (styled like Figma) =====
+                    _modeCard(
+                      mode: TransportMode.walking,
+                      icon: Icons.directions_walk,
+                      title: 'Walking',
+                      subtitle: 'Best for short distances',
+                    ),
+                    const SizedBox(height: 10),
+                    _modeCard(
+                      mode: TransportMode.jeep,
+                      icon: Icons.airport_shuttle,
+                      title: 'Jeepney',
+                      subtitle: 'Most common & affordable',
+                    ),
+                    const SizedBox(height: 10),
+                    _modeCard(
+                      mode: TransportMode.bus,
+                      icon: Icons.directions_bus,
+                      title: 'Bus',
+                      subtitle: 'Good for longer routes',
+                    ),
+                    const SizedBox(height: 10),
+                    _modeCard(
+                      mode: TransportMode.uv,
+                      icon: Icons.directions_car,
+                      title: 'UV Express',
+                      subtitle: 'Faster point-to-point',
+                    ),
+                    const SizedBox(height: 10),
+                    _modeCard(
+                      mode: TransportMode.lrtMrt,
+                      icon: Icons.train,
+                      title: 'LRT / MRT',
+                      subtitle: 'Avoid road traffic',
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _buildPillButton(
-                  label: "Share",
-                  color: const Color(0xFFB3E5FC),
-                  textColor: Colors.black87,
-                  onTap: onShare,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  /// A private helper widget to generate consistent, rounded pill-shaped buttons.
-  Widget _buildPillButton({
-    required String label,
-    required Color color,
-    required Color textColor,
-    VoidCallback? onTap,
-  }) {
+  Widget _pill(String label, Color bg, Color fg, VoidCallback? onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
         decoration: BoxDecoration(
-          color: color, // The background color of the pill
-          borderRadius: BorderRadius.circular(24), // Gives the pill shape
+          color: bg,
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: textColor,
+            color: fg,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _modeCard({
+    required TransportMode mode,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final selected = _selectedMode == mode;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedMode = mode);
+        widget.onModeSelected?.call(mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE0F2F1) : const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? const Color(0xFF00695C) : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Left icon box
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF00695C) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : Colors.black54,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? const Color(0xFF00695C) : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2893,10 +3976,13 @@ class LocationDetailsSheet extends StatelessWidget {
 import 'package:flutter/material.dart';
 
 import '../screens/drawer_destination_screen.dart';
+import '../services/place_search_service.dart';
 
 /// The side menu (drawer) shown across Mapparaan's screens.
 class MapparaanDrawer extends StatelessWidget {
-  const MapparaanDrawer({super.key});
+  final ValueChanged<PlaceResult>? onPlaceSelected;
+
+  const MapparaanDrawer({super.key, this.onPlaceSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -3015,14 +4101,22 @@ class MapparaanDrawer extends StatelessWidget {
     );
   }
 
-  void _openDestination(BuildContext context, DrawerDestination destination) {
+  Future<void> _openDestination(
+    BuildContext context,
+    DrawerDestination destination,
+  ) async {
     final navigator = Navigator.of(context);
     navigator.pop();
-    navigator.push(
-      MaterialPageRoute<void>(
-        builder: (_) => DrawerDestinationScreen(destination: destination),
+    final selected = await navigator.push<PlaceResult>(
+      MaterialPageRoute<PlaceResult>(
+        builder: (_) => DrawerDestinationScreen(
+          destination: destination,
+        ),
       ),
     );
+    if (selected != null) {
+      onPlaceSelected?.call(selected);
+    }
   }
 }
 
@@ -3199,6 +4293,13 @@ class AppConstants {
   static const String searchCountryCodes = 'ph';
   static const int searchResultLimit = 8;
   static const int searchMinQueryLength = 3;
+
+  // ── Transit Planner API ────────────────────────────────────────────────────
+  /// Base URL for the local transit planner API (backend/planner/api.py).
+  /// - Web (Chrome): 'http://localhost:8080' or 'http://127.0.0.1:8080'
+  /// - Android emulator: 'http://10.0.2.2:8080'
+  /// - Physical device: 'http://`YOUR_PC_IP`:8080' (e.g. 'http://192.168.1.100:8080')
+  static const String transitApiBaseUrl = 'http://10.0.2.2:8080';
 }
 </file>
 
@@ -3242,170 +4343,14 @@ class _TestHomePlaceholder extends StatelessWidget {
 }
 </file>
 
-<file path="test/ai_assistant_service_test.dart">
-import 'package:flutter_test/flutter_test.dart';
-import 'package:mapparaan/services/ai_assistant_service.dart';
-
-void main() {
-  test('extracts route intent from a natural-language query', () {
-    final intent = AiAssistantService.parse('from Taft to Makati fastest');
-
-    expect(intent.origin, 'Taft');
-    expect(intent.destination, 'Makati');
-    expect(intent.preference, 'fastest');
-  });
-
-  test('extracts a simple destination query', () {
-    final intent = AiAssistantService.parse('find UP Diliman');
-
-    expect(intent.destination, 'UP Diliman');
-    expect(intent.preference, isNull);
-  });
-
-  test('supports Taglish route requests', () {
-    final intent = AiAssistantService.parse('punta sa BGC cheapest');
-
-    expect(intent.destination, 'BGC');
-    expect(intent.preference, 'cheapest');
-  });
-}
-</file>
-
-<file path="test/local_persistence_test.dart">
-import 'package:flutter_test/flutter_test.dart';
-import 'package:mapparaan/services/route_planner_service.dart';
-import 'package:mapparaan/services/saved_places_service.dart';
-import 'package:mapparaan/services/trip_history_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-  });
-
-  test('saved places persist values containing legacy delimiters', () async {
-    const place = SavedPlace(
-      id: 'place-1',
-      name: 'Mall::North',
-      subtitle: 'District::Metro Manila',
-      latitude: 14.6,
-      longitude: 121.0,
-    );
-
-    await SavedPlacesService.save(place);
-    final loaded = await SavedPlacesService.load();
-
-    expect(loaded, hasLength(1));
-    expect(loaded.single.name, place.name);
-    expect(loaded.single.subtitle, place.subtitle);
-    expect(loaded.single.latitude, place.latitude);
-    expect(loaded.single.longitude, place.longitude);
-  });
-
-  test('saved places can be toggled off after reload', () async {
-    const place = SavedPlace(
-      id: 'place-2',
-      name: 'Makati',
-      subtitle: 'Metro Manila',
-      latitude: 14.55,
-      longitude: 121.02,
-    );
-
-    expect(await SavedPlacesService.toggle(place), isTrue);
-    expect(await SavedPlacesService.toggle(place), isFalse);
-    expect(await SavedPlacesService.load(), isEmpty);
-  });
-
-  test('trip history round-trips route fields containing delimiters', () async {
-    final trip = TripHistoryEntry(
-      id: 'trip-1',
-      origin: 'Taft',
-      destination: 'Makati::CBD',
-      preference: RoutePreference.cheapest,
-      durationMinutes: 42,
-      fareEstimate: 12.5,
-      createdAt: DateTime.utc(2026, 10, 9),
-    );
-
-    await TripHistoryService.addEntry(trip);
-    final loaded = await TripHistoryService.load();
-
-    expect(loaded, hasLength(1));
-    expect(loaded.single.id, trip.id);
-    expect(loaded.single.origin, trip.origin);
-    expect(loaded.single.destination, trip.destination);
-    expect(loaded.single.preference, trip.preference);
-    expect(loaded.single.durationMinutes, trip.durationMinutes);
-    expect(loaded.single.fareEstimate, trip.fareEstimate);
-    expect(loaded.single.createdAt, trip.createdAt);
-  });
-
-  test('legacy saved-place and trip-history records remain readable', () async {
-    SharedPreferences.setMockInitialValues({
-      'saved_places': ['old-id::Old Place::Old address::14.6::121.0'],
-      'trip_history': [
-        'old-trip::Taft::Old destination::cheapest::30::15::2026-10-09T00:00:00.000Z',
-      ],
-    });
-
-    final places = await SavedPlacesService.load();
-    final trips = await TripHistoryService.load();
-
-    expect(places.single.name, 'Old Place');
-    expect(places.single.subtitle, 'Old address');
-    expect(trips.single.destination, 'Old destination');
-    expect(trips.single.preference, RoutePreference.cheapest);
-  });
-}
-</file>
-
-<file path="test/route_planner_service_test.dart">
-import 'package:flutter_test/flutter_test.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:mapparaan/services/route_planner_service.dart';
-
-void main() {
-  test('fastest route preference ranks the shortest ETA first', () {
-  final route = RoutePlannerService.generateRouteOptions(
-    destination: const LatLng(14.5995, 120.9842),
-    userLocation: const LatLng(14.5943, 120.9721),
-    preference: RoutePreference.fastest,
-  );
-
-  expect(route.first.etaMinutes, lessThanOrEqualTo(route[1].etaMinutes));
-  expect(route.first.preference, RoutePreference.fastest);
-});
-
-test('cheapest route preference ranks the lowest fare first', () {
-  final route = RoutePlannerService.generateRouteOptions(
-    destination: const LatLng(14.5995, 120.9842),
-    userLocation: const LatLng(14.5943, 120.9721),
-    preference: RoutePreference.cheapest,
-  );
-
-  expect(route.first.fare, lessThanOrEqualTo(route[1].fare));
-  expect(route.first.preference, RoutePreference.cheapest);
-});
-
-test('fewest transfers preference ranks the lowest transfer count first', () {
-  final route = RoutePlannerService.generateRouteOptions(
-    destination: const LatLng(14.5995, 120.9842),
-    userLocation: const LatLng(14.5943, 120.9721),
-    preference: RoutePreference.fewestTransfers,
-  );
-
-  expect(route.first.transfers, lessThanOrEqualTo(route[1].transfers));
-  expect(route.first.preference, RoutePreference.fewestTransfers);
-});
-}
-</file>
-
-<file path="test/search_to_pin_widget_test.dart">
+<file path="test/location_details_screen_test.dart">
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:mapparaan/screens/home_screen.dart';
+import 'package:mapparaan/screens/location_details_screen.dart';
+import 'package:mapparaan/services/ai_assistant_service.dart';
 import 'package:mapparaan/services/place_search_service.dart';
+import 'package:mapparaan/services/route_planner_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -3413,66 +4358,201 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('searching and selecting a place opens its map actions', (
-    tester,
-  ) async {
-    final searchedQueries = <String>[];
-    final result = PlaceResult(
-      name: 'Santa Ana',
-      subtitle: 'Taytay, Rizal, Philippines',
-      coordinates: const LatLng(14.57, 121.13),
+  testWidgets('LocationDetailsScreen renders correctly with passenger selector and route cards',
+      (WidgetTester tester) async {
+    const testPlace = PlaceResult(
+      name: 'National Museum of the Philippines',
+      subtitle: 'Padre Burgos Ave, Ermita, Manila',
+      coordinates: LatLng(14.5869, 120.9812),
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(
-          showMap: false,
-          searchPlaces: (query) async {
-            searchedQueries.add(query);
-            return [result];
-          },
+      const MaterialApp(
+        home: LocationDetailsScreen(
+          place: testPlace,
+          userLocation: LatLng(14.5943, 120.9721),
+          initialPreference: RoutePreference.fastest,
+          passengerType: PassengerType.general,
         ),
       ),
     );
 
-    await tester.tap(find.byType(TextField).first);
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'Santa Ana');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pumpAndSettle();
+    // Initial pump
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
-    expect(searchedQueries, ['Santa Ana']);
-    expect(find.text('Taytay, Rizal, Philippines'), findsOneWidget);
+    // Verify place name appears
+    expect(find.text('National Museum of the Philippines'), findsOneWidget);
 
-    await tester.tap(find.text('Santa Ana').last);
-    await tester.pumpAndSettle();
+    // Verify passenger selector chips appear
+    expect(find.text('Regular'), findsOneWidget);
+    expect(find.text('Student'), findsOneWidget);
+    expect(find.text('Senior'), findsOneWidget);
+    expect(find.text('PWD'), findsOneWidget);
 
-    expect(find.text('Santa Ana'), findsNWidgets(2));
-    expect(find.text('Directions'), findsOneWidget);
-    expect(find.text('Save'), findsOneWidget);
-    expect(find.text('Share'), findsOneWidget);
+    // Verify preference buttons appear
+    expect(find.text('Fastest'), findsOneWidget);
+    expect(find.text('Cheapest'), findsOneWidget);
+
+    // Tap on Student discount chip
+    await tester.tap(find.text('Student'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Verify student is now selected
+    expect(find.text('Student'), findsOneWidget);
   });
 }
 </file>
 
-<file path="test/widget_test.dart">
+<file path="test/transit_planner_test.dart">
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mapparaan/main.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:mapparaan/services/ai_assistant_service.dart';
+import 'package:mapparaan/services/route_planner_service.dart';
+import 'package:mapparaan/services/transit_planner_service.dart';
 
 void main() {
-  testWidgets('Home screen loads', (WidgetTester tester) async {
-    await tester.pumpWidget(const MapparaanApp(enableMap: false));
+  group('PassengerTypeExt', () {
+    test('apiValue matches backend expected identifiers', () {
+      expect(PassengerType.general.apiValue, 'general');
+      expect(PassengerType.student.apiValue, 'student');
+      expect(PassengerType.senior.apiValue, 'senior');
+      expect(PassengerType.pwd.apiValue, 'pwd');
+    });
 
-    expect(find.byType(MapparaanApp), findsOneWidget);
-    expect(find.text('Mapparaan'), findsOneWidget);
+    test('isDiscounted is true only for student, senior, and pwd', () {
+      expect(PassengerType.general.isDiscounted, isFalse);
+      expect(PassengerType.student.isDiscounted, isTrue);
+      expect(PassengerType.senior.isDiscounted, isTrue);
+      expect(PassengerType.pwd.isDiscounted, isTrue);
+    });
   });
 
-  testWidgets('Drawer destinations open their pages', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(const MapparaanApp(enableMap: false));
+  group('TransitPlanOption JSON deserialization', () {
+    test('parses full API response with legs and coordinates', () {
+      final json = {
+        'preference': 'fastest',
+        'title': 'Fastest route',
+        'summary': 'Walk 5 min → LRT-1 LRT 1 (20 min)',
+        'eta_minutes': 25,
+        'fare': 35,
+        'fare_discounted': 28,
+        'transfers': 0,
+        'modes': ['lrt1'],
+        'legs': [
+          {
+            'type': 'walk',
+            'from': 'Your location',
+            'to': 'Central Terminal LRT',
+            'minutes': 5,
+            'meters': 350,
+            'path': [
+              [14.5918, 120.9786],
+              [14.5928, 120.9820],
+            ],
+          },
+          {
+            'type': 'ride',
+            'mode': 'lrt1',
+            'mode_label': 'LRT-1',
+            'route_id': 'ROUTE_880747',
+            'route_code': 'LRT 1',
+            'route_name': 'Baclaran - Roosevelt',
+            'from': 'Central Terminal LRT',
+            'to': 'Monumento LRT',
+            'stops': 9,
+            'wait_minutes': 3,
+            'minutes': 18,
+            'km': 9.2,
+            'fare': 35,
+            'path': [
+              [14.5928, 120.9820],
+              [14.6542, 120.9839],
+            ],
+          },
+        ],
+      };
 
-    expect(find.text('Mapparaan'), findsOneWidget);
+      final option = TransitPlanOption.fromJson(json);
+
+      expect(option.preference, 'fastest');
+      expect(option.title, 'Fastest route');
+      expect(option.etaMinutes, 25);
+      expect(option.fare, 35);
+      expect(option.fareDiscounted, 28);
+      expect(option.transfers, 0);
+      expect(option.modes, contains('lrt1'));
+      expect(option.legs.length, 2);
+
+      // Verify legs
+      final walkLeg = option.legs[0];
+      expect(walkLeg.isWalk, isTrue);
+      expect(walkLeg.meters, 350);
+      expect(walkLeg.path.length, 2);
+
+      final rideLeg = option.legs[1];
+      expect(rideLeg.isRide, isTrue);
+      expect(rideLeg.mode, 'lrt1');
+      expect(rideLeg.modeLabel, 'LRT-1');
+      expect(rideLeg.stops, 9);
+      expect(rideLeg.path.length, 2);
+
+      // Verify allPoints extraction
+      expect(option.allPoints.length, 4);
+
+      // Verify effective fares
+      expect(option.effectiveFare(PassengerType.general), 35);
+      expect(option.effectiveFare(PassengerType.student), 28);
+      expect(option.effectiveFare(PassengerType.senior), 28);
+      expect(option.effectiveFare(PassengerType.pwd), 28);
+    });
+  });
+
+  group('TransitPlannerService Fallback', () {
+    test('generates fallback options when API is offline', () {
+      const origin = LatLng(14.5943, 120.9721);
+      const destination = LatLng(14.6567, 121.0287);
+
+      final fallback = TransitPlannerService.getFallbackOptions(
+        destination: destination,
+        userLocation: origin,
+        preference: RoutePreference.fastest,
+        passengerType: PassengerType.student,
+      );
+
+      expect(fallback, isNotEmpty);
+      expect(fallback.first.isMock, isTrue);
+      expect(fallback.first.fare, greaterThan(0));
+      expect(fallback.first.fareDiscounted, lessThan(fallback.first.fare));
+      expect(
+        fallback.first.effectiveFare(PassengerType.student),
+        fallback.first.fareDiscounted,
+      );
+    });
+  });
+
+  group('AiQueryResolution passenger parsing', () {
+    test('detects student discount from Taglish queries', () {
+      final res = AiQueryResolution.fromQuery('student route to UST');
+      expect(res.passengerType, PassengerType.student);
+    });
+
+    test('detects senior discount from query', () {
+      final res = AiQueryResolution.fromQuery('cheapest senior fare to SM North');
+      expect(res.passengerType, PassengerType.senior);
+      expect(res.preference, RoutePreference.cheapest);
+    });
+
+    test('detects PWD discount from query', () {
+      final res = AiQueryResolution.fromQuery('pwd route to Ayala');
+      expect(res.passengerType, PassengerType.pwd);
+    });
+
+    test('defaults to general when no discount specified', () {
+      final res = AiQueryResolution.fromQuery('to Monumento');
+      expect(res.passengerType, PassengerType.general);
+    });
   });
 }
 </file>

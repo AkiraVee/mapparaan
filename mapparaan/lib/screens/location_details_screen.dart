@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/commuter_preference_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
@@ -14,15 +16,10 @@ import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 
-/// The single, consistent "I picked a place" screen. Every place selection
-/// in the app — plain search, an "Ask MapParaan" query, or tapping a saved
-/// place from the drawer — ends up here.
-///
-/// It connects to the local GTFS transit planner API (backend/planner/api.py),
-/// showing real Metro Manila routes, individual legs, ETAs, and fares with
-/// legal discounts (RA 11314 / RA 9994 / RA 10754) for students, seniors, and PWDs.
-/// If the local API server isn't running, it seamlessly falls back to mocked
-/// estimates and OSRM walking paths.
+/// The single, consistent "I picked a place" screen.
+/// Connects to the local GTFS transit planner API, showing real Metro Manila
+/// routes, individual legs, ETAs, fares with legal discounts, and dynamic
+/// landmark theme accent customization.
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
   final String placeName;
@@ -55,6 +52,8 @@ class LocationDetailsScreen extends StatefulWidget {
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   final MapController _mapController = MapController();
 
+  CommuterPreferences _preferences = const CommuterPreferences();
+
   bool _isSaved = false;
   bool _isLoadingRoute = false;
   bool _tripLogged = false;
@@ -72,6 +71,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     super.initState();
     _selectedPreference = widget.initialPreference;
     _passengerType = widget.passengerType;
+    _loadPreferences();
     _loadSavedState();
     _refreshRoute();
   }
@@ -87,6 +87,15 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     return '${destination.latitude}_${destination.longitude}';
   }
 
+  /// Loads active commuter preferences including the dynamic Manila Landmark color palette.
+  Future<void> _loadPreferences() async {
+    final loaded = await CommuterPreferencesService.load();
+    if (!mounted) return;
+    setState(() {
+      _preferences = loaded;
+    });
+  }
+
   Future<void> _loadSavedState() async {
     try {
       final savedPlaces = await SavedPlacesService.load();
@@ -99,17 +108,45 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     }
   }
 
-  /// Refreshes transit routes from the local GTFS planner API. If the API is
-  /// unreachable, it falls back to mocked options + OSRM walking path.
+  /// Refreshes transit routes using real GTFS data or offline fallback.
+  /// Dynamically resolves live GPS location if no location was passed from the home screen.
   Future<void> _refreshRoute() async {
     final destination = widget.resolvedDestination;
-    final userLocation = widget.userLocation ?? const LatLng(14.5943, 120.9721);
+    LatLng? origin = widget.userLocation;
+
+    // ── 1. AUTO-FETCH LIVE GPS LOCATION IF MISSING ──
+    if (origin == null) {
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          final position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+          );
+          origin = LatLng(position.latitude, position.longitude);
+        }
+      } catch (_) {
+        // Silently catch errors if GPS hardware is unreachable
+      }
+    }
+
+    // ── 2. HANDLE DISABLED LOCATION PERMISSION ──
+    if (origin == null) {
+      setState(() => _isLoadingRoute = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location is disabled. Enable location services to calculate your route.'),
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() => _isLoadingRoute = true);
 
-    // 1. Attempt to fetch real multimodal options from the local planner API
+    // ── 3. ATTEMPT REAL-TIME GTFS PLANNER API ROUTE ──
     final realPlans = await TransitPlannerService.planTransit(
-      origin: userLocation,
+      origin: origin,
       destination: destination,
       passengerType: _passengerType,
     );
@@ -117,7 +154,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (!mounted) return;
 
     if (realPlans != null && realPlans.isNotEmpty) {
-      // Find option matching current preference, or fallback to first
       final matching = realPlans.where((o) => o.routePreference == _selectedPreference);
       final selected = matching.isNotEmpty ? matching.first : realPlans.first;
       final points = selected.allPoints;
@@ -132,9 +168,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
       _fitCameraToBounds(points);
     } else {
-      // 2. Local API offline: Fall back to mocked estimates and OSRM walking route
+      // ── 4. OFFLINE FALLBACK ROUTE (OSRM + MOCK ESTIMATES) ──
       final geometry = await RoutePlannerService.fetchRoute(
-        origin: userLocation,
+        origin: origin,
         destination: destination,
         profile: 'foot',
       );
@@ -143,11 +179,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
       final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
           ? geometry.points
-          : [userLocation, destination];
+          : [origin, destination];
 
       final fallbackOptions = TransitPlannerService.getFallbackOptions(
         destination: destination,
-        userLocation: userLocation,
+        userLocation: origin,
         preference: _selectedPreference,
         passengerType: _passengerType,
         fallbackPath: fallbackPoints,
@@ -166,7 +202,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _fitCameraToBounds(fallbackPoints);
     }
 
-    // Log trip once per visit to this screen
+    // ── 5. LOG TRIP ENTRY TO HISTORY ──
     if (!_tripLogged && _routeOptions.isNotEmpty) {
       _tripLogged = true;
       final topOption = _selectedOption ?? _routeOptions.first;
@@ -203,7 +239,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (preference == _selectedPreference) return;
     setState(() => _selectedPreference = preference);
 
-    // Look for an existing loaded option matching the selected preference
     final matching = _routeOptions.where((o) => o.routePreference == preference);
     if (matching.isNotEmpty) {
       _selectOption(matching.first);
@@ -277,7 +312,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (location == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Location isn't available. Enable it from the home screen."),
+          content: Text("Location isn't available. Enable location from settings."),
         ),
       );
       return;
@@ -342,7 +377,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       polylines: [
                         Polyline(
                           points: _routePoints,
-                          color: const Color(0xFF00695C),
+                          color: _preferences.colorPalette.primary, // Dynamic palette color
                           strokeWidth: 5,
                           borderStrokeWidth: 2,
                           borderColor: Colors.white,
@@ -443,7 +478,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
 
-              // Bottom details sheet
+              // Bottom details sheet styled dynamically with chosen landmark palette
               Align(
                 alignment: Alignment.bottomCenter,
                 child: SafeArea(
@@ -456,6 +491,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                     passengerType: _passengerType,
                     routeOptions: _routeOptions,
                     selectedOption: _selectedOption,
+                    colorPalette: _preferences.colorPalette,
                     onSaveToggle: _handleSaveToggle,
                     onShare: _handleShare,
                     onClose: () => Navigator.of(context).pop(),
@@ -481,6 +517,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
   final PassengerType passengerType;
   final List<TransitPlanOption> routeOptions;
   final TransitPlanOption? selectedOption;
+  final ColorPalette colorPalette;
   final VoidCallback onSaveToggle;
   final VoidCallback onShare;
   final VoidCallback onClose;
@@ -496,6 +533,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
     required this.passengerType,
     required this.routeOptions,
     required this.selectedOption,
+    required this.colorPalette,
     required this.onSaveToggle,
     required this.onShare,
     required this.onClose,
@@ -507,6 +545,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.of(context).size.height * 0.58;
+    final primary = colorPalette.primary;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
@@ -526,7 +565,6 @@ class _PlaceDetailsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
           Center(
             child: Container(
               width: 36,
@@ -539,7 +577,6 @@ class _PlaceDetailsSheet extends StatelessWidget {
             ),
           ),
 
-          // Header title and action buttons
           Row(
             children: [
               Expanded(
@@ -557,7 +594,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   isSaved ? Icons.bookmark : Icons.bookmark_border,
-                  color: isSaved ? const Color(0xFF00695C) : Colors.black87,
+                  color: isSaved ? primary : Colors.black87,
                 ),
                 onPressed: onSaveToggle,
               ),
@@ -575,40 +612,38 @@ class _PlaceDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Passenger Category Selector (General / Student / Senior / PWD)
           _PassengerTypeSelector(
             selectedType: passengerType,
+            colorPalette: colorPalette,
             onSelected: onPassengerTypeSelected,
           ),
           const SizedBox(height: 10),
 
-          // Route preference selector (Fastest / Cheapest / Fewest Transfers)
           Row(
             children: [
               _PreferenceButton(
                 label: 'Fastest',
                 active: selectedPreference == RoutePreference.fastest,
-                accent: const Color(0xFF00695C),
+                accent: primary,
                 onPressed: () => onPreferenceSelected(RoutePreference.fastest),
               ),
               const SizedBox(width: 8),
               _PreferenceButton(
                 label: 'Cheapest',
                 active: selectedPreference == RoutePreference.cheapest,
-                accent: const Color(0xFF00796B),
+                accent: primary,
                 onPressed: () => onPreferenceSelected(RoutePreference.cheapest),
               ),
               const SizedBox(width: 8),
               _PreferenceButton(
                 label: 'Fewest\nTransfers',
                 active: selectedPreference == RoutePreference.fewestTransfers,
-                accent: const Color(0xFF00897B),
+                accent: primary,
                 onPressed: () => onPreferenceSelected(RoutePreference.fewestTransfers),
               ),
             ],
           ),
 
-          // Offline fallback notice banner
           if (isOfflineFallback)
             Container(
               margin: const EdgeInsets.only(top: 8),
@@ -634,7 +669,6 @@ class _PlaceDetailsSheet extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Scrollable route options list
           Flexible(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -649,6 +683,7 @@ class _PlaceDetailsSheet extends StatelessWidget {
                         route: route,
                         isSelected: isSelected,
                         passengerType: passengerType,
+                        colorPalette: colorPalette,
                         onTap: () => onOptionSelected(route),
                       ),
                     );
@@ -663,18 +698,21 @@ class _PlaceDetailsSheet extends StatelessWidget {
   }
 }
 
-/// Category selector allowing commuters to switch between General, Student, Senior, and PWD
 class _PassengerTypeSelector extends StatelessWidget {
   final PassengerType selectedType;
+  final ColorPalette colorPalette;
   final ValueChanged<PassengerType> onSelected;
 
   const _PassengerTypeSelector({
     required this.selectedType,
+    required this.colorPalette,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final primary = colorPalette.primary;
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF0F4F4),
@@ -711,7 +749,7 @@ class _PassengerTypeSelector extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? const Color(0xFF00695C) : Colors.black87,
+                        color: isSelected ? primary : Colors.black87,
                       ),
                     ),
                     if (type.isDiscounted)
@@ -720,7 +758,7 @@ class _PassengerTypeSelector extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 8.5,
                           fontWeight: FontWeight.w600,
-                          color: isSelected ? const Color(0xFF00897B) : Colors.teal.shade800,
+                          color: isSelected ? primary : primary.withValues(alpha: 0.7),
                         ),
                       ),
                   ],
@@ -774,17 +812,18 @@ class _PreferenceButton extends StatelessWidget {
   }
 }
 
-/// Rich card showing real legs, ETA, fare, and statutory discount
 class _RouteResultCard extends StatelessWidget {
   final TransitPlanOption route;
   final bool isSelected;
   final PassengerType passengerType;
+  final ColorPalette colorPalette;
   final VoidCallback onTap;
 
   const _RouteResultCard({
     required this.route,
     required this.isSelected,
     required this.passengerType,
+    required this.colorPalette,
     required this.onTap,
   });
 
@@ -804,6 +843,8 @@ class _RouteResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDiscounted = passengerType.isDiscounted;
     final effectiveFare = route.effectiveFare(passengerType);
+    final primary = colorPalette.primary;
+    final container = colorPalette.container;
 
     return InkWell(
       onTap: onTap,
@@ -812,33 +853,31 @@ class _RouteResultCard extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF0FDFB) : const Color(0xFFF7F9F9),
+          color: isSelected ? container.withValues(alpha: 0.35) : const Color(0xFFF7F9F9),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00695C) : const Color(0xFFE2E8E8),
+            color: isSelected ? primary : const Color(0xFFE2E8E8),
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Mode icon container
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFD7F3F1) : const Color(0xFFE6EEEE),
+                color: isSelected ? container : const Color(0xFFE6EEEE),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 _getLeadingIcon(),
                 size: 22,
-                color: const Color(0xFF00695C),
+                color: primary,
               ),
             ),
             const SizedBox(width: 12),
 
-            // Route summary & legs details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -857,7 +896,7 @@ class _RouteResultCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00695C),
+                            color: primary,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -882,7 +921,6 @@ class _RouteResultCard extends StatelessWidget {
                     ),
                   ),
 
-                  // Individual leg badges if available
                   if (route.legs.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -940,7 +978,6 @@ class _RouteResultCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
 
-            // Fare section with student/senior/PWD discount display
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -954,10 +991,10 @@ class _RouteResultCard extends StatelessWidget {
                 children: [
                   Text(
                     '₱$effectiveFare',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF00695C),
+                      color: primary,
                     ),
                   ),
                   if (isDiscounted) ...[
@@ -974,15 +1011,15 @@ class _RouteResultCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE0F2F1),
+                        color: container,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
+                      child: Text(
                         '-20%',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF00695C),
+                          color: primary,
                         ),
                       ),
                     ),
