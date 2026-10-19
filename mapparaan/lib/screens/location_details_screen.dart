@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../constants.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
+import '../services/saved_places_service.dart';
+import '../services/trip_history_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 
+/// The single, consistent "I picked a place" screen. Every place selection
+/// in the app — plain search, an "Ask MapParaan" query, or tapping a saved
+/// place from the drawer — ends up here, showing the same real map, the
+/// same Save/Share actions, and the same route-preference cards, instead of
+/// switching between this screen and the smaller bottom sheet depending on
+/// how the place was picked.
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
   final String placeName;
@@ -29,6 +40,7 @@ class LocationDetailsScreen extends StatefulWidget {
   });
 
   String get resolvedPlaceName => place?.name ?? placeName;
+  String get resolvedSubtitle => place?.subtitle ?? origin;
   LatLng get resolvedDestination =>
       place?.coordinates ?? destinationCoordinates ?? const LatLng(14.5995, 120.9842);
 
@@ -37,18 +49,51 @@ class LocationDetailsScreen extends StatefulWidget {
 }
 
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
+  final MapController _mapController = MapController();
+
   bool _isSaved = false;
+  bool _isLoadingRoute = false;
+  bool _tripLogged = false;
   RoutePreference _selectedPreference = RoutePreference.fastest;
   List<RouteOption> _routeOptions = const [];
+  List<LatLng> _routePoints = [];
 
   @override
   void initState() {
     super.initState();
     _selectedPreference = widget.initialPreference;
-    _refreshRouteOptions();
+    _loadSavedState();
+    _refreshRoute();
   }
 
-  void _refreshRouteOptions() {
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  String get _savedPlaceId {
+    final destination = widget.resolvedDestination;
+    return '${destination.latitude}_${destination.longitude}';
+  }
+
+  Future<void> _loadSavedState() async {
+    try {
+      final savedPlaces = await SavedPlacesService.load();
+      if (!mounted) return;
+      setState(() {
+        _isSaved = savedPlaces.any((s) => s.id == _savedPlaceId);
+      });
+    } catch (_) {
+      // Saved-state check failing shouldn't block showing the screen.
+    }
+  }
+
+  /// Refreshes both the mocked multimodal route cards and the real
+  /// walking-route polyline on the map, then records the lookup in Trip
+  /// History — the same way a route lookup used to only get logged when it
+  /// happened through the old bottom sheet's "Directions" button.
+  Future<void> _refreshRoute() async {
     final destination = widget.resolvedDestination;
     final userLocation = widget.userLocation ?? const LatLng(14.5943, 120.9721);
 
@@ -58,50 +103,211 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         userLocation: userLocation,
         preference: _selectedPreference,
       );
+      _isLoadingRoute = true;
     });
+
+    final geometry = await RoutePlannerService.fetchRoute(
+      origin: userLocation,
+      destination: destination,
+      profile: 'foot',
+    );
+
+    if (!mounted) return;
+
+    if (geometry == null || geometry.points.isEmpty) {
+      setState(() => _isLoadingRoute = false);
+      return;
+    }
+
+    setState(() {
+      _routePoints = geometry.points;
+      _isLoadingRoute = false;
+    });
+
+    final bounds = LatLngBounds.fromPoints(geometry.points);
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.fromLTRB(40, 120, 40, 280),
+      ),
+    );
+
+    final mins = (geometry.durationSeconds / 60).round();
+    final km = (geometry.distanceMeters / 1000).toStringAsFixed(1);
+    final topOption = _routeOptions.isNotEmpty ? _routeOptions.first : null;
+
+    // Log once per visit to this screen, so tapping through the preference
+    // buttons doesn't pile up duplicate entries for the same trip.
+    if (_tripLogged) return;
+    _tripLogged = true;
+    await TripHistoryService.addEntry(
+      TripHistoryEntry(
+        origin: widget.userLocation != null ? 'Your location' : 'Default location',
+        destination: widget.resolvedPlaceName,
+        preference: _selectedPreference,
+        durationMinutes: mins,
+        // Fare stays a placeholder (0) until real fare data from the
+        // Sakay.ph GTFS repo is wired in.
+        routeSummary: topOption != null
+            ? '${topOption.modeLabel} • $km km'
+            : 'Walking • $km km',
+      ),
+    );
   }
 
   void _selectPreference(RoutePreference preference) {
-    setState(() {
-      _selectedPreference = preference;
-    });
-    _refreshRouteOptions();
+    if (preference == _selectedPreference) return;
+    setState(() => _selectedPreference = preference);
+    _refreshRoute();
+  }
+
+  Future<void> _handleSaveToggle() async {
+    try {
+      final destination = widget.resolvedDestination;
+      final added = await SavedPlacesService.toggle(
+        SavedPlace(
+          id: _savedPlaceId,
+          name: widget.resolvedPlaceName,
+          subtitle: widget.resolvedSubtitle,
+          latitude: destination.latitude,
+          longitude: destination.longitude,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _isSaved = added);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(added ? 'Saved place' : 'Removed from saved places')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save place: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _handleShare() async {
-    final text = 'Mapparaan route to ${widget.resolvedPlaceName}';
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Route summary copied to clipboard')),
-    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: '${widget.resolvedPlaceName} — ${widget.resolvedSubtitle}',
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share place: $error')),
+        );
+      }
+    }
+  }
+
+  void _centerOnMyLocation() {
+    final location = widget.userLocation;
+    if (location == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Location isn't available. Enable it from the home screen."),
+        ),
+      );
+      return;
+    }
+    _mapController.move(location, 15.0);
   }
 
   @override
   Widget build(BuildContext context) {
+    final destination = widget.resolvedDestination;
+
     return Scaffold(
-      drawer: const MapparaanDrawer(),
+      drawer: MapparaanDrawer(
+        onPlaceSelected: (selected) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LocationDetailsScreen(
+                place: selected,
+                userLocation: widget.userLocation,
+              ),
+            ),
+          );
+        },
+      ),
       body: Builder(
         builder: (context) {
           return Stack(
             children: [
-              Container(
-                color: const Color(0xFFE0E0E0),
-                width: double.infinity,
-                height: double.infinity,
-                child: const Center(
-                  child: Text(
-                    'Map goes here',
-                    style: TextStyle(color: Colors.black45, fontSize: 16),
+              // ===== REAL MAP (same tiles/markers/route styling as the rest
+              // of the app, instead of a static "Map goes here" box) =====
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: widget.userLocation ?? destination,
+                  initialZoom: AppConstants.defaultZoom,
+                  minZoom: AppConstants.minZoom,
+                  maxZoom: AppConstants.maxZoom,
+                  cameraConstraint: CameraConstraint.contain(
+                    bounds: AppConstants.manilaBounds,
                   ),
                 ),
+                children: [
+                  const MapparaanTileLayer(),
+                  if (_routePoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _routePoints,
+                          color: const Color(0xFF00695C),
+                          strokeWidth: 5,
+                          borderStrokeWidth: 2,
+                          borderColor: Colors.white,
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(
+                    markers: [
+                      if (widget.userLocation != null)
+                        Marker(
+                          point: widget.userLocation!,
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Marker(
+                        point: destination,
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.topCenter,
+                        child: const Icon(
+                          Icons.location_on,
+                          size: 40,
+                          color: Color(0xFFD32F2F),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
+
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -111,16 +317,21 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       ),
                       CircleIconButton(
                         icon: Icons.my_location,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Centering on your location')),
-                          );
-                        },
+                        onTap: _centerOnMyLocation,
                       ),
                     ],
                   ),
                 ),
               ),
+
+              if (_isLoadingRoute)
+                const Positioned(
+                  top: 100,
+                  left: 0,
+                  right: 0,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+
               Align(
                 alignment: Alignment.bottomCenter,
                 child: SafeArea(
@@ -130,7 +341,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                     isSaved: _isSaved,
                     selectedPreference: _selectedPreference,
                     routeOptions: _routeOptions,
-                    onSaveToggle: () => setState(() => _isSaved = !_isSaved),
+                    onSaveToggle: _handleSaveToggle,
                     onShare: _handleShare,
                     onClose: () => Navigator.of(context).pop(),
                     onPreferenceSelected: _selectPreference,
