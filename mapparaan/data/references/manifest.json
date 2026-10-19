@@ -1,0 +1,35 @@
+{
+  "built_on": "2026-10-19",
+  "source": "https://github.com/sakayph/gtfs (DOTC data, ~2013-15)",
+  "calendar_patched_to": [
+    "20200101",
+    "20351231"
+  ],
+  "services": 20,
+  "routes_by_mode": {
+    "lrt1": 1,
+    "lrt2": 1,
+    "bus": 189,
+    "jeepney": 1522,
+    "mrt3": 1,
+    "pnr": 1,
+    "fort_bus": 2
+  },
+  "rows": {
+    "agency.txt": 6,
+    "calendar.txt": 20,
+    "feed_info.txt": 1,
+    "frequencies.txt": 1864,
+    "routes.txt": 1717,
+    "shapes.txt": 520,
+    "stop_times.txt": 79414,
+    "stops.txt": 4858,
+    "trips.txt": 1864
+  },
+  "known_gaps": [
+    "No road geometry for jeepney/bus routes (only 10 shapes)",
+    "No UV Express routes",
+    "No fares in GTFS; fare_config.json values are placeholders",
+    "Schedules are headway-based and approximate"
+  ]
+}
