@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../main.dart';
 import '../services/commuter_preference_service.dart';
 
 import '../services/ai_assistant_service.dart';
@@ -7,6 +7,10 @@ import '../services/place_search_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/trip_history_service.dart';
 import 'search_location_screen.dart';
+import 'auth_screen.dart';
+import '../services/auth_service.dart';
+import '../services/memory_pin_service.dart';
+import 'location_details_screen.dart';
 
 enum DrawerDestination {
   profile,
@@ -32,9 +36,9 @@ class DrawerDestinationScreen extends StatelessWidget {
     };
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F9F8),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: Text(title),
       ),
       body: SafeArea(
@@ -61,24 +65,350 @@ class _ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AuthService.isLoggedIn,
+      builder: (context, isLoggedIn, _) {
+        final user = AuthService.currentUser;
+
+        if (!isLoggedIn) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircleAvatar(
+                  radius: 44,
+                  backgroundColor: Color(0xFFE0F2F1),
+                  child: Icon(Icons.person_outline, size: 48, color: Color(0xFF00695C)),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Guest Commuter',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Sign in to upload memory pictures, save favorite locations, and customize your commute experience.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00695C),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign In or Register'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 12),
+
+              // 1. CENTERED AVATAR WITH EDIT BADGE
+              Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF00695C), width: 3),
+                      ),
+                      child: const CircleAvatar(
+                        radius: 48,
+                        backgroundColor: Color(0xFFE0F2F1),
+                        child: Icon(Icons.person, size: 54, color: Color(0xFF00695C)),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00695C),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 2. CENTERED NAME AND EMAIL
+              Text(
+                user['name'] ?? 'Commuter User',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                user['email'] ?? 'commuter@example.com',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 3. ACTIVITY STATS ROW
+              ValueListenableBuilder<List<MemoryPin>>(
+                valueListenable: MemoryPinService.pins,
+                builder: (context, pins, _) {
+                  return FutureBuilder(
+                    future: Future.wait([
+                      SavedPlacesService.load(),
+                      TripHistoryService.load(),
+                    ]),
+                    builder: (context, snapshot) {
+                      final savedCount = (snapshot.data?[0] as List?)?.length ?? 0;
+                      final tripCount = (snapshot.data?[1] as List?)?.length ?? 0;
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _StatItem(
+                              icon: Icons.photo_library_outlined,
+                              value: '${pins.length}',
+                              label: 'Memories',
+                            ),
+                            Container(height: 30, width: 1, color: Colors.grey.withOpacity(0.3)),
+                            _StatItem(
+                              icon: Icons.bookmark_border,
+                              value: '$savedCount',
+                              label: 'Saved Places',
+                            ),
+                            Container(height: 30, width: 1, color: Colors.grey.withOpacity(0.3)),
+                            _StatItem(
+                              icon: Icons.directions_transit_outlined,
+                              value: '$tripCount',
+                              label: 'Trips Taken',
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 28),
+
+              // 4. UPLOADED PICTURES GALLERY SECTION
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Uploaded Location Memories',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  ValueListenableBuilder<List<MemoryPin>>(
+                    valueListenable: MemoryPinService.pins,
+                    builder: (context, pins, _) => Text(
+                      '${pins.length} photos',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              ValueListenableBuilder<List<MemoryPin>>(
+                valueListenable: MemoryPinService.pins,
+                builder: (context, pins, _) {
+                  if (pins.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.add_a_photo_outlined, size: 36, color: Colors.grey[400]),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'No pictures uploaded yet',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Visit a place and tap "Add Memory Photo" on the location details screen to save pictures here.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: pins.length,
+                    itemBuilder: (context, index) {
+                      final pin = pins[index];
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[800]
+                                      : Colors.teal[50],
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image,
+                                      size: 40,
+                                      color: Color(0xFF00695C),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      pin.placeName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      pin.address,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 32),
+
+              // 5. SIGN OUT BUTTON
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                    side: BorderSide(color: Colors.red[200]!),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () => AuthService.signOut(),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _StatItem({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
-        CircleAvatar(
-          radius: 36,
-          backgroundColor: const Color(0xFFE0F2F1),
-          child: Icon(icon, size: 34, color: const Color(0xFF00695C)),
+        Icon(icon, size: 20, color: const Color(0xFF00695C)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 20),
-        const Text(
-          'Guest commuter',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Your profile and travel preferences will live here. Sign-in is not available yet.',
-          style: TextStyle(fontSize: 15, height: 1.45, color: Colors.black54),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.grey),
         ),
       ],
     );
@@ -187,6 +517,12 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
     _future = TripHistoryService.load();
   }
 
+  void _refresh() {
+    setState(() {
+      _future = TripHistoryService.load();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<TripHistoryEntry>>(
@@ -197,8 +533,7 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
           return const _EmptyState(
             icon: Icons.route_outlined,
             title: 'Your trips will show up here',
-            message:
-                'Once you plan a route, your recent trips will appear here.',
+            message: 'Once you plan a route, your recent trips will appear here.',
           );
         }
 
@@ -209,24 +544,15 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
               children: [
                 Text(
                   '${items.length} ${items.length == 1 ? 'trip' : 'trips'} recorded',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.delete_sweep_outlined, size: 18),
                   label: const Text('Clear all'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red[700],
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red[700]),
                   onPressed: () async {
                     await TripHistoryService.clear();
-                    if (!context.mounted) return;
-                    setState(() {
-                      _future = TripHistoryService.load();
-                    });
+                    if (context.mounted) _refresh();
                   },
                 ),
               ],
@@ -243,23 +569,25 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
                     leading: const CircleAvatar(
                       radius: 20,
                       backgroundColor: Color(0xFFE0F2F1),
-                      child: Icon(
-                        Icons.directions_transit,
-                        color: Color(0xFF00695C),
-                        size: 20,
-                      ),
+                      child: Icon(Icons.directions_transit, color: Color(0xFF00695C), size: 20),
                     ),
-                    title: Text(
-                      '${trip.origin} → ${trip.destination}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    title: Text('${trip.origin} → ${trip.destination}', style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
                       '${trip.routeSummary ?? 'Route'} • ${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
                       style: const TextStyle(fontSize: 13),
                     ),
-                    trailing: Text(
-                      trip.etaText,
-                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(trip.etaText, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                          onPressed: () async {
+                            await TripHistoryService.deleteEntry(trip.id);
+                            if (context.mounted) _refresh();
+                          },
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -272,7 +600,6 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
   }
 }
 
-// ── REPLACE FROM HERE ──
 class _SettingsPage extends StatefulWidget {
   const _SettingsPage();
 
@@ -290,7 +617,6 @@ class _SettingsPageState extends State<_SettingsPage> {
     _loadPreferences();
   }
 
-  /// Loads stored theme and color settings when opening the settings drawer.
   Future<void> _loadPreferences() async {
     final loaded = await CommuterPreferencesService.load();
     if (!mounted) return;
@@ -298,11 +624,26 @@ class _SettingsPageState extends State<_SettingsPage> {
       _prefs = loaded;
       _isLoading = false;
     });
+    _syncThemeNotifier(loaded.themeMode);
   }
 
-  /// Updates state and persists choice to disk when a user picks a new palette or theme.
+  void _syncThemeNotifier(AppThemeMode appMode) {
+    switch (appMode) {
+      case AppThemeMode.system:
+        themeNotifier.value = ThemeMode.system;
+        break;
+      case AppThemeMode.light:
+        themeNotifier.value = ThemeMode.light;
+        break;
+      case AppThemeMode.dark:
+        themeNotifier.value = ThemeMode.dark;
+        break;
+    }
+  }
+
   Future<void> _updatePreferences(CommuterPreferences newPrefs) async {
     setState(() => _prefs = newPrefs);
+    _syncThemeNotifier(newPrefs.themeMode);
     await CommuterPreferencesService.save(newPrefs);
   }
 
@@ -356,7 +697,7 @@ class _SettingsPageState extends State<_SettingsPage> {
         const SizedBox(height: 4),
         const Text(
           'Personalize main branding inspired by famous Manila landmarks.',
-          style: TextStyle(fontSize: 13, color: Colors.black54),
+          style: TextStyle(fontSize: 13, color: Colors.grey),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -369,9 +710,19 @@ class _SettingsPageState extends State<_SettingsPage> {
                 backgroundColor: palette.primary,
                 radius: 10,
               ),
-              label: Text(palette.label),
+              label: Text(
+                palette.label,
+                style: TextStyle(
+                  // Forces dark teal text on light teal backgrounds so it remains readable
+                  color: isSelected 
+                      ? palette.primary 
+                      : Theme.of(context).colorScheme.onSurface,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
               selected: isSelected,
               selectedColor: palette.container,
+              backgroundColor: Theme.of(context).cardColor,
               onSelected: (_) {
                 _updatePreferences(_prefs.copyWith(colorPalette: palette));
               },
@@ -438,7 +789,7 @@ class _HelpSupportPage extends StatelessWidget {
         SizedBox(height: 8),
         Text(
           'Quick answers about using Mapparaan.',
-          style: TextStyle(fontSize: 14, color: Colors.black54),
+          style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
         SizedBox(height: 16),
         _HelpQuestion(
@@ -476,7 +827,7 @@ class _HelpQuestion extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               answer,
-              style: const TextStyle(height: 1.4, color: Colors.black54),
+              style: const TextStyle(height: 1.4, color: Colors.grey),
             ),
           ),
         ),
@@ -522,7 +873,7 @@ class _EmptyState extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 14,
                 height: 1.45,
-                color: Colors.black54,
+                color: Colors.grey,
               ),
             ),
             if (actionLabel != null) ...[

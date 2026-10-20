@@ -15,7 +15,7 @@ class CircleIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).cardColor, // Dynamic Background
       shape: const CircleBorder(),
       elevation: 3,
       child: InkWell(
@@ -23,7 +23,7 @@ class CircleIconButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: Colors.black87),
+          child: Icon(icon, color: Theme.of(context).iconTheme.color), // Dynamic Icon Color
         ),
       ),
     );

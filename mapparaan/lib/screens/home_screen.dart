@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
@@ -43,43 +44,43 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Automatically fetches live location on startup or prompts the user if disabled.
-Future<void> _initUserLocation() async {
-  try {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!mounted) return;
-    if (!serviceEnabled) {
-      await _openLocationHelp();
-      return;
-    }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+  Future<void> _initUserLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!mounted) return;
-      if (permission == LocationPermission.denied) {
+      if (!serviceEnabled) {
         await _openLocationHelp();
         return;
       }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (!mounted) return;
+        if (permission == LocationPermission.denied) {
+          await _openLocationHelp();
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      if (permission == LocationPermission.deniedForever) {
+        await _openLocationHelp();
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+
+      final userLatLng = LatLng(position.latitude, position.longitude);
+      setState(() => _userLocation = userLatLng);
+      _mapController.move(userLatLng, 15.0);
+    } catch (e) {
+      if (mounted) debugPrint('Auto-location error: $e');
     }
-
-    if (!mounted) return;
-    if (permission == LocationPermission.deniedForever) {
-      await _openLocationHelp();
-      return;
-    }
-
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-    if (!mounted) return;
-
-    final userLatLng = LatLng(position.latitude, position.longitude);
-    setState(() => _userLocation = userLatLng);
-    _mapController.move(userLatLng, 15.0);
-  } catch (e) {
-    if (mounted) debugPrint('Auto-location error: $e');
   }
-}
 
   @override
   void dispose() {
@@ -93,14 +94,6 @@ Future<void> _initUserLocation() async {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// The one and only way a place gets "selected" in the app. Plain search,
-  /// an "Ask MapParaan" query, and tapping a saved place in the drawer all
-  /// end up here, so they always open the same full details screen (real
-  /// map, route options, Save / Share) instead of behaving differently
-  /// depending on how the place was picked.
-  ///
-  /// [preference] is whatever the person asked for ("cheapest route to X");
-  /// when they didn't name one it defaults to fastest.
   Future<void> _selectPlace(
     PlaceResult place, {
     RoutePreference? preference,
@@ -120,8 +113,6 @@ Future<void> _initUserLocation() async {
       ),
     );
 
-    // Back on the home screen: clear the search text so it doesn't keep
-    // showing the place we just left.
     if (!mounted) return;
     _searchController.clear();
   }
@@ -216,58 +207,152 @@ Future<void> _initUserLocation() async {
     }
   }
 
+  /// Displays popup dialog when a purple memory pin on the map is tapped
+  void _showMemoryPinDialog(MemoryPin pin) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            pin.placeName,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 150,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Icon(Icons.image, size: 50, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                pin.address,
+                style: const TextStyle(color: Colors.black54),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: Colors.black54)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00695C),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              icon: const Icon(Icons.directions, size: 18),
+              label: const Text('Go Here'),
+              onPressed: () {
+                Navigator.pop(context);
+                _selectPlace(
+                  PlaceResult(
+                    name: pin.placeName,
+                    subtitle: pin.address,
+                    coordinates: pin.coordinates,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
-          // ===== MAP =====
+          // ===== MAP WITH MEMORY PINS =====
           if (widget.showMap)
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: const LatLng(
-                  AppConstants.defaultLat,
-                  AppConstants.defaultLng,
-                ),
-                initialZoom: AppConstants.defaultZoom,
-                minZoom: AppConstants.minZoom,
-                maxZoom: AppConstants.maxZoom,
-                cameraConstraint: CameraConstraint.contain(
-                  bounds: AppConstants.manilaBounds,
-                ),
-              ),
-              children: [
-                const MapparaanTileLayer(),
-                if (_userLocation != null)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: _userLocation!,
-                        width: 24,
-                        height: 24,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
+            ValueListenableBuilder<List<MemoryPin>>(
+              valueListenable: MemoryPinService.pins,
+              builder: (context, memoryPins, _) {
+                return FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: const LatLng(
+                      AppConstants.defaultLat,
+                      AppConstants.defaultLng,
+                    ),
+                    initialZoom: AppConstants.defaultZoom,
+                    minZoom: AppConstants.minZoom,
+                    maxZoom: AppConstants.maxZoom,
+                    cameraConstraint: CameraConstraint.contain(
+                      bounds: AppConstants.manilaBounds,
+                    ),
+                  ),
+                  children: [
+                    const MapparaanTileLayer(),
+                    if (_userLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _userLocation!,
+                            width: 24,
+                            height: 24,
                             child: Container(
-                              width: 14,
-                              height: 14,
                               decoration: BoxDecoration(
-                                color: Colors.blueAccent,
+                                color: Colors.blue.withValues(alpha: 0.3),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2.5),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueAccent,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2.5,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-              ],
+                    if (memoryPins.isNotEmpty)
+                      MarkerLayer(
+                        markers: memoryPins.map((pin) {
+                          return Marker(
+                            point: pin.coordinates,
+                            width: 50,
+                            height: 50,
+                            alignment: Alignment.topCenter,
+                            child: GestureDetector(
+                              onTap: () => _showMemoryPinDialog(pin),
+                              child: const Icon(
+                                Icons.photo_camera_front,
+                                size: 40,
+                                color: Colors.purple,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                );
+              },
             )
           else
             const Positioned.fill(child: ColoredBox(color: Color(0xFFF2F5F4))),

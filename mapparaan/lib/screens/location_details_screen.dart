@@ -15,6 +15,8 @@ import '../services/trip_history_service.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
+import '../services/auth_service.dart';
+import '../services/memory_pin_service.dart';
 
 /// The single, consistent "I picked a place" screen.
 /// Connects to the local GTFS transit planner API, showing real Metro Manila
@@ -612,6 +614,39 @@ class _PlaceDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
+          ValueListenableBuilder<bool>(
+            valueListenable: AuthService.isLoggedIn,
+            builder: (context, isLoggedIn, _) {
+              if (!isLoggedIn) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.camera_alt, size: 18),
+                  label: const Text('Add Memory Photo'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00695C),
+                    side: const BorderSide(color: Color(0xFF00695C)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: () {
+                    // Temporary mock action: Simulate uploading a photo
+                    final mockPin = MemoryPin(
+                      id: DateTime.now().toString(),
+                      placeName: placeName,
+                      address: 'Temporary Address Data', // You can pass widget.resolvedSubtitle here
+                      coordinates: const LatLng(14.59, 120.97), // Pass destination coordinates here
+                      imagePath: 'mock_image_data', 
+                    );
+                    MemoryPinService.addPin(mockPin);
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Memory saved! Check your map.')),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
           _PassengerTypeSelector(
             selectedType: passengerType,
             colorPalette: colorPalette,

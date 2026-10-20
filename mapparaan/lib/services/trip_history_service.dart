@@ -93,6 +93,19 @@ class TripHistoryService {
       ..clear()
       ..addAll(updated);
   }
+static Future<void> deleteEntry(String id) async {
+    final current = await load();
+    // Filter out the entry with the matching ID
+    final updated = current.where((entry) => entry.id != id).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _key,
+      updated.map((item) => item.serialize()).toList(),
+    );
+    _entries
+      ..clear()
+      ..addAll(updated);
+  }
 
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
@@ -100,3 +113,4 @@ class TripHistoryService {
     _entries.clear();
   }
 }
+

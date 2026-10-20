@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// Reusable pill-shaped search input bar across Mapparaan screens.
 class AskMapparaanBar extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final bool autofocus;
-  final bool readOnly; // Read-only flag when used as a button to trigger navigation
+  final bool readOnly;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
-  final VoidCallback? onTap; // Callback when the search bar field is tapped
+  final VoidCallback? onTap;
   final VoidCallback? onMicTap;
   final IconData leadingIcon;
   final VoidCallback? onLeadingTap;
@@ -19,7 +18,7 @@ class AskMapparaanBar extends StatelessWidget {
     required this.controller,
     this.hintText = 'Ask MapParaan',
     this.autofocus = false,
-    this.readOnly = false, // Defaults to editable text field
+    this.readOnly = false,
     this.onSubmitted,
     this.onChanged,
     this.onTap,
@@ -31,9 +30,8 @@ class AskMapparaanBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Material wrapper provides background color and rounded elevation
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).cardColor, // Dynamic Background
       borderRadius: BorderRadius.circular(28),
       elevation: 4,
       child: Padding(
@@ -41,24 +39,22 @@ class AskMapparaanBar extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 4),
-            // Leading Icon (Magnifying glass search icon)
             InkWell(
               onTap: onLeadingTap ?? onTap,
               customBorder: const CircleBorder(),
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Icon(leadingIcon, color: Colors.black45),
+                child: Icon(leadingIcon, color: Theme.of(context).iconTheme.color?.withOpacity(0.6)),
               ),
             ),
             const SizedBox(width: 4),
-            // Search Text Input Field
             Expanded(
               child: TextField(
                 controller: controller,
                 focusNode: focusNode,
                 autofocus: autofocus,
-                readOnly: readOnly, // Prevents soft keyboard when readOnly is true
-                onTap: onTap, // Triggers navigation when tapped
+                readOnly: readOnly,
+                onTap: onTap,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: hintText,
@@ -69,12 +65,11 @@ class AskMapparaanBar extends StatelessWidget {
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
-            // Trailing Action Button (Send Arrow or Microphone)
             IconButton(
               tooltip: onSubmitted == null ? 'Voice search' : 'Search',
               icon: Icon(
                 onSubmitted == null ? Icons.mic : Icons.send,
-                color: Colors.black87,
+                color: Theme.of(context).iconTheme.color,
               ),
               onPressed: () {
                 final value = controller.text.trim();

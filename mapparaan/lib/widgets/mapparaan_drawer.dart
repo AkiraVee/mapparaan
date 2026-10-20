@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-
 import '../screens/drawer_destination_screen.dart';
 import '../services/place_search_service.dart';
 
-/// The side menu (drawer) shown across Mapparaan's screens.
 class MapparaanDrawer extends StatelessWidget {
   final ValueChanged<PlaceResult>? onPlaceSelected;
 
@@ -11,8 +9,10 @@ class MapparaanDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
         child: Column(
           children: [
@@ -22,25 +22,25 @@ class MapparaanDrawer extends StatelessWidget {
                 children: [
                   const CircleAvatar(
                     radius: 23,
-                    backgroundColor: Color(0xFFE0F2F1),
-                    child: Icon(Icons.alt_route, color: Color(0xFF00695C)),
+                    backgroundColor: Color(0xFF00695C),
+                    child: Icon(Icons.alt_route, color: Colors.white),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Mapparaan',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
                           'Your commute, simplified',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(fontSize: 12, color: onSurface.withOpacity(0.6)),
                         ),
                       ],
                     ),
@@ -53,20 +53,20 @@ class MapparaanDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: Theme.of(context).dividerColor),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                     child: Text(
                       'YOUR ACCOUNT',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
-                        color: Colors.black54,
+                        color: onSurface.withOpacity(0.5),
                       ),
                     ),
                   ),
@@ -92,15 +92,15 @@ class MapparaanDrawer extends StatelessWidget {
                       DrawerDestination.tripHistory,
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(12, 20, 12, 8),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
                     child: Text(
                       'PREFERENCES',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
-                        color: Colors.black54,
+                        color: onSurface.withOpacity(0.5),
                       ),
                     ),
                   ),
@@ -162,7 +162,7 @@ class _MenuItem extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       leading: Icon(icon, color: const Color(0xFF00695C)),
       title: Text(label, style: const TextStyle(fontSize: 15)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.black38),
+      trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
       onTap: onTap,
     );
   }
@@ -176,7 +176,7 @@ class _HelpCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFE0F2F1),
+      color: const Color(0xFF00695C).withOpacity(0.15),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -185,7 +185,7 @@ class _HelpCard extends StatelessWidget {
           leading: Icon(Icons.help_outline, color: Color(0xFF00695C)),
           title: Text(
             'Help & Support',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF00695C)),
           ),
           trailing: Icon(Icons.chevron_right, color: Color(0xFF00695C)),
         ),
