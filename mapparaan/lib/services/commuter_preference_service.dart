@@ -20,6 +20,12 @@ enum ColorPalette {
   final Color container;
 
   const ColorPalette(this.label, this.primary, this.container);
+
+  Color get onPrimary =>
+      primary.computeLuminance() > 0.179 ? Colors.black : Colors.white;
+
+  Color get onContainer =>
+      container.computeLuminance() > 0.179 ? Colors.black : Colors.white;
 }
 
 /// ── 3. PREFERENCES MODEL ──
@@ -57,6 +63,10 @@ class CommuterPreferences {
 
 /// ── 4. STORAGE SERVICE ──
 class CommuterPreferencesService {
+  static final ValueNotifier<CommuterPreferences> current = ValueNotifier(
+    const CommuterPreferences(),
+  );
+
   static const String _keyThemeMode = 'pref_theme_mode';
   static const String _keyPalette = 'pref_color_palette';
   static const String _keyMetric = 'pref_use_metric';
@@ -67,10 +77,12 @@ class CommuterPreferencesService {
   static Future<CommuterPreferences> load() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final themeName = prefs.getString(_keyThemeMode) ?? AppThemeMode.system.name;
-    final paletteName = prefs.getString(_keyPalette) ?? ColorPalette.systemDefault.name;
+    final themeName =
+        prefs.getString(_keyThemeMode) ?? AppThemeMode.system.name;
+    final paletteName =
+        prefs.getString(_keyPalette) ?? ColorPalette.systemDefault.name;
 
-    return CommuterPreferences(
+    final loaded = CommuterPreferences(
       themeMode: AppThemeMode.values.firstWhere(
         (e) => e.name == themeName,
         orElse: () => AppThemeMode.system,
@@ -83,6 +95,8 @@ class CommuterPreferencesService {
       highContrastMap: prefs.getBool(_keyContrast) ?? false,
       compactUi: prefs.getBool(_keyCompactUi) ?? false,
     );
+    current.value = loaded;
+    return loaded;
   }
 
   static Future<void> save(CommuterPreferences preferences) async {
@@ -92,5 +106,6 @@ class CommuterPreferencesService {
     await prefs.setBool(_keyMetric, preferences.useMetricUnits);
     await prefs.setBool(_keyContrast, preferences.highContrastMap);
     await prefs.setBool(_keyCompactUi, preferences.compactUi);
+    current.value = preferences;
   }
 }

@@ -70,7 +70,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       if (!mounted) return;
 
@@ -91,7 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _selectPlace(
@@ -195,7 +198,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       if (!mounted) return;
 
@@ -207,11 +212,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Displays popup dialog when a purple memory pin on the map is tapped
+  /// Displays the saved location details when a memory pin is tapped.
   void _showMemoryPinDialog(MemoryPin pin) {
     showDialog(
       context: context,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -228,29 +234,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 150,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Center(
-                  child: Icon(Icons.image, size: 50, color: Colors.grey),
+                child: Center(
+                  child: Icon(
+                    Icons.image,
+                    size: 50,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 pin.address,
-                style: const TextStyle(color: Colors.black54),
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(color: Colors.black54)),
+              child: Text(
+                'Close',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00695C),
-                foregroundColor: Colors.white,
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -341,10 +354,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             alignment: Alignment.topCenter,
                             child: GestureDetector(
                               onTap: () => _showMemoryPinDialog(pin),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.photo_camera_front,
                                 size: 40,
-                                color: Colors.purple,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                           );
@@ -355,7 +368,11 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             )
           else
-            const Positioned.fill(child: ColoredBox(color: Color(0xFFF2F5F4))),
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+              ),
+            ),
 
           // ===== TOP BAR =====
           SafeArea(
@@ -402,7 +419,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: _bottomAskController,
                   hintText: 'Ask MapParaan',
                   onTap: () => _goToSearchScreen(_bottomAskController.text),
-                  onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
+                  onLeadingTap: () =>
+                      _goToSearchScreen(_bottomAskController.text),
                   onSubmitted: _handleAiQuery,
                 ),
               ),

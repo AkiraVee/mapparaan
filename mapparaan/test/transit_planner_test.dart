@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mapparaan/services/ai_assistant_service.dart';
+import 'package:mapparaan/services/commuter_preference_service.dart';
 import 'package:mapparaan/services/route_planner_service.dart';
 import 'package:mapparaan/services/transit_planner_service.dart';
 
@@ -101,6 +102,24 @@ void main() {
     });
   });
 
+  test('unknown transit modes use the selected app accent color', () {
+    final previous = CommuterPreferencesService.current.value;
+    addTearDown(() => CommuterPreferencesService.current.value = previous);
+    CommuterPreferencesService.current.value = previous.copyWith(
+      colorPalette: ColorPalette.pasigDusk,
+    );
+
+    const leg = TransitLeg(
+      type: 'ride',
+      from: 'A',
+      to: 'B',
+      minutes: 10,
+      mode: 'other',
+    );
+
+    expect(leg.color, ColorPalette.pasigDusk.primary);
+  });
+
   group('TransitPlannerService Fallback', () {
     test('generates fallback options when API is offline', () {
       const origin = LatLng(14.5943, 120.9721);
@@ -131,7 +150,9 @@ void main() {
     });
 
     test('detects senior discount from query', () {
-      final res = AiQueryResolution.fromQuery('cheapest senior fare to SM North');
+      final res = AiQueryResolution.fromQuery(
+        'cheapest senior fare to SM North',
+      );
       expect(res.passengerType, PassengerType.senior);
       expect(res.preference, RoutePreference.cheapest);
     });

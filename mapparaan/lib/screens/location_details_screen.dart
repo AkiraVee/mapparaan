@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
-import '../services/commuter_preference_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
@@ -45,7 +44,9 @@ class LocationDetailsScreen extends StatefulWidget {
   String get resolvedPlaceName => place?.name ?? placeName;
   String get resolvedSubtitle => place?.subtitle ?? origin;
   LatLng get resolvedDestination =>
-      place?.coordinates ?? destinationCoordinates ?? const LatLng(14.5995, 120.9842);
+      place?.coordinates ??
+      destinationCoordinates ??
+      const LatLng(14.5995, 120.9842);
 
   @override
   State<LocationDetailsScreen> createState() => _LocationDetailsScreenState();
@@ -53,8 +54,6 @@ class LocationDetailsScreen extends StatefulWidget {
 
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   final MapController _mapController = MapController();
-
-  CommuterPreferences _preferences = const CommuterPreferences();
 
   bool _isSaved = false;
   bool _isLoadingRoute = false;
@@ -73,7 +72,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     super.initState();
     _selectedPreference = widget.initialPreference;
     _passengerType = widget.passengerType;
-    _loadPreferences();
     _loadSavedState();
     _refreshRoute();
   }
@@ -87,15 +85,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   String get _savedPlaceId {
     final destination = widget.resolvedDestination;
     return '${destination.latitude}_${destination.longitude}';
-  }
-
-  /// Loads active commuter preferences including the dynamic Manila Landmark color palette.
-  Future<void> _loadPreferences() async {
-    final loaded = await CommuterPreferencesService.load();
-    if (!mounted) return;
-    setState(() {
-      _preferences = loaded;
-    });
   }
 
   Future<void> _loadSavedState() async {
@@ -122,7 +111,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         final serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
           final position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ),
           );
           origin = LatLng(position.latitude, position.longitude);
         }
@@ -137,7 +128,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Location is disabled. Enable location services to calculate your route.'),
+            content: Text(
+              'Location is disabled. Enable location services to calculate your route.',
+            ),
           ),
         );
       }
@@ -156,7 +149,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (!mounted) return;
 
     if (realPlans != null && realPlans.isNotEmpty) {
-      final matching = realPlans.where((o) => o.routePreference == _selectedPreference);
+      final matching = realPlans.where(
+        (o) => o.routePreference == _selectedPreference,
+      );
       final selected = matching.isNotEmpty ? matching.first : realPlans.first;
       final points = selected.allPoints;
 
@@ -191,7 +186,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         fallbackPath: fallbackPoints,
       );
 
-      final selected = fallbackOptions.isNotEmpty ? fallbackOptions.first : null;
+      final selected = fallbackOptions.isNotEmpty
+          ? fallbackOptions.first
+          : null;
 
       setState(() {
         _isOfflineFallback = true;
@@ -210,7 +207,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       final topOption = _selectedOption ?? _routeOptions.first;
       await TripHistoryService.addEntry(
         TripHistoryEntry(
-          origin: widget.userLocation != null ? 'Your location' : 'Default location',
+          origin: widget.userLocation != null
+              ? 'Your location'
+              : 'Default location',
           destination: widget.resolvedPlaceName,
           preference: _selectedPreference,
           durationMinutes: topOption.etaMinutes,
@@ -241,7 +240,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (preference == _selectedPreference) return;
     setState(() => _selectedPreference = preference);
 
-    final matching = _routeOptions.where((o) => o.routePreference == preference);
+    final matching = _routeOptions.where(
+      (o) => o.routePreference == preference,
+    );
     if (matching.isNotEmpty) {
       _selectOption(matching.first);
     } else {
@@ -282,13 +283,15 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       if (!mounted) return;
       setState(() => _isSaved = added);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(added ? 'Saved place' : 'Removed from saved places')),
+        SnackBar(
+          content: Text(added ? 'Saved place' : 'Removed from saved places'),
+        ),
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save place: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save place: $error')));
       }
     }
   }
@@ -314,7 +317,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (location == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Location isn't available. Enable location from settings."),
+          content: Text(
+            "Location isn't available. Enable location from settings.",
+          ),
         ),
       );
       return;
@@ -360,7 +365,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   const MapparaanTileLayer(),
 
                   // Draw real multi-leg route (walk, jeepney, bus, rail) with distinctive colors
-                  if (_selectedOption != null && _selectedOption!.legs.isNotEmpty)
+                  if (_selectedOption != null &&
+                      _selectedOption!.legs.isNotEmpty)
                     PolylineLayer(
                       polylines: [
                         for (final leg in _selectedOption!.legs)
@@ -379,7 +385,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       polylines: [
                         Polyline(
                           points: _routePoints,
-                          color: _preferences.colorPalette.primary, // Dynamic palette color
+                          color: Theme.of(context).colorScheme.primary,
                           strokeWidth: 5,
                           borderStrokeWidth: 2,
                           borderColor: Colors.white,
@@ -407,7 +413,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.blueAccent,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2.5),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
                                 ),
                               ),
                             ),
@@ -432,7 +441,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
               // Top action bar (menu + my location)
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -459,7 +471,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       elevation: 4,
                       shape: StadiumBorder(),
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -471,7 +486,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             SizedBox(width: 10),
                             Text(
                               'Finding best transit routes...',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -487,13 +505,14 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   top: false,
                   child: _PlaceDetailsSheet(
                     placeName: widget.resolvedPlaceName,
+                    address: widget.resolvedSubtitle,
+                    coordinates: widget.resolvedDestination,
                     isSaved: _isSaved,
                     isOfflineFallback: _isOfflineFallback,
                     selectedPreference: _selectedPreference,
                     passengerType: _passengerType,
                     routeOptions: _routeOptions,
                     selectedOption: _selectedOption,
-                    colorPalette: _preferences.colorPalette,
                     onSaveToggle: _handleSaveToggle,
                     onShare: _handleShare,
                     onClose: () => Navigator.of(context).pop(),
@@ -513,13 +532,14 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
 class _PlaceDetailsSheet extends StatelessWidget {
   final String placeName;
+  final String address;
+  final LatLng coordinates;
   final bool isSaved;
   final bool isOfflineFallback;
   final RoutePreference selectedPreference;
   final PassengerType passengerType;
   final List<TransitPlanOption> routeOptions;
   final TransitPlanOption? selectedOption;
-  final ColorPalette colorPalette;
   final VoidCallback onSaveToggle;
   final VoidCallback onShare;
   final VoidCallback onClose;
@@ -529,13 +549,14 @@ class _PlaceDetailsSheet extends StatelessWidget {
 
   const _PlaceDetailsSheet({
     required this.placeName,
+    required this.address,
+    required this.coordinates,
     required this.isSaved,
     required this.isOfflineFallback,
     required this.selectedPreference,
     required this.passengerType,
     required this.routeOptions,
     required this.selectedOption,
-    required this.colorPalette,
     required this.onSaveToggle,
     required this.onShare,
     required this.onClose,
@@ -547,15 +568,16 @@ class _PlaceDetailsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.of(context).size.height * 0.58;
-    final primary = colorPalette.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primary = colorScheme.primary;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        boxShadow: [
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        boxShadow: const [
           BoxShadow(
             color: Colors.black26,
             blurRadius: 14,
@@ -596,18 +618,18 @@ class _PlaceDetailsSheet extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   isSaved ? Icons.bookmark : Icons.bookmark_border,
-                  color: isSaved ? primary : Colors.black87,
+                  color: isSaved ? primary : colorScheme.onSurface,
                 ),
                 onPressed: onSaveToggle,
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.share, color: Colors.black87),
+                icon: Icon(Icons.share, color: colorScheme.onSurface),
                 onPressed: onShare,
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.close, color: Colors.black87),
+                icon: Icon(Icons.close, color: colorScheme.onSurface),
                 onPressed: onClose,
               ),
             ],
@@ -624,23 +646,27 @@ class _PlaceDetailsSheet extends StatelessWidget {
                   icon: const Icon(Icons.camera_alt, size: 18),
                   label: const Text('Add Memory Photo'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF00695C),
-                    side: const BorderSide(color: Color(0xFF00695C)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    foregroundColor: colorScheme.primary,
+                    side: BorderSide(color: colorScheme.primary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   onPressed: () {
                     // Temporary mock action: Simulate uploading a photo
                     final mockPin = MemoryPin(
-                      id: DateTime.now().toString(),
+                      id: DateTime.now().microsecondsSinceEpoch.toString(),
                       placeName: placeName,
-                      address: 'Temporary Address Data', // You can pass widget.resolvedSubtitle here
-                      coordinates: const LatLng(14.59, 120.97), // Pass destination coordinates here
-                      imagePath: 'mock_image_data', 
+                      address: address,
+                      coordinates: coordinates,
+                      imagePath: 'mock_image_data',
                     );
                     MemoryPinService.addPin(mockPin);
-                    
+
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Memory saved! Check your map.')),
+                      const SnackBar(
+                        content: Text('Memory saved! Check your map.'),
+                      ),
                     );
                   },
                 ),
@@ -649,7 +675,6 @@ class _PlaceDetailsSheet extends StatelessWidget {
           ),
           _PassengerTypeSelector(
             selectedType: passengerType,
-            colorPalette: colorPalette,
             onSelected: onPassengerTypeSelected,
           ),
           const SizedBox(height: 10),
@@ -674,7 +699,8 @@ class _PlaceDetailsSheet extends StatelessWidget {
                 label: 'Fewest\nTransfers',
                 active: selectedPreference == RoutePreference.fewestTransfers,
                 accent: primary,
-                onPressed: () => onPreferenceSelected(RoutePreference.fewestTransfers),
+                onPressed: () =>
+                    onPreferenceSelected(RoutePreference.fewestTransfers),
               ),
             ],
           ),
@@ -708,22 +734,20 @@ class _PlaceDetailsSheet extends StatelessWidget {
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
-                children: routeOptions.map(
-                  (route) {
-                    final isSelected = selectedOption == route ||
-                        (selectedOption == null && route == routeOptions.first);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _RouteResultCard(
-                        route: route,
-                        isSelected: isSelected,
-                        passengerType: passengerType,
-                        colorPalette: colorPalette,
-                        onTap: () => onOptionSelected(route),
-                      ),
-                    );
-                  },
-                ).toList(),
+                children: routeOptions.map((route) {
+                  final isSelected =
+                      selectedOption == route ||
+                      (selectedOption == null && route == routeOptions.first);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _RouteResultCard(
+                      route: route,
+                      isSelected: isSelected,
+                      passengerType: passengerType,
+                      onTap: () => onOptionSelected(route),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ),
@@ -735,22 +759,21 @@ class _PlaceDetailsSheet extends StatelessWidget {
 
 class _PassengerTypeSelector extends StatelessWidget {
   final PassengerType selectedType;
-  final ColorPalette colorPalette;
   final ValueChanged<PassengerType> onSelected;
 
   const _PassengerTypeSelector({
     required this.selectedType,
-    required this.colorPalette,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final primary = colorPalette.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primary = colorScheme.primary;
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F4F4),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(3),
@@ -764,7 +787,7 @@ class _PassengerTypeSelector extends StatelessWidget {
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
+                  color: isSelected ? colorScheme.surface : Colors.transparent,
                   borderRadius: BorderRadius.circular(9),
                   boxShadow: isSelected
                       ? const [
@@ -783,8 +806,10 @@ class _PassengerTypeSelector extends StatelessWidget {
                       type.label,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? primary : Colors.black87,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected ? primary : colorScheme.onSurface,
                       ),
                     ),
                     if (type.isDiscounted)
@@ -793,7 +818,9 @@ class _PassengerTypeSelector extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 8.5,
                           fontWeight: FontWeight.w600,
-                          color: isSelected ? primary : primary.withValues(alpha: 0.7),
+                          color: isSelected
+                              ? primary
+                              : primary.withValues(alpha: 0.7),
                         ),
                       ),
                   ],
@@ -822,8 +849,9 @@ class _PreferenceButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = active ? Colors.white : Colors.black87;
-    final background = active ? accent : const Color(0xFFEAF1F1);
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = active ? colorScheme.onPrimary : colorScheme.onSurface;
+    final background = active ? accent : colorScheme.surfaceContainerHighest;
 
     return Expanded(
       child: ElevatedButton(
@@ -851,14 +879,12 @@ class _RouteResultCard extends StatelessWidget {
   final TransitPlanOption route;
   final bool isSelected;
   final PassengerType passengerType;
-  final ColorPalette colorPalette;
   final VoidCallback onTap;
 
   const _RouteResultCard({
     required this.route,
     required this.isSelected,
     required this.passengerType,
-    required this.colorPalette,
     required this.onTap,
   });
 
@@ -866,7 +892,9 @@ class _RouteResultCard extends StatelessWidget {
     if (route.transfers == 0) {
       if (route.modes.contains('jeepney')) return Icons.airport_shuttle;
       if (route.modes.contains('bus')) return Icons.directions_bus;
-      if (route.modes.any((m) => m.startsWith('lrt') || m.startsWith('mrt') || m == 'pnr')) {
+      if (route.modes.any(
+        (m) => m.startsWith('lrt') || m.startsWith('mrt') || m == 'pnr',
+      )) {
         return Icons.train;
       }
       return Icons.directions_walk;
@@ -878,8 +906,9 @@ class _RouteResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDiscounted = passengerType.isDiscounted;
     final effectiveFare = route.effectiveFare(passengerType);
-    final primary = colorPalette.primary;
-    final container = colorPalette.container;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primary = colorScheme.primary;
+    final container = colorScheme.primaryContainer;
 
     return InkWell(
       onTap: onTap,
@@ -888,10 +917,12 @@ class _RouteResultCard extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? container.withValues(alpha: 0.35) : const Color(0xFFF7F9F9),
+          color: isSelected
+              ? container.withValues(alpha: 0.35)
+              : colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? primary : const Color(0xFFE2E8E8),
+            color: isSelected ? primary : colorScheme.outlineVariant,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -902,14 +933,12 @@ class _RouteResultCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isSelected ? container : const Color(0xFFE6EEEE),
+                color: isSelected
+                    ? container
+                    : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                _getLeadingIcon(),
-                size: 22,
-                color: primary,
-              ),
+              child: Icon(_getLeadingIcon(), size: 22, color: primary),
             ),
             const SizedBox(width: 12),
 
@@ -929,17 +958,20 @@ class _RouteResultCard extends StatelessWidget {
                       if (isSelected) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: primary,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Active map route',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: colorScheme.onPrimary,
                             ),
                           ),
                         ),
@@ -949,10 +981,10 @@ class _RouteResultCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Colors.black54,
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
 
@@ -963,7 +995,10 @@ class _RouteResultCard extends StatelessWidget {
                       runSpacing: 4,
                       children: route.legs.map((leg) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: leg.color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
@@ -976,7 +1011,9 @@ class _RouteResultCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                leg.isWalk ? Icons.directions_walk : Icons.directions_bus,
+                                leg.isWalk
+                                    ? Icons.directions_walk
+                                    : Icons.directions_bus,
                                 size: 11,
                                 color: leg.color,
                               ),
@@ -1002,9 +1039,9 @@ class _RouteResultCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       route.summary,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Colors.black54,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1016,9 +1053,9 @@ class _RouteResultCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFDDE6E6)),
+                border: Border.all(color: colorScheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -1035,16 +1072,19 @@ class _RouteResultCard extends StatelessWidget {
                   if (isDiscounted) ...[
                     Text(
                       '₱${route.fare}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
-                        color: Colors.black38,
+                        color: colorScheme.onSurfaceVariant,
                         decoration: TextDecoration.lineThrough,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: container,
                         borderRadius: BorderRadius.circular(4),

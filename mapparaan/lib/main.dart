@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+
+import 'services/commuter_preference_service.dart';
 import 'screens/home_screen.dart';
 
-// Global notifier to control Theme Mode (System / Light / Dark) across the app
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
-
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await CommuterPreferencesService.load();
   runApp(const MyApp());
 }
 
@@ -13,42 +14,63 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (context, currentMode, _) {
+    return ValueListenableBuilder<CommuterPreferences>(
+      valueListenable: CommuterPreferencesService.current,
+      builder: (context, preferences, _) {
+        final palette = preferences.colorPalette;
+        final lightColorScheme =
+            ColorScheme.fromSeed(
+              seedColor: palette.primary,
+              brightness: Brightness.light,
+            ).copyWith(
+              primary: palette.primary,
+              onPrimary: palette.onPrimary,
+              primaryContainer: palette.container,
+              onPrimaryContainer: palette.onContainer,
+              secondary: palette.primary,
+              onSecondary: palette.onPrimary,
+              secondaryContainer: palette.container,
+              onSecondaryContainer: palette.onContainer,
+            );
+        final darkColorScheme =
+            ColorScheme.fromSeed(
+              seedColor: palette.primary,
+              brightness: Brightness.dark,
+            ).copyWith(
+              primary: palette.primary,
+              onPrimary: palette.onPrimary,
+              primaryContainer: palette.container,
+              onPrimaryContainer: palette.onContainer,
+              secondary: palette.primary,
+              onSecondary: palette.onPrimary,
+              secondaryContainer: palette.container,
+              onSecondaryContainer: palette.onContainer,
+            );
+
         return MaterialApp(
           title: 'mapparaan',
           debugShowCheckedModeBanner: false,
-
-          // 1. Light Theme Definition
           theme: ThemeData(
             brightness: Brightness.light,
-            primaryColor: const Color(0xFF00695C),
+            primaryColor: palette.primary,
             scaffoldBackgroundColor: const Color(0xFFF7F9F8),
             cardColor: Colors.white,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF00695C),
-              brightness: Brightness.light,
-            ),
+            colorScheme: lightColorScheme,
             useMaterial3: true,
           ),
-
-          // 2. Dark Theme Definition
           darkTheme: ThemeData(
             brightness: Brightness.dark,
-            primaryColor: const Color(0xFF80CBC4),
+            primaryColor: palette.primary,
             scaffoldBackgroundColor: const Color(0xFF121212),
             cardColor: const Color(0xFF1E1E1E),
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF00695C),
-              brightness: Brightness.dark,
-            ),
+            colorScheme: darkColorScheme,
             useMaterial3: true,
           ),
-
-          // Active Mode (Listens to the theme setting)
-          themeMode: currentMode,
-
+          themeMode: switch (preferences.themeMode) {
+            AppThemeMode.system => ThemeMode.system,
+            AppThemeMode.light => ThemeMode.light,
+            AppThemeMode.dark => ThemeMode.dark,
+          },
           home: const HomeScreen(),
         );
       },

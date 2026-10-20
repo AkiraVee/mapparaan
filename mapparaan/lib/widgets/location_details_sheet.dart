@@ -49,11 +49,12 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
       snap: true,
       snapSizes: const [0.30, 0.55, 0.75],
       builder: (context, scrollController) {
+        final colorScheme = Theme.of(context).colorScheme;
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
                 blurRadius: 16,
@@ -67,7 +68,8 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onVerticalDragUpdate: (details) {
-                  final newSize = _sheetController.size -
+                  final newSize =
+                      _sheetController.size -
                       details.delta.dy / MediaQuery.of(context).size.height;
                   _sheetController.jumpTo(newSize.clamp(0.22, 0.75));
                 },
@@ -114,9 +116,9 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                                 const SizedBox(height: 4),
                                 Text(
                                   widget.address!,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.black54,
+                                    color: colorScheme.onSurfaceVariant,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -139,14 +141,26 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _pill('Directions', const Color(0xFF00695C), Colors.white,
-                              widget.onDirections),
+                          _pill(
+                            'Directions',
+                            colorScheme.primary,
+                            colorScheme.onPrimary,
+                            widget.onDirections,
+                          ),
                           const SizedBox(width: 8),
-                          _pill('Save', const Color(0xFFB3E5FC), Colors.black87,
-                              widget.onSave),
+                          _pill(
+                            'Save',
+                            colorScheme.secondaryContainer,
+                            colorScheme.onSecondaryContainer,
+                            widget.onSave,
+                          ),
                           const SizedBox(width: 8),
-                          _pill('Share', const Color(0xFFB3E5FC), Colors.black87,
-                              widget.onShare),
+                          _pill(
+                            'Share',
+                            colorScheme.secondaryContainer,
+                            colorScheme.onSecondaryContainer,
+                            widget.onShare,
+                          ),
                         ],
                       ),
                     ),
@@ -236,6 +250,7 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
     required String subtitle,
   }) {
     final selected = _selectedMode == mode;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
       onTap: () {
@@ -246,10 +261,12 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE0F2F1) : const Color(0xFFF5F5F5),
+          color: selected
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF00695C) : Colors.transparent,
+            color: selected ? colorScheme.primary : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -260,12 +277,14 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFF00695C) : Colors.white,
+                color: selected ? colorScheme.primary : colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
-                color: selected ? Colors.white : Colors.black54,
+                color: selected
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurfaceVariant,
                 size: 26,
               ),
             ),
@@ -280,15 +299,17 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: selected ? const Color(0xFF00695C) : Colors.black87,
+                      color: selected
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Colors.black54,
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],

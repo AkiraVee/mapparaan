@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
+
 import '../services/commuter_preference_service.dart';
 
 import '../services/ai_assistant_service.dart';
@@ -74,10 +74,16 @@ class _ProfilePage extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 44,
-                  backgroundColor: Color(0xFFE0F2F1),
-                  child: Icon(Icons.person_outline, size: 48, color: Color(0xFF00695C)),
+                  backgroundColor: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer,
+                  child: Icon(
+                    Icons.person_outline,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Text(
@@ -85,21 +91,30 @@ class _ProfilePage extends StatelessWidget {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
                     'Sign in to upload memory pictures, save favorite locations, and customize your commute experience.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 28),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00695C),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   icon: const Icon(Icons.login),
                   label: const Text('Sign In or Register'),
@@ -127,12 +142,21 @@ class _ProfilePage extends StatelessWidget {
                     Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF00695C), width: 3),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 3,
+                        ),
                       ),
-                      child: const CircleAvatar(
+                      child: CircleAvatar(
                         radius: 48,
-                        backgroundColor: Color(0xFFE0F2F1),
-                        child: Icon(Icons.person, size: 54, color: Color(0xFF00695C)),
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer,
+                        child: Icon(
+                          Icons.person,
+                          size: 54,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                     Positioned(
@@ -140,14 +164,14 @@ class _ProfilePage extends StatelessWidget {
                       right: 2,
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF00695C),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.edit,
                           size: 14,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       ),
                     ),
@@ -161,13 +185,19 @@ class _ProfilePage extends StatelessWidget {
               Text(
                 user['name'] ?? 'Commuter User',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 user['email'] ?? 'commuter@example.com',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
 
               const SizedBox(height: 24),
@@ -182,11 +212,16 @@ class _ProfilePage extends StatelessWidget {
                       TripHistoryService.load(),
                     ]),
                     builder: (context, snapshot) {
-                      final savedCount = (snapshot.data?[0] as List?)?.length ?? 0;
-                      final tripCount = (snapshot.data?[1] as List?)?.length ?? 0;
+                      final savedCount =
+                          (snapshot.data?[0] as List?)?.length ?? 0;
+                      final tripCount =
+                          (snapshot.data?[1] as List?)?.length ?? 0;
 
                       return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 16,
+                        ),
                         decoration: BoxDecoration(
                           color: Theme.of(context).cardColor,
                           borderRadius: BorderRadius.circular(18),
@@ -206,13 +241,21 @@ class _ProfilePage extends StatelessWidget {
                               value: '${pins.length}',
                               label: 'Memories',
                             ),
-                            Container(height: 30, width: 1, color: Colors.grey.withValues(alpha: 0.3)),
+                            Container(
+                              height: 30,
+                              width: 1,
+                              color: Colors.grey.withValues(alpha: 0.3),
+                            ),
                             _StatItem(
                               icon: Icons.bookmark_border,
                               value: '$savedCount',
                               label: 'Saved Places',
                             ),
-                            Container(height: 30, width: 1, color: Colors.grey.withValues(alpha: 0.3)),
+                            Container(
+                              height: 30,
+                              width: 1,
+                              color: Colors.grey.withValues(alpha: 0.3),
+                            ),
                             _StatItem(
                               icon: Icons.directions_transit_outlined,
                               value: '$tripCount',
@@ -240,7 +283,10 @@ class _ProfilePage extends StatelessWidget {
                     valueListenable: MemoryPinService.pins,
                     builder: (context, pins, _) => Text(
                       '${pins.length} photos',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],
@@ -257,21 +303,35 @@ class _ProfilePage extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: Colors.grey.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Column(
                         children: [
-                          Icon(Icons.add_a_photo_outlined, size: 36, color: Colors.grey[400]),
+                          Icon(
+                            Icons.add_a_photo_outlined,
+                            size: 36,
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
                           const SizedBox(height: 10),
                           const Text(
                             'No pictures uploaded yet',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
+                          Text(
                             'Visit a place and tap "Add Memory Photo" on the location details screen to save pictures here.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -281,12 +341,13 @@ class _ProfilePage extends StatelessWidget {
                   return GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.85,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.85,
+                        ),
                     itemCount: pins.length,
                     itemBuilder: (context, index) {
                       final pin = pins[index];
@@ -309,14 +370,16 @@ class _ProfilePage extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Container(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.grey[800]
-                                      : Colors.teal[50],
-                                  child: const Center(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer,
+                                  child: Center(
                                     child: Icon(
                                       Icons.image,
                                       size: 40,
-                                      color: Color(0xFF00695C),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
                                     ),
                                   ),
                                 ),
@@ -340,9 +403,11 @@ class _ProfilePage extends StatelessWidget {
                                       pin.address,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.grey,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                                       ),
                                     ),
                                   ],
@@ -367,10 +432,15 @@ class _ProfilePage extends StatelessWidget {
                     foregroundColor: Colors.red[700],
                     side: BorderSide(color: Colors.red[200]!),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   icon: const Icon(Icons.logout),
-                  label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    'Sign Out',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () => AuthService.signOut(),
                 ),
               ),
@@ -399,7 +469,7 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF00695C)),
+        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 4),
         Text(
           value,
@@ -407,7 +477,10 @@ class _StatItem extends StatelessWidget {
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -443,11 +516,12 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
             message: 'Save places you visit often to find them quickly.',
             actionLabel: 'Find a place',
             onAction: () async {
-              final selection = await Navigator.of(context).push<SearchSelection>(
-                MaterialPageRoute<SearchSelection>(
-                  builder: (_) => const SearchLocationScreen(),
-                ),
-              );
+              final selection = await Navigator.of(context)
+                  .push<SearchSelection>(
+                    MaterialPageRoute<SearchSelection>(
+                      builder: (_) => const SearchLocationScreen(),
+                    ),
+                  );
               if (context.mounted && selection != null) {
                 Navigator.of(context).pop(selection.place);
               }
@@ -461,18 +535,18 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
           itemBuilder: (context, index) {
             final place = items[index];
             return ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.place_outlined,
-                color: Color(0xFF00695C),
+                color: Theme.of(context).colorScheme.primary,
               ),
               title: Text(place.name),
               subtitle: Text(
                 place.subtitle.isEmpty ? 'Saved place' : place.subtitle,
               ),
               trailing: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.bookmark_remove_outlined,
-                  color: Colors.black45,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 tooltip: 'Remove from saved',
                 onPressed: () async {
@@ -532,7 +606,8 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
           return const _EmptyState(
             icon: Icons.route_outlined,
             title: 'Your trips will show up here',
-            message: 'Once you plan a route, your recent trips will appear here.',
+            message:
+                'Once you plan a route, your recent trips will appear here.',
           );
         }
 
@@ -543,7 +618,11 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
               children: [
                 Text(
                   '${items.length} ${items.length == 1 ? 'trip' : 'trips'} recorded',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.delete_sweep_outlined, size: 18),
@@ -565,12 +644,21 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
                   final trip = items[items.length - 1 - index];
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
+                    leading: CircleAvatar(
                       radius: 20,
-                      backgroundColor: Color(0xFFE0F2F1),
-                      child: Icon(Icons.directions_transit, color: Color(0xFF00695C), size: 20),
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer,
+                      child: Icon(
+                        Icons.directions_transit,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
                     ),
-                    title: Text('${trip.origin} → ${trip.destination}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: Text(
+                      '${trip.origin} → ${trip.destination}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     subtitle: Text(
                       '${trip.routeSummary ?? 'Route'} • ${trip.durationMinutes} min • ₱${trip.fareEstimate.toStringAsFixed(0)}',
                       style: const TextStyle(fontSize: 13),
@@ -578,9 +666,23 @@ class _TripHistoryPageState extends State<_TripHistoryPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(trip.etaText, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text(
+                          trip.etaText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                        ),
                         IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
                           onPressed: () async {
                             await TripHistoryService.deleteEntry(trip.id);
                             if (context.mounted) _refresh();
@@ -623,26 +725,10 @@ class _SettingsPageState extends State<_SettingsPage> {
       _prefs = loaded;
       _isLoading = false;
     });
-    _syncThemeNotifier(loaded.themeMode);
-  }
-
-  void _syncThemeNotifier(AppThemeMode appMode) {
-    switch (appMode) {
-      case AppThemeMode.system:
-        themeNotifier.value = ThemeMode.system;
-        break;
-      case AppThemeMode.light:
-        themeNotifier.value = ThemeMode.light;
-        break;
-      case AppThemeMode.dark:
-        themeNotifier.value = ThemeMode.dark;
-        break;
-    }
   }
 
   Future<void> _updatePreferences(CommuterPreferences newPrefs) async {
     setState(() => _prefs = newPrefs);
-    _syncThemeNotifier(newPrefs.themeMode);
     await CommuterPreferencesService.save(newPrefs);
   }
 
@@ -694,9 +780,12 @@ class _SettingsPageState extends State<_SettingsPage> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Personalize main branding inspired by famous Manila landmarks.',
-          style: TextStyle(fontSize: 13, color: Colors.grey),
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -712,15 +801,16 @@ class _SettingsPageState extends State<_SettingsPage> {
               label: Text(
                 palette.label,
                 style: TextStyle(
-                  // Forces dark teal text on light teal backgrounds so it remains readable
-                  color: isSelected 
-                      ? palette.primary 
+                  // Keep selected chip text legible on its tinted background.
+                  color: isSelected
+                      ? palette.onContainer
                       : Theme.of(context).colorScheme.onSurface,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
               selected: isSelected,
               selectedColor: palette.container,
+              checkmarkColor: palette.onContainer,
               backgroundColor: Theme.of(context).cardColor,
               onSelected: (_) {
                 _updatePreferences(_prefs.copyWith(colorPalette: palette));
@@ -740,18 +830,24 @@ class _SettingsPageState extends State<_SettingsPage> {
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           title: const Text('High-Contrast Map Shading'),
-          subtitle: const Text('Enhances baseline legibility for visual clarity'),
+          subtitle: const Text(
+            'Enhances baseline legibility for visual clarity',
+          ),
           value: _prefs.highContrastMap,
           activeTrackColor: activeColor,
-          onChanged: (val) => _updatePreferences(_prefs.copyWith(highContrastMap: val)),
+          onChanged: (val) =>
+              _updatePreferences(_prefs.copyWith(highContrastMap: val)),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           title: const Text('Compact Sheet View'),
-          subtitle: const Text('Reduces bottom sheet height for maximum map space'),
+          subtitle: const Text(
+            'Reduces bottom sheet height for maximum map space',
+          ),
           value: _prefs.compactUi,
           activeTrackColor: activeColor,
-          onChanged: (val) => _updatePreferences(_prefs.copyWith(compactUi: val)),
+          onChanged: (val) =>
+              _updatePreferences(_prefs.copyWith(compactUi: val)),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -759,7 +855,8 @@ class _SettingsPageState extends State<_SettingsPage> {
           subtitle: const Text('Display distances in meters and kilometers'),
           value: _prefs.useMetricUnits,
           activeTrackColor: activeColor,
-          onChanged: (val) => _updatePreferences(_prefs.copyWith(useMetricUnits: val)),
+          onChanged: (val) =>
+              _updatePreferences(_prefs.copyWith(useMetricUnits: val)),
         ),
 
         const Divider(height: 32),
@@ -767,7 +864,9 @@ class _SettingsPageState extends State<_SettingsPage> {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.privacy_tip_outlined, color: activeColor),
           title: const Text('Privacy & Location Access'),
-          subtitle: const Text('Location permission is used strictly to calculate live routes and center the map on request.'),
+          subtitle: const Text(
+            'Location permission is used strictly to calculate live routes and center the map on request.',
+          ),
         ),
       ],
     );
@@ -780,7 +879,7 @@ class _HelpSupportPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      children: const [
+      children: [
         Text(
           'How can we help?',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
@@ -788,7 +887,10 @@ class _HelpSupportPage extends StatelessWidget {
         SizedBox(height: 8),
         Text(
           'Quick answers about using Mapparaan.',
-          style: TextStyle(fontSize: 14, color: Colors.grey),
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         SizedBox(height: 16),
         _HelpQuestion(
@@ -826,7 +928,10 @@ class _HelpQuestion extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               answer,
-              style: const TextStyle(height: 1.4, color: Colors.grey),
+              style: TextStyle(
+                height: 1.4,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ),
@@ -858,7 +963,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 52, color: const Color(0xFF00695C)),
+            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 20),
             Text(
               title,
@@ -869,10 +974,10 @@ class _EmptyState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 height: 1.45,
-                color: Colors.grey,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             if (actionLabel != null) ...[
@@ -882,7 +987,7 @@ class _EmptyState extends StatelessWidget {
                 icon: const Icon(Icons.search),
                 label: Text(actionLabel!),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF00695C),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ],

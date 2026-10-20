@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import 'ai_assistant_service.dart';
+import 'commuter_preference_service.dart';
 import 'route_planner_service.dart';
 
 extension PassengerTypeExt on PassengerType {
@@ -93,7 +94,7 @@ class TransitLeg {
       case 'uv_express':
         return const Color(0xFF5E35B1); // Purple
       default:
-        return const Color(0xFF00695C); // MapParaan teal
+        return CommuterPreferencesService.current.value.colorPalette.primary;
     }
   }
 
@@ -197,7 +198,8 @@ class TransitPlanOption {
       summary: json['summary'] as String? ?? '',
       etaMinutes: (json['eta_minutes'] as num?)?.toInt() ?? 0,
       fare: (json['fare'] as num?)?.toInt() ?? 0,
-      fareDiscounted: (json['fare_discounted'] as num?)?.toInt() ??
+      fareDiscounted:
+          (json['fare_discounted'] as num?)?.toInt() ??
           ((json['fare'] as num?)?.toInt() ?? 0),
       transfers: (json['transfers'] as num?)?.toInt() ?? 0,
       modes: parsedModes,
@@ -218,8 +220,8 @@ class TransitPlanOption {
     final prefString = mock.preference == RoutePreference.cheapest
         ? 'cheapest'
         : mock.preference == RoutePreference.fewestTransfers
-            ? 'fewest_transfers'
-            : 'fastest';
+        ? 'fewest_transfers'
+        : 'fastest';
 
     return TransitPlanOption(
       preference: prefString,
@@ -291,14 +293,17 @@ class TransitPlannerService {
       final List rawOptions;
       if (decoded is List) {
         rawOptions = decoded;
-      } else if (decoded is Map<String, dynamic> && decoded['options'] is List) {
+      } else if (decoded is Map<String, dynamic> &&
+          decoded['options'] is List) {
         rawOptions = decoded['options'] as List;
       } else {
         return null;
       }
 
       return rawOptions
-          .map((item) => TransitPlanOption.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => TransitPlanOption.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     } catch (e) {
       debugPrint('Transit planner API offline or unreachable ($baseUrl): $e');

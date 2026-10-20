@@ -44,7 +44,11 @@ class AskMapparaanBar extends StatelessWidget {
               customBorder: const CircleBorder(),
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Icon(leadingIcon, color: Theme.of(context).iconTheme.color?.withOpacity(0.6)),
+                child: Icon(
+                  leadingIcon,
+                  color: Theme.of(context).iconTheme.color
+                      ?.withValues(alpha: 0.6),
+                ),
               ),
             ),
             const SizedBox(width: 4),

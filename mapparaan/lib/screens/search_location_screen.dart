@@ -136,7 +136,9 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     Navigator.of(context).pop(
       SearchSelection(
         place: place,
-        resolution: AiQueryResolution.fromQuery(_topSearchController.text.trim()),
+        resolution: AiQueryResolution.fromQuery(
+          _topSearchController.text.trim(),
+        ),
       ),
     );
   }
@@ -161,7 +163,9 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
           _isAiResolving = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No matching place found for that request.')),
+          const SnackBar(
+            content: Text('No matching place found for that request.'),
+          ),
         );
         return;
       }
@@ -207,7 +211,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     // because the search bar is focused with an empty/short query. This is
     // what stops "Type at least 3 characters" from showing up as soon as you
     // tap the search bar.
-    final showResultsPanel = _hasConnectionError ||
+    final showResultsPanel =
+        _hasConnectionError ||
         _isAiResolving ||
         _isSearching ||
         _searchResults.isNotEmpty;
@@ -222,7 +227,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter:
-                    _userLocation ?? const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+                    _userLocation ??
+                    const LatLng(
+                      AppConstants.defaultLat,
+                      AppConstants.defaultLng,
+                    ),
                 initialZoom: AppConstants.defaultZoom,
                 minZoom: AppConstants.minZoom,
                 maxZoom: AppConstants.maxZoom,
@@ -265,7 +274,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               ],
             )
           else
-            const Positioned.fill(child: ColoredBox(color: Color(0xFFF3F5F3))),
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+              ),
+            ),
 
           // Bound Fill Positioned Container to prevent vertical overflow layout errors
           Positioned.fill(
@@ -282,7 +295,9 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                         Builder(
                           builder: (context) {
                             return CircleIconButton(
-                              icon: _isSearchFocused ? Icons.arrow_back : Icons.menu,
+                              icon: _isSearchFocused
+                                  ? Icons.arrow_back
+                                  : Icons.menu,
                               onTap: () {
                                 if (_isSearchFocused) {
                                   _topSearchFocusNode.unfocus();
@@ -322,11 +337,11 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                         child: _hasConnectionError
                             ? _NoConnectionState(onRetry: _retry)
                             : _isAiResolving || _isSearching
-                                ? const Center(child: CircularProgressIndicator())
-                                : _SearchDropdown(
-                                    results: _searchResults,
-                                    onSelect: _selectPlace,
-                                  ),
+                            ? const Center(child: CircularProgressIndicator())
+                            : _SearchDropdown(
+                                results: _searchResults,
+                                onSelect: _selectPlace,
+                              ),
                       ),
                     ],
                   ],
@@ -341,7 +356,10 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               alignment: Alignment.bottomCenter,
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: AskMapparaanBar(
                     controller: _bottomAskController,
                     hintText: 'Ask MapParaan',
@@ -364,8 +382,9 @@ class _SearchDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.white,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(16),
       elevation: 4,
       child: ListView.separated(
@@ -376,7 +395,10 @@ class _SearchDropdown extends StatelessWidget {
         itemBuilder: (context, index) {
           final place = results[index];
           return ListTile(
-            leading: const Icon(Icons.place_outlined, color: Colors.black54),
+            leading: Icon(
+              Icons.place_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ),
             title: Text(
               place.name,
               maxLines: 1,
@@ -387,7 +409,10 @@ class _SearchDropdown extends StatelessWidget {
               place.subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             onTap: () => onSelect(place),
           );
@@ -403,8 +428,9 @@ class _NoConnectionState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.white,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(16),
       elevation: 4,
       child: Padding(
@@ -412,23 +438,26 @@ class _NoConnectionState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.wifi_off, size: 40, color: Colors.black45),
+            Icon(Icons.wifi_off, size: 40, color: colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             const Text(
               "Couldn't load results",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Check your connection. Your search is still here.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00695C),
-                foregroundColor: Colors.white,
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 32,
                   vertical: 12,
