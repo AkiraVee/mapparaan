@@ -10,7 +10,6 @@ import 'search_location_screen.dart';
 import 'auth_screen.dart';
 import '../services/auth_service.dart';
 import '../services/memory_pin_service.dart';
-import 'location_details_screen.dart';
 
 enum DrawerDestination {
   profile,
@@ -193,7 +192,7 @@ class _ProfilePage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -207,13 +206,13 @@ class _ProfilePage extends StatelessWidget {
                               value: '${pins.length}',
                               label: 'Memories',
                             ),
-                            Container(height: 30, width: 1, color: Colors.grey.withOpacity(0.3)),
+                            Container(height: 30, width: 1, color: Colors.grey.withValues(alpha: 0.3)),
                             _StatItem(
                               icon: Icons.bookmark_border,
                               value: '$savedCount',
                               label: 'Saved Places',
                             ),
-                            Container(height: 30, width: 1, color: Colors.grey.withOpacity(0.3)),
+                            Container(height: 30, width: 1, color: Colors.grey.withValues(alpha: 0.3)),
                             _StatItem(
                               icon: Icons.directions_transit_outlined,
                               value: '$tripCount',
@@ -258,7 +257,7 @@ class _ProfilePage extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
                       ),
                       child: Column(
                         children: [
@@ -297,7 +296,7 @@ class _ProfilePage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
