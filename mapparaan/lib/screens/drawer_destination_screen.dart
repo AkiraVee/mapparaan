@@ -46,13 +46,86 @@ class DrawerDestinationScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: switch (destination) {
             DrawerDestination.profile => _ProfilePage(icon: icon),
-            DrawerDestination.savedPlaces => const _SavedPlacesPage(),
-            DrawerDestination.tripHistory => const _TripHistoryPage(),
+            DrawerDestination.savedPlaces => const _AccountRequiredPage(
+              feature: 'saved places',
+              child: _SavedPlacesPage(),
+            ),
+            DrawerDestination.tripHistory => const _AccountRequiredPage(
+              feature: 'trip history',
+              child: _TripHistoryPage(),
+            ),
             DrawerDestination.settings => const _SettingsPage(),
             DrawerDestination.helpSupport => const _HelpSupportPage(),
           },
         ),
       ),
+    );
+  }
+}
+
+class _AccountRequiredPage extends StatelessWidget {
+  final String feature;
+  final Widget child;
+
+  const _AccountRequiredPage({required this.feature, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AuthService.isLoggedIn,
+      child: child,
+      builder: (context, isLoggedIn, child) {
+        if (isLoggedIn) return child!;
+
+        final scheme = Theme.of(context).colorScheme;
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: scheme.primaryContainer,
+                  child: Icon(
+                    Icons.lock_outline,
+                    size: 36,
+                    color: scheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Sign in to view your $feature',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'You can keep using the map without an account. Sign in or create an account when you want to access your $feature.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign In or Register'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -183,7 +256,7 @@ class _ProfilePage extends StatelessWidget {
 
               // 2. CENTERED NAME AND EMAIL
               Text(
-                user['name'] ?? 'Commuter User',
+                user?.userMetadata?['full_name'] ?? 'Commuter User',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 22,
@@ -192,7 +265,7 @@ class _ProfilePage extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                user['email'] ?? 'commuter@example.com',
+                user?.email ?? 'commuter@example.com',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,

@@ -185,22 +185,22 @@ class _HelpCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.primaryContainer.withValues(alpha: 0.45),
+      color: scheme.primaryContainer,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: ListTile(
-          leading: Icon(Icons.help_outline, color: scheme.primary),
+          leading: Icon(Icons.help_outline, color: scheme.onPrimaryContainer),
           title: Text(
             'Help & Support',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: scheme.primary,
+              color: scheme.onPrimaryContainer,
             ),
           ),
-          trailing: Icon(Icons.chevron_right, color: scheme.primary),
+          trailing: Icon(Icons.chevron_right, color: scheme.onPrimaryContainer),
         ),
       ),
     );

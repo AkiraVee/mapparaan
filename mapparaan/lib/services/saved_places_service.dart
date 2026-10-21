@@ -1,5 +1,5 @@
 import 'package:latlong2/latlong.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SavedPlace {
   final String id;
@@ -12,137 +12,71 @@ class SavedPlace {
     this.id = '',
     required this.name,
     required this.subtitle,
-    this.latitude = 0,
-    this.longitude = 0,
+    required this.latitude,
+    required this.longitude,
   });
 
   LatLng get coordinates => LatLng(latitude, longitude);
-
-  static String _escapeField(String value) => value.replaceAll('::', '\u0000');
-
-  static String _unescapeField(String value) => value.replaceAll('\u0000', '::');
-
-  factory SavedPlace.fromLegacyString(String raw) {
-    final parts = raw.split('::');
-    if (parts.length >= 5) {
-      final id = parts.first;
-      final lastLatitude = parts[parts.length - 2];
-      final lastLongitude = parts.last;
-      final latitude = double.tryParse(lastLatitude) ?? 0;
-      final longitude = double.tryParse(lastLongitude) ?? 0;
-
-      if (parts.length == 5) {
-        return SavedPlace(
-          id: id,
-          name: _unescapeField(parts[1]),
-          subtitle: _unescapeField(parts[2]),
-          latitude: latitude,
-          longitude: longitude,
-        );
-      }
-
-      final name = _unescapeField(parts.sublist(1, parts.length - 3).join('::'));
-      final subtitle = _unescapeField(parts[parts.length - 3]);
-      return SavedPlace(
-        id: id,
-        name: name,
-        subtitle: subtitle,
-        latitude: latitude,
-        longitude: longitude,
-      );
-    }
-    throw FormatException('Invalid saved place value: $raw');
-  }
-
-  String serialize() =>
-      '$id::${_escapeField(name)}::${_escapeField(subtitle)}::$latitude::$longitude';
 }
 
 class SavedPlacesService {
-  static const String _key = 'saved_places';
-  static final List<SavedPlace> _places = <SavedPlace>[];
+  static final SupabaseClient _client = Supabase.instance.client;
 
-  static List<SavedPlace> get places => List.unmodifiable(_places);
+  static Future<List<SavedPlace>> load() => fetchSavedPlaces();
 
-  static Future<List<SavedPlace>> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_key) ?? const <String>[];
-    final loaded = raw.map(SavedPlace.fromLegacyString).toList();
-    _places
-      ..clear()
-      ..addAll(loaded);
-    return List.unmodifiable(loaded);
-  }
+  static Future<List<SavedPlace>> fetchSavedPlaces() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
 
-  static bool contains(String name) =>
-      _places.any((place) => place.name.toLowerCase() == name.toLowerCase());
+    final List<dynamic> response = await _client
+        .from('saved_places')
+        .select('id, name, subtitle, geom')
+        .eq('user_id', userId);
 
-  static Future<bool> save(SavedPlace place) async {
-    final all = await load();
-    final index = all.indexWhere(
-      (current) => current.id == place.id ||
-          current.name.toLowerCase() == place.name.toLowerCase(),
-    );
-    final updated = [...all];
-    if (index >= 0) {
-      updated[index] = place;
-    } else {
-      updated.add(place);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _key,
-      updated.map((item) => item.serialize()).toList(),
-    );
-    _places
-      ..clear()
-      ..addAll(updated);
-    return true;
-  }
+    return response.map((row) {
+      final geomStr = row['geom'] as String? ?? '';
+      double lat = 0.0;
+      double lng = 0.0;
 
-  static Future<bool> toggle(SavedPlace place) async {
-    final all = await load();
-    final index = all.indexWhere(
-      (current) => current.id == place.id ||
-          current.name.toLowerCase() == place.name.toLowerCase(),
-    );
-    final updated = [...all];
-    if (index >= 0) {
-      updated.removeAt(index);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _key,
-        updated.map((item) => item.serialize()).toList(),
+      if (geomStr.contains('POINT(')) {
+        final rawCoords = geomStr.split('POINT(')[1].replaceFirst(')', '').split(' ');
+        lng = double.parse(rawCoords[0]);
+        lat = double.parse(rawCoords[1]);
+      }
+
+      return SavedPlace(
+        id: row['id'],
+        name: row['name'],
+        subtitle: row['subtitle'] ?? '',
+        latitude: lat,
+        longitude: lng,
       );
-      _places
-        ..clear()
-        ..addAll(updated);
-      return false;
-    }
-    updated.add(place);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _key,
-      updated.map((item) => item.serialize()).toList(),
-    );
-    _places
-      ..clear()
-      ..addAll(updated);
-    return true;
+    }).toList();
   }
 
-  static Future<void> removeByName(String name) async {
-    final all = await load();
-    final filtered = all
-        .where((place) => place.name.toLowerCase() != name.toLowerCase())
-        .toList();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _key,
-      filtered.map((item) => item.serialize()).toList(),
-    );
-    _places
-      ..clear()
-      ..addAll(filtered);
+  static Future<bool> toggle(SavedPlace place) => toggleSavedPlace(place);
+
+  static Future<bool> toggleSavedPlace(SavedPlace place) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return false;
+
+    final existing = await _client
+        .from('saved_places')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', place.name);
+
+    if ((existing as List).isNotEmpty) {
+      await _client.from('saved_places').delete().eq('id', existing.first['id']);
+      return false;
+    } else {
+      await _client.from('saved_places').insert({
+        'user_id': userId,
+        'name': place.name,
+        'subtitle': place.subtitle,
+        'geom': 'POINT(${place.longitude} ${place.latitude})',
+      });
+      return true;
+    }
   }
 }

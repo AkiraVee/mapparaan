@@ -1,10 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'services/commuter_preference_service.dart';
 import 'screens/home_screen.dart';
 
+// Global reference for Supabase queries
+final supabase = Supabase.instance.client;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://ghrtgzqtucifnzmfmfjw.supabase.co', // Changed the 'q' to a 'g'
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocnRnenF0dWNpZm56bWZtZmp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTc2MTksImV4cCI6MjEwODE3MzYxOX0.HQMIyN5pYE3BrQmLvClZD8MWXKaPezG9SVFew8kpheo',
+  );
+
   await CommuterPreferencesService.load();
   runApp(const MyApp());
 }
@@ -48,7 +60,7 @@ class MyApp extends StatelessWidget {
             );
 
         return MaterialApp(
-          title: 'mapparaan',
+          title: 'Mapparaan',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             brightness: Brightness.light,
@@ -71,9 +83,58 @@ class MyApp extends StatelessWidget {
             AppThemeMode.light => ThemeMode.light,
             AppThemeMode.dark => ThemeMode.dark,
           },
-          home: const HomeScreen(),
+          home: const AuthGate(),
         );
       },
     );
+  }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.signedOut) {
+        CommuterPreferencesService.current.value =
+            const CommuterPreferences();
+        return;
+      }
+      if (state.session != null) _loadUserPreferences();
+    });
+  }
+
+  Future<void> _loadUserPreferences() async {
+    try {
+      await CommuterPreferencesService.load();
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while loading commuter preferences'),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const HomeScreen();
   }
 }

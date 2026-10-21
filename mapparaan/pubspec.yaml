@@ -45,6 +45,7 @@ dependencies:
   shared_preferences: ^2.3.4
   share_plus: ^13.3.1
   flutter_map_cancellable_tile_provider: ^3.0.2
+  supabase_flutter: ^2.18.3
 
 dev_dependencies:
   flutter_test:

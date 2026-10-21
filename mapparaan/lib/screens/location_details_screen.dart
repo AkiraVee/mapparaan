@@ -11,11 +11,11 @@ import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transit_planner_service.dart';
 import '../services/trip_history_service.dart';
+import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 import '../services/auth_service.dart';
-import '../services/memory_pin_service.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
@@ -172,8 +172,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         fallbackPath: fallbackPoints,
       );
 
-      final selected =
-          fallbackOptions.isNotEmpty ? fallbackOptions.first : null;
+      final selected = fallbackOptions.isNotEmpty
+          ? fallbackOptions.first
+          : null;
 
       setState(() {
         _isOfflineFallback = true;
@@ -195,8 +196,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
               ? 'Your location'
               : 'Default location',
           destination: widget.resolvedPlaceName,
-          preference: _selectedPreference,
+          preference: _selectedPreference.name,
           durationMinutes: topOption.etaMinutes,
+          fareEstimate: topOption.effectiveFare(_passengerType).toDouble(),
           routeSummary: topOption.summary.isNotEmpty
               ? topOption.summary
               : '${topOption.title} (₱${topOption.effectiveFare(_passengerType)})',
@@ -251,6 +253,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   }
 
   Future<void> _handleSaveToggle() async {
+    if (!AuthService.isLoggedIn.value) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Sign in to save places to your account.'),
+          action: SnackBarAction(
+            label: 'Sign In',
+            onPressed: () {
+              Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const AuthScreen()));
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       final destination = widget.resolvedDestination;
       final added = await SavedPlacesService.toggle(
@@ -271,9 +289,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save place: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save place: $error')));
       }
     }
   }
@@ -674,19 +692,11 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                             ),
                           ),
                           onPressed: () {
-                            final mockPin = MemoryPin(
-                              id: DateTime.now()
-                                  .microsecondsSinceEpoch
-                                  .toString(),
-                              placeName: widget.placeName,
-                              address: widget.address,
-                              coordinates: widget.coordinates,
-                              imagePath: 'mock_image_data',
-                            );
-                            MemoryPinService.addPin(mockPin);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Memory saved! Check your map.'),
+                                content: Text(
+                                  'Memory photo upload is not available yet.',
+                                ),
                               ),
                             );
                           },
@@ -705,25 +715,30 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                     children: [
                       _PreferenceButton(
                         label: 'Fastest',
-                        active: widget.selectedPreference ==
+                        active:
+                            widget.selectedPreference ==
                             RoutePreference.fastest,
                         accent: primary,
-                        onPressed: () => widget
-                            .onPreferenceSelected(RoutePreference.fastest),
+                        onPressed: () => widget.onPreferenceSelected(
+                          RoutePreference.fastest,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       _PreferenceButton(
                         label: 'Cheapest',
-                        active: widget.selectedPreference ==
+                        active:
+                            widget.selectedPreference ==
                             RoutePreference.cheapest,
                         accent: primary,
-                        onPressed: () => widget
-                            .onPreferenceSelected(RoutePreference.cheapest),
+                        onPressed: () => widget.onPreferenceSelected(
+                          RoutePreference.cheapest,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       _PreferenceButton(
                         label: 'Fewest\nTransfers',
-                        active: widget.selectedPreference ==
+                        active:
+                            widget.selectedPreference ==
                             RoutePreference.fewestTransfers,
                         accent: primary,
                         onPressed: () => widget.onPreferenceSelected(
@@ -769,7 +784,8 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                   const SizedBox(height: 12),
 
                   ...widget.routeOptions.map((route) {
-                    final isSelected = widget.selectedOption == route ||
+                    final isSelected =
+                        widget.selectedOption == route ||
                         (widget.selectedOption == null &&
                             route == widget.routeOptions.first);
                     return Padding(
@@ -843,8 +859,9 @@ class _PassengerTypeSelector extends StatelessWidget {
                       type.label,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: isSelected ? primary : colorScheme.onSurface,
                       ),
                     ),
@@ -889,8 +906,7 @@ class _PreferenceButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final foreground = active ? colorScheme.onPrimary : colorScheme.onSurface;
-    final background =
-        active ? accent : colorScheme.surfaceContainerHighest;
+    final background = active ? accent : colorScheme.surfaceContainerHighest;
 
     return Expanded(
       child: ElevatedButton(
