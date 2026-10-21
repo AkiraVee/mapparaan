@@ -17,10 +17,6 @@ import '../widgets/mapparaan_tile_layer.dart';
 import '../services/auth_service.dart';
 import '../services/memory_pin_service.dart';
 
-/// The single, consistent "I picked a place" screen.
-/// Connects to the local GTFS transit planner API, showing real Metro Manila
-/// routes, individual legs, ETAs, fares with legal discounts, and dynamic
-/// landmark theme accent customization.
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
   final String placeName;
@@ -94,18 +90,13 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       setState(() {
         _isSaved = savedPlaces.any((s) => s.id == _savedPlaceId);
       });
-    } catch (_) {
-      // Saved-state check failing shouldn't block showing the screen.
-    }
+    } catch (_) {}
   }
 
-  /// Refreshes transit routes using real GTFS data or offline fallback.
-  /// Dynamically resolves live GPS location if no location was passed from the home screen.
   Future<void> _refreshRoute() async {
     final destination = widget.resolvedDestination;
     LatLng? origin = widget.userLocation;
 
-    // ── 1. AUTO-FETCH LIVE GPS LOCATION IF MISSING ──
     if (origin == null) {
       try {
         final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -117,12 +108,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           );
           origin = LatLng(position.latitude, position.longitude);
         }
-      } catch (_) {
-        // Silently catch errors if GPS hardware is unreachable
-      }
+      } catch (_) {}
     }
 
-    // ── 2. HANDLE DISABLED LOCATION PERMISSION ──
     if (origin == null) {
       setState(() => _isLoadingRoute = false);
       if (mounted) {
@@ -139,7 +127,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
     setState(() => _isLoadingRoute = true);
 
-    // ── 3. ATTEMPT REAL-TIME GTFS PLANNER API ROUTE ──
     final realPlans = await TransitPlannerService.planTransit(
       origin: origin,
       destination: destination,
@@ -165,7 +152,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
       _fitCameraToBounds(points);
     } else {
-      // ── 4. OFFLINE FALLBACK ROUTE (OSRM + MOCK ESTIMATES) ──
       final geometry = await RoutePlannerService.fetchRoute(
         origin: origin,
         destination: destination,
@@ -186,9 +172,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         fallbackPath: fallbackPoints,
       );
 
-      final selected = fallbackOptions.isNotEmpty
-          ? fallbackOptions.first
-          : null;
+      final selected =
+          fallbackOptions.isNotEmpty ? fallbackOptions.first : null;
 
       setState(() {
         _isOfflineFallback = true;
@@ -201,7 +186,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _fitCameraToBounds(fallbackPoints);
     }
 
-    // ── 5. LOG TRIP ENTRY TO HISTORY ──
     if (!_tripLogged && _routeOptions.isNotEmpty) {
       _tripLogged = true;
       final topOption = _selectedOption ?? _routeOptions.first;
@@ -231,9 +215,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           padding: const EdgeInsets.fromLTRB(40, 100, 40, 360),
         ),
       );
-    } catch (_) {
-      // Avoid crash if bounds calculation fails on identical points
-    }
+    } catch (_) {}
   }
 
   void _selectPreference(RoutePreference preference) {
@@ -289,9 +271,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not save place: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save place: $error')),
+        );
       }
     }
   }
@@ -349,7 +331,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         builder: (context) {
           return Stack(
             children: [
-              // ===== INTERACTIVE MAP =====
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -363,8 +344,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 ),
                 children: [
                   const MapparaanTileLayer(),
-
-                  // Draw real multi-leg route (walk, jeepney, bus, rail) with distinctive colors
                   if (_selectedOption != null &&
                       _selectedOption!.legs.isNotEmpty)
                     PolylineLayer(
@@ -392,8 +371,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                         ),
                       ],
                     ),
-
-                  // Map markers for origin and destination
                   MarkerLayer(
                     markers: [
                       if (widget.userLocation != null)
@@ -438,7 +415,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 ],
               ),
 
-              // Top action bar (menu + my location)
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -498,29 +474,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
 
-              // Bottom details sheet styled dynamically with chosen landmark palette
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: SafeArea(
-                  top: false,
-                  child: _PlaceDetailsSheet(
-                    placeName: widget.resolvedPlaceName,
-                    address: widget.resolvedSubtitle,
-                    coordinates: widget.resolvedDestination,
-                    isSaved: _isSaved,
-                    isOfflineFallback: _isOfflineFallback,
-                    selectedPreference: _selectedPreference,
-                    passengerType: _passengerType,
-                    routeOptions: _routeOptions,
-                    selectedOption: _selectedOption,
-                    onSaveToggle: _handleSaveToggle,
-                    onShare: _handleShare,
-                    onClose: () => Navigator.of(context).pop(),
-                    onPreferenceSelected: _selectPreference,
-                    onPassengerTypeSelected: _selectPassengerType,
-                    onOptionSelected: _selectOption,
-                  ),
-                ),
+              _PlaceDetailsSheet(
+                placeName: widget.resolvedPlaceName,
+                address: widget.resolvedSubtitle,
+                coordinates: widget.resolvedDestination,
+                isSaved: _isSaved,
+                isOfflineFallback: _isOfflineFallback,
+                selectedPreference: _selectedPreference,
+                passengerType: _passengerType,
+                routeOptions: _routeOptions,
+                selectedOption: _selectedOption,
+                onSaveToggle: _handleSaveToggle,
+                onShare: _handleShare,
+                onClose: () => Navigator.of(context).pop(),
+                onPreferenceSelected: _selectPreference,
+                onPassengerTypeSelected: _selectPassengerType,
+                onOptionSelected: _selectOption,
               ),
             ],
           );
@@ -530,7 +499,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   }
 }
 
-class _PlaceDetailsSheet extends StatelessWidget {
+// ─── Custom sliding panel (whole tab moves) ───────────────────────────────────
+
+class _PlaceDetailsSheet extends StatefulWidget {
   final String placeName;
   final String address;
   final LatLng coordinates;
@@ -566,196 +537,262 @@ class _PlaceDetailsSheet extends StatelessWidget {
   });
 
   @override
+  State<_PlaceDetailsSheet> createState() => _PlaceDetailsSheetState();
+}
+
+class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
+  double _heightFactor = 0.42;
+
+  static const double _minFactor = 0.30;
+  static const double _maxFactor = 0.90;
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    setState(() {
+      _heightFactor -= details.primaryDelta! / screenHeight;
+      _heightFactor = _heightFactor.clamp(_minFactor, _maxFactor);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    const targets = [0.30, 0.42, 0.65, 0.90];
+    var closest = targets.first;
+    var minDist = (_heightFactor - closest).abs();
+    for (final t in targets) {
+      final d = (_heightFactor - t).abs();
+      if (d < minDist) {
+        minDist = d;
+        closest = t;
+      }
+    }
+    setState(() => _heightFactor = closest);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.of(context).size.height * 0.58;
     final colorScheme = Theme.of(context).colorScheme;
     final primary = colorScheme.primary;
+    final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-      decoration: BoxDecoration(
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: screenHeight * _heightFactor,
+      child: Material(
         color: colorScheme.surface,
+        elevation: 12,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 14,
-            offset: Offset(0, -3),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.black12,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  placeName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  isSaved ? Icons.bookmark : Icons.bookmark_border,
-                  color: isSaved ? primary : colorScheme.onSurface,
-                ),
-                onPressed: onSaveToggle,
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.share, color: colorScheme.onSurface),
-                onPressed: onShare,
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.close, color: colorScheme.onSurface),
-                onPressed: onClose,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          ValueListenableBuilder<bool>(
-            valueListenable: AuthService.isLoggedIn,
-            builder: (context, isLoggedIn, _) {
-              if (!isLoggedIn) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.camera_alt, size: 18),
-                  label: const Text('Add Memory Photo'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colorScheme.primary,
-                    side: BorderSide(color: colorScheme.primary),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // Drag handle + title → moves WHOLE sheet
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: _onDragUpdate,
+              onVerticalDragEnd: _onDragEnd,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
                   ),
-                  onPressed: () {
-                    // Temporary mock action: Simulate uploading a photo
-                    final mockPin = MemoryPin(
-                      id: DateTime.now().microsecondsSinceEpoch.toString(),
-                      placeName: placeName,
-                      address: address,
-                      coordinates: coordinates,
-                      imagePath: 'mock_image_data',
-                    );
-                    MemoryPinService.addPin(mockPin);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Memory saved! Check your map.'),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          _PassengerTypeSelector(
-            selectedType: passengerType,
-            onSelected: onPassengerTypeSelected,
-          ),
-          const SizedBox(height: 10),
-
-          Row(
-            children: [
-              _PreferenceButton(
-                label: 'Fastest',
-                active: selectedPreference == RoutePreference.fastest,
-                accent: primary,
-                onPressed: () => onPreferenceSelected(RoutePreference.fastest),
-              ),
-              const SizedBox(width: 8),
-              _PreferenceButton(
-                label: 'Cheapest',
-                active: selectedPreference == RoutePreference.cheapest,
-                accent: primary,
-                onPressed: () => onPreferenceSelected(RoutePreference.cheapest),
-              ),
-              const SizedBox(width: 8),
-              _PreferenceButton(
-                label: 'Fewest\nTransfers',
-                active: selectedPreference == RoutePreference.fewestTransfers,
-                accent: primary,
-                onPressed: () =>
-                    onPreferenceSelected(RoutePreference.fewestTransfers),
-              ),
-            ],
-          ),
-
-          if (isOfflineFallback)
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFFE0B2)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, size: 14, color: Color(0xFFE65100)),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'API offline: showing mock estimates. Start backend/planner/api.py for real routes.',
-                      style: TextStyle(fontSize: 10, color: Color(0xFFBF360C)),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.placeName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            widget.isSaved
+                                ? Icons.bookmark
+                                : Icons.bookmark_border,
+                            color: widget.isSaved
+                                ? primary
+                                : colorScheme.onSurface,
+                          ),
+                          onPressed: widget.onSaveToggle,
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Icons.share, color: colorScheme.onSurface),
+                          onPressed: widget.onShare,
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Icons.close, color: colorScheme.onSurface),
+                          onPressed: widget.onClose,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
 
-          const SizedBox(height: 10),
+            // Content scrolls independently
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                children: [
+                  ValueListenableBuilder<bool>(
+                    valueListenable: AuthService.isLoggedIn,
+                    builder: (context, isLoggedIn, _) {
+                      if (!isLoggedIn) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.camera_alt, size: 18),
+                          label: const Text('Add Memory Photo'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primary,
+                            side: BorderSide(color: primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          onPressed: () {
+                            final mockPin = MemoryPin(
+                              id: DateTime.now()
+                                  .microsecondsSinceEpoch
+                                  .toString(),
+                              placeName: widget.placeName,
+                              address: widget.address,
+                              coordinates: widget.coordinates,
+                              imagePath: 'mock_image_data',
+                            );
+                            MemoryPinService.addPin(mockPin);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Memory saved! Check your map.'),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
 
-          Flexible(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: routeOptions.map((route) {
-                  final isSelected =
-                      selectedOption == route ||
-                      (selectedOption == null && route == routeOptions.first);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _RouteResultCard(
-                      route: route,
-                      isSelected: isSelected,
-                      passengerType: passengerType,
-                      onTap: () => onOptionSelected(route),
+                  _PassengerTypeSelector(
+                    selectedType: widget.passengerType,
+                    onSelected: widget.onPassengerTypeSelected,
+                  ),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      _PreferenceButton(
+                        label: 'Fastest',
+                        active: widget.selectedPreference ==
+                            RoutePreference.fastest,
+                        accent: primary,
+                        onPressed: () => widget
+                            .onPreferenceSelected(RoutePreference.fastest),
+                      ),
+                      const SizedBox(width: 8),
+                      _PreferenceButton(
+                        label: 'Cheapest',
+                        active: widget.selectedPreference ==
+                            RoutePreference.cheapest,
+                        accent: primary,
+                        onPressed: () => widget
+                            .onPreferenceSelected(RoutePreference.cheapest),
+                      ),
+                      const SizedBox(width: 8),
+                      _PreferenceButton(
+                        label: 'Fewest\nTransfers',
+                        active: widget.selectedPreference ==
+                            RoutePreference.fewestTransfers,
+                        accent: primary,
+                        onPressed: () => widget.onPreferenceSelected(
+                          RoutePreference.fewestTransfers,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (widget.isOfflineFallback)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFFE0B2)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Color(0xFFE65100),
+                          ),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'API offline: showing mock estimates. Start backend/planner/api.py for real routes.',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFFBF360C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
+
+                  const SizedBox(height: 12),
+
+                  ...widget.routeOptions.map((route) {
+                    final isSelected = widget.selectedOption == route ||
+                        (widget.selectedOption == null &&
+                            route == widget.routeOptions.first);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _RouteResultCard(
+                        route: route,
+                        isSelected: isSelected,
+                        passengerType: widget.passengerType,
+                        onTap: () => widget.onOptionSelected(route),
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+
+// ─── Passenger type ───────────────────────────────────────────────────────────
 
 class _PassengerTypeSelector extends StatelessWidget {
   final PassengerType selectedType;
@@ -806,9 +843,8 @@ class _PassengerTypeSelector extends StatelessWidget {
                       type.label,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
                         color: isSelected ? primary : colorScheme.onSurface,
                       ),
                     ),
@@ -834,6 +870,8 @@ class _PassengerTypeSelector extends StatelessWidget {
   }
 }
 
+// ─── Preference buttons ───────────────────────────────────────────────────────
+
 class _PreferenceButton extends StatelessWidget {
   final String label;
   final bool active;
@@ -851,7 +889,8 @@ class _PreferenceButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final foreground = active ? colorScheme.onPrimary : colorScheme.onSurface;
-    final background = active ? accent : colorScheme.surfaceContainerHighest;
+    final background =
+        active ? accent : colorScheme.surfaceContainerHighest;
 
     return Expanded(
       child: ElevatedButton(
@@ -874,6 +913,8 @@ class _PreferenceButton extends StatelessWidget {
     );
   }
 }
+
+// ─── Route card ───────────────────────────────────────────────────────────────
 
 class _RouteResultCard extends StatelessWidget {
   final TransitPlanOption route;
@@ -941,7 +982,6 @@ class _RouteResultCard extends StatelessWidget {
               child: Icon(_getLeadingIcon(), size: 22, color: primary),
             ),
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -987,7 +1027,6 @@ class _RouteResultCard extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-
                   if (route.legs.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -1034,7 +1073,6 @@ class _RouteResultCard extends StatelessWidget {
                       }).toList(),
                     ),
                   ],
-
                   if (route.summary.isNotEmpty) ...[
                     const SizedBox(height: 5),
                     Text(
@@ -1049,7 +1087,6 @@ class _RouteResultCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
