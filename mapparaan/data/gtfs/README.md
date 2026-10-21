@@ -1,6 +1,17 @@
-Philippine GTFS Data
-====================
+# Manila City GTFS (Cleaned & Strictly Focused)
 
-This is a [GTFS](https://developers.google.com/transit/gtfs/reference) feed containing jeepney, bus, and train data for Metro Manila. The data was released as part of the [Philippine Transit App Challenge](http://philippine-transit.hackathome.com/dataset-philippines-transit-information-service-gtfs/) which has since been concluded.
+Cleaned subset of the Sakay.ph / DOTC Philippine GTFS feed, restricted to **Manila City** only.
 
-The data has been modified to better serve our app [Sakay](http://sakay.ph), for the original DOTC data, you can refer to the `dotc` branch.
+## What was done
+1. **Geographic filter**: Kept only stops whose coordinates fall inside the City of Manila bounding box  
+   (lat 14.5495–14.6434, lon 120.9205–121.0343).
+2. **Related entities**: Kept stop_times, trips, routes, shapes, frequencies and calendar entries that refer to those Manila stops.
+3. **Agencies**: Only the agencies that operate the retained routes (LRTA, LTFRB, MRTC, PNR, etc.).
+4. **Cleaning**: Removed unused records; preserved original field structure so the feed remains valid GTFS (note: some trips now only contain the Manila portion of their original itinerary).
+
+## Result
+- Stops: only those inside Manila City
+- Routes & trips: those that serve Manila City
+- Ideal for analysis or applications focused exclusively on the City of Manila.
+
+Original data: Metro Manila jeepney, bus, LRT, MRT & PNR services.
