@@ -3,9 +3,17 @@
 
 Usage:
   python3 clip_gtfs.py <gtfs_in_dir> <boundary.geojson> <gtfs_out_dir>
+                       [--tolerance-m 50] [--review-csv stops_to_review.csv]
 
 Rules
-  * A stop is kept only if it lies inside the polygon.
+  * A stop is kept if it lies inside the polygon, or within --tolerance-m
+    metres of its edge (default 50). Source coordinates are rounded to ~3
+    decimals (up to ~55 m error), so a stop on the city line can land just
+    outside the polygon. Use --tolerance-m 0 for a strict polygon test.
+    A stop in that edge band is skipped if its name names another city
+    (e.g. "..., Quezon City"): outside the polygon that label is real evidence.
+    Names are never used to ADD a stop, and never to drop one inside the
+    polygon (LTFRB labels many Manila stops "Quezon City" / "Caloocan").
   * Each trip is cut into runs of consecutive inside-stops. Every run with
     2+ stops becomes its own trip (suffix _a, _b ...), so the planner never
     sees a fake direct ride across a gap outside the city.
@@ -13,7 +21,7 @@ Rules
   * Shapes are cut to the part inside the polygon.
   * Routes/services/agencies/stops/shapes that end up unused are removed.
 """
-import csv, json, sys, os, collections
+import argparse, csv, json, math, sys, os, collections
 
 def load(d, n):
     p = os.path.join(d, n + ".txt")
@@ -41,6 +49,14 @@ def in_ring(x, y, ring):
         j = i
     return ins
 
+OTHER_CITIES = ("quezon city", "caloocan", "pasay", "makati", "mandaluyong", "san juan",
+                "pasig", "taguig", "navotas", "malabon", "parañaque", "paranaque",
+                "marikina", "las piñas", "las pinas", "valenzuela", "muntinlupa", "pateros")
+
+def names_other_city(name):
+    n = name.lower()
+    return any(c in n for c in OTHER_CITIES)
+
 def make_inside(geoj):
     polys = []
     for f in geoj["features"]:
@@ -51,6 +67,25 @@ def make_inside(geoj):
                 return True
         return False
     return inside
+
+def make_near(geoj):
+    """dist_to_edge_m(lat, lon): metres from the point to the nearest outer-ring edge."""
+    rings = []
+    for f in geoj["features"]:
+        rings += [p[0] for p in rings_of(f["geometry"])]
+    def dist(lat, lon):
+        best = 1e12
+        kx = 111320.0 * math.cos(math.radians(lat)); ky = 111320.0
+        for ring in rings:
+            for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+                ax, ay = (x1 - lon) * kx, (y1 - lat) * ky
+                bx, by = (x2 - lon) * kx, (y2 - lat) * ky
+                dx, dy = bx - ax, by - ay
+                L = dx * dx + dy * dy
+                t = 0.0 if L == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / L))
+                best = min(best, math.hypot(ax + t * dx, ay + t * dy))
+        return best
+    return dist
 
 def secs(t):
     h, m, s = (int(v) for v in t.split(":")); return h * 3600 + m * 60 + s
@@ -66,11 +101,23 @@ def runs(flags):
     if cur: out.append(cur)
     return out
 
-def main(src, boundary, dst):
-    inside = make_inside(json.load(open(boundary)))
+def main(src, boundary, dst, tolerance_m=50.0, review_csv=None):
+    geoj = json.load(open(boundary))
+    inside = make_inside(geoj)
+    dist_to_edge = make_near(geoj)
     os.makedirs(dst, exist_ok=True)
     sf, stops = load(src, "stops")
-    sin = {s["stop_id"] for s in stops if inside(float(s["stop_lat"]), float(s["stop_lon"]))}
+    sin, strict, near_kept, review = set(), 0, [], []
+    for s in stops:
+        lat, lon = float(s["stop_lat"]), float(s["stop_lon"])
+        if inside(lat, lon):
+            sin.add(s["stop_id"]); strict += 1
+            continue
+        d = dist_to_edge(lat, lon)
+        if d <= tolerance_m and not names_other_city(s["stop_name"]):
+            sin.add(s["stop_id"]); near_kept.append((s, d))
+        elif d <= 250:
+            review.append((s, d, "names another city" if d <= tolerance_m else f"more than {tolerance_m:g} m outside"))
     ff, trips = load(src, "trips"); stf, st = load(src, "stop_times")
     ffr, freq = load(src, "frequencies")
     by = collections.defaultdict(list)
@@ -138,11 +185,24 @@ def main(src, boundary, dst):
             p = os.path.join(src, n + ext)
             if os.path.exists(p):
                 open(os.path.join(dst, n + ext), "wb").write(open(p, "rb").read())
-    print(f"stops {len(stops)} -> {len(new_stops)} (inside polygon: {len(sin)})")
+    print(f"stops {len(stops)} -> {len(new_stops)} (inside polygon: {strict}, "
+          f"kept by {tolerance_m:g} m edge tolerance: {len(near_kept)})")
+    for s_, d in sorted(near_kept, key=lambda x: x[1]):
+        print(f"  + {d:3.0f} m outside  {s_['stop_id']:12} {s_['stop_name']}")
+    if review_csv:
+        with open(review_csv, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f); w.writerow(["stop_id", "stop_name", "lat", "lon", "meters_outside", "excluded_because"])
+            for s_, d, why in sorted(review, key=lambda x: x[1]):
+                w.writerow([s_["stop_id"], s_["stop_name"], s_["stop_lat"], s_["stop_lon"], round(d), why])
+        print(f"stops 'within 250 m outside, not kept' written to {review_csv} ({len(review)})")
     print(f"routes {len(routes)} -> {len(new_routes)}; trips {len(trips)} -> {len(new_trips)}")
     print(f"stop_times {len(st)} -> {len(new_st)}; shapes kept {len(shape_ok)}/{len(sh)}")
     print(dict(stats))
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4: sys.exit(__doc__)
-    main(*sys.argv[1:])
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("gtfs_in"); ap.add_argument("boundary"); ap.add_argument("gtfs_out")
+    ap.add_argument("--tolerance-m", type=float, default=50.0)
+    ap.add_argument("--review-csv", default=None)
+    a = ap.parse_args()
+    main(a.gtfs_in, a.boundary, a.gtfs_out, a.tolerance_m, a.review_csv)

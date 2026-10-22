@@ -89,6 +89,7 @@ LTFRB_1493,,"Dapitan / Maria Cristina ntersrction, Manila",,14.6142,120.991,,,0,
 LTFRB_1494,,"Blumentritt / Pity Margal Intersection, Manila",,14.6188,120.998,,,0,,0
 LTFRB_1495,,"Blumentritt, Manila",,14.6163,120.999,,,0,,0
 LTFRB_1496,,"Halcon / Espana Boulevard Intersection, Manila",,14.6169,121.001,,,0,,0
+LTFRB_1498,,"Halcon / Florentino Intersection, Manila",,14.6179,121,,,0,,0
 LTFRB_1499,,"Instruccion / Espana Boulevard Intersection, Manila",,14.615,120.999,,,0,,0
 LTFRB_1500,,"Espana Boulevard / Gen. E. Quintos Street Intersection, Manila",,14.6136,120.997,,,0,,0
 LTFRB_1501,,"Espana Boulevard / Ruperto. S. Crsitobal Streett Intersection, Manila",,14.6123,120.996,,,0,,0
@@ -293,6 +294,7 @@ LTFRB_1700,,"Hotel Victoria, M Adriatico, Manila",,14.5671,120.988,,,0,,0
 LTFRB_1701,,"Hospital, A.Mabini, Manila",,14.563,120.988,,,0,,0
 LTFRB_1702,,"Century Park, Un-named road near A.Mabini, Manila",,14.5614,120.99,,,0,,0
 LTFRB_1703,,"HP Village Square, Pablo Ocampo Sr., Manila",,14.5602,120.99,,,0,,0
+LTFRB_1704,,"Roxas Blvd / Pablo Ocampo Sr., Manila",,14.5596,120.987,,,0,,0
 LTFRB_1769,,"Mendiola / Legarda Intersection, Manila",,14.6003,120.991,,,0,,0
 LTFRB_1770,,"Manuel Quezon University, R Hidalgo, Manila",,14.5999,120.988,,,0,,0
 LTFRB_1771,,"Legarda, Manila",,14.5977,120.99,,,0,,0
@@ -494,6 +496,7 @@ LTFRB_4335,,"United Nations Ave / Tanque, Manila",,14.5847,120.992,,,0,,0
 LTFRB_4336,,"United Nations Ave / President Quirino Ave Ext, Manila",,14.5853,120.994,,,0,,0
 LTFRB_4396,,"Bonifacio Dr, Manila",,14.5927,120.969,,,0,,0
 LTFRB_4397,,"Bonifacio Dr, Manila",,14.5943,120.969,,,0,,0
+LTFRB_4398,,"Bonifacio Dr, Manila",,14.596,120.967,,,0,,0
 LTFRB_4399,,"Del Pan Flyover, Manila",,14.5975,120.966,,,0,,0
 LTFRB_4400,,"Del Pan Flyover, Manila",,14.5993,120.965,,,0,,0
 LTFRB_4402,,"Del Pan Flyover, Manila",,14.5977,120.966,,,0,,0

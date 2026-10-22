@@ -2,7 +2,7 @@
 """
 Lightweight multimodal transit planner for Metro Manila, built directly on the
 patched Sakay GTFS feed (data/gtfs) and Mapparaan's fare config
-(data/references). Standard library only.
+(data/reference). Standard library only.
 
 It is NOT a timetable router: the feed models jeepneys/buses as always-running
 headway services, so a trip is "board whenever one comes, ride N stops".
@@ -73,34 +73,10 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
-def resolve_data_dir(data_dir=None):
-    if data_dir and os.path.isdir(data_dir):
-        return os.path.abspath(data_dir)
-    here = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(here, "..", "..", "data"),
-        os.path.join(here, "..", "data"),
-        os.path.join(here, "data"),
-        os.path.abspath("data"),
-        os.path.abspath("mapparaan/data"),
-    ]
-    for c in candidates:
-        if os.path.isdir(c) and os.path.isdir(os.path.join(c, "gtfs")):
-            return os.path.abspath(c)
-    raise FileNotFoundError(
-        "Could not locate Mapparaan transit data directory (with gtfs subfolder). "
-        "Searched: " + ", ".join(candidates)
-    )
-
-
 class Planner:
-    def __init__(self, data_dir=None):
-        data_dir = resolve_data_dir(data_dir)
-        self.data_dir = data_dir
+    def __init__(self, data_dir):
         gtfs = os.path.join(data_dir, "gtfs")
-        ref = os.path.join(data_dir, "references")
-        if not os.path.isdir(ref):
-            ref = os.path.join(data_dir, "reference")
+        ref = os.path.join(data_dir, "reference")
 
         with open(os.path.join(ref, "fare_config.json"), encoding="utf-8") as f:
             self.fares = json.load(f)
@@ -267,6 +243,8 @@ class Planner:
         #                        (may walk ONE hop, board, or finish)
         #   ns .. wb-1           riding a trip at a given position
         #   wb .. wb+ns-1        standing at a stop after walking (must board)
+        # Allowing only one walk between rides stops the search from "walking
+        # the whole city", and ending only after a ride guarantees a transit leg.
         wb = ns + len(ridx_trip)
         START, END = -2, -1
         best, prev, heap = {}, {}, []
@@ -389,15 +367,15 @@ class Planner:
         }
 
     # ── public API ───────────────────────────────────────────────────────────
-    def plan(self, origin, dest, passenger="general", when=None, avoid_modes=None):
-        """origin/dest = (lat, lon). Returns a list of route options."""
+    def plan(self, origin, dest, passenger="general", when=None):
+        """origin/dest = (lat, lon). Returns a list of route options.
+
+        `passenger` is accepted for API symmetry; fares come back both regular
+        and discounted, so it does not change the result."""
         when = when or datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
-        
-        passenger_norm = (passenger or "general").lower().strip()
-        if passenger_norm in ("senior", "senior_citizen"):
-            passenger_norm = "senior_citizen"
-        discount = (self.fares["discount"]["multiplier"]
-                    if passenger_norm in self.fares["discount"]["eligible_groups"] else 1.0)
+        # Both the regular and the discounted fare are always returned; the
+        # client picks which one to show based on the passenger type.
+        discount = self.fares["discount"]["multiplier"]
         options, seen = [], set()
 
         direct_m = hav_m(origin[0], origin[1], dest[0], dest[1])
@@ -449,28 +427,15 @@ class Planner:
 
 def main():
     args = sys.argv[1:]
-    if len(args) < 2:
+    if len(args) < 3:
         print(__doc__)
         sys.exit(1)
-    
-    # Optional data_dir as first arg or auto-resolved
-    if len(args) >= 3 and not ("," in args[0]):
-        data_dir = args[0]
-        origin_str = args[1]
-        dest_str = args[2]
-        rest = args[3:]
-    else:
-        data_dir = None
-        origin_str = args[0]
-        dest_str = args[1]
-        rest = args[2:]
-
-    o = tuple(float(x) for x in origin_str.split(","))
-    d = tuple(float(x) for x in dest_str.split(","))
+    data_dir = args[0]
+    o = tuple(float(x) for x in args[1].split(","))
+    d = tuple(float(x) for x in args[2].split(","))
     passenger = "general"
-    if "--passenger" in rest:
-        passenger = rest[rest.index("--passenger") + 1]
-    
+    if "--passenger" in args:
+        passenger = args[args.index("--passenger") + 1]
     planner = Planner(data_dir)
     for opt in planner.plan(o, d, passenger=passenger):
         print(f"\n== {opt['title']}: {opt['eta_minutes']} min, "

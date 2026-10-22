@@ -71,10 +71,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
+  
   assets:
-      - .env
-
+    - .env
   # Runtime configuration is loaded when the app starts. Keep secrets out of
   # the Flutter asset bundle; use .env.example as the setup template.
 

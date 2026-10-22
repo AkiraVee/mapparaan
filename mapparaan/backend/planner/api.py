@@ -9,10 +9,18 @@ Usage:
 
 Endpoint:
   GET /plan?from=14.5918,120.9786&to=14.6567,121.0287&passenger=student
+
+Service area:
+  The data covers the City of Manila only. If the origin or destination is more
+  than the planner's maximum walk to a stop (see SERVICE_MARGIN_M) outside the
+  boundary in <data>/references/manila_boundary.geojson, /plan answers 200 with
+      {"status": "ok", "options": [], "reason": "outside_service_area", "message": "..."}
+  so the app can tell that apart from "no route found" (options empty, no reason).
 """
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -24,8 +32,63 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gtfs_planner import Planner, resolve_data_dir
 
+try:
+    from gtfs_planner import ACCESS_RADII_M
+    SERVICE_MARGIN_M = max(ACCESS_RADII_M)  # farthest the planner walks to a first stop
+except ImportError:
+    SERVICE_MARGIN_M = 1500
+
 # Global planner instance loaded once at startup
 _PLANNER = None
+# Outer ring(s) of the City of Manila boundary, or None if the file is missing
+_AREA = None
+
+
+def load_service_area(data_dir):
+    """Reads manila_boundary.geojson from <data_dir>/references (or reference)."""
+    for folder in ("references", "reference"):
+        path = os.path.join(data_dir, folder, "manila_boundary.geojson")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                gj = json.load(f)
+            geom = gj["features"][0]["geometry"] if "features" in gj else gj["geometry"]
+            polys = [geom["coordinates"]] if geom["type"] == "Polygon" else geom["coordinates"]
+            return [p[0] for p in polys]
+    return None
+
+
+def _in_ring(lon, lat, ring):
+    inside, j = False, len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if (yi > lat) != (yj > lat) and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _dist_to_ring_m(lon, lat, ring):
+    best, kx, ky = 1e12, 111320.0 * math.cos(math.radians(lat)), 111320.0
+    for p, q in zip(ring, ring[1:] + ring[:1]):
+        ax, ay = (p[0] - lon) * kx, (p[1] - lat) * ky
+        bx, by = (q[0] - lon) * kx, (q[1] - lat) * ky
+        dx, dy = bx - ax, by - ay
+        seg = dx * dx + dy * dy
+        t = 0.0 if seg == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg))
+        best = min(best, math.hypot(ax + t * dx, ay + t * dy))
+    return best
+
+
+def in_service_area(point):
+    """True if point (lat, lon) is inside Manila or within walking reach of it.
+    With no boundary file loaded nothing is blocked."""
+    if _AREA is None:
+        return True
+    lat, lon = point
+    if any(_in_ring(lon, lat, r) for r in _AREA):
+        return True
+    return min(_dist_to_ring_m(lon, lat, r) for r in _AREA) <= SERVICE_MARGIN_M
 
 
 def parse_coords(val):
@@ -129,6 +192,21 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 })
                 return
 
+            # Data covers the City of Manila only: say so instead of returning a
+            # bare empty list the app would mistake for "no route found".
+            if not (in_service_area(origin) and in_service_area(destination)):
+                print(f"[PLAN] from={origin} to={destination} -> outside service area")
+                self._send_json(200, {
+                    "status": "ok",
+                    "origin": [origin[0], origin[1]],
+                    "destination": [destination[0], destination[1]],
+                    "passenger": passenger,
+                    "options": [],
+                    "reason": "outside_service_area",
+                    "message": "Mapparaan currently covers the City of Manila only.",
+                })
+                return
+
             t0 = time.time()
             try:
                 options = _PLANNER.plan(
@@ -169,7 +247,7 @@ class TransitApiHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host="0.0.0.0", port=8080, data_dir=None):
-    global _PLANNER
+    global _PLANNER, _AREA
     resolved_dir = resolve_data_dir(data_dir)
     print("=" * 64)
     print(" Mapparaan Local Transit Planner API")
@@ -179,6 +257,9 @@ def run_server(host="0.0.0.0", port=8080, data_dir=None):
     _PLANNER = Planner(resolved_dir)
     load_time = time.time() - t0
     print(f"Loaded {len(_PLANNER.trips)} trips and {_PLANNER.n_stops} stops in {load_time:.2f}s.")
+    _AREA = load_service_area(resolved_dir)
+    print("Service area: City of Manila boundary loaded." if _AREA else
+          "Service area: manila_boundary.geojson not found, not restricting requests.")
     print("-" * 64)
     print(f"Server listening on http://{host}:{port}/")
     print(f"Local test:       http://localhost:{port}/plan?from=14.5918,120.9786&to=14.6567,121.0287&passenger=student")
