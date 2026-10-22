@@ -141,6 +141,25 @@ void main() {
         fallback.first.fareDiscounted,
       );
     });
+
+    test('keeps each fallback route preference selectable', () {
+      const origin = LatLng(14.5943, 120.9721);
+      const destination = LatLng(14.6567, 121.0287);
+
+      final fallback = TransitPlannerService.getFallbackOptions(
+        destination: destination,
+        userLocation: origin,
+      );
+
+      expect(
+        fallback.map((option) => option.routePreference),
+        containsAll(<RoutePreference>[
+          RoutePreference.fastest,
+          RoutePreference.cheapest,
+          RoutePreference.fewestTransfers,
+        ]),
+      );
+    });
   });
 
   group('AiQueryResolution passenger parsing', () {

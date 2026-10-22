@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
 import '../constants.dart';
+import '../services/commuter_preference_service.dart';
 
 /// Color treatments for the basemap. Change [MapparaanTileLayer.tint]
 /// (or its default below) to switch the map's color.
@@ -39,29 +40,30 @@ class MapparaanTileLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final layer = TileLayer(
-      urlTemplate: AppConstants.mapTileUrl,
-      userAgentPackageName: AppConstants.appPackageName,
-      maxZoom: AppConstants.maxZoom,
-      // Cancels tile requests that are no longer needed (faster on web).
-      tileProvider: CancellableNetworkTileProvider(),
-      // Show tiles immediately instead of fading them in.
-      tileDisplay: const TileDisplay.instantaneous(),
-      // Load extra tiles around the screen and keep them longer, so panning
-      // shows fewer blank patches.
-      panBuffer: 2,
-      keepBuffer: 4,
-    );
-
-    final overlay = tint.overlay;
-    if (overlay == null) return layer;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        layer,
-        IgnorePointer(child: ColoredBox(color: overlay)),
-      ],
+    return ValueListenableBuilder<CommuterPreferences>(
+      valueListenable: CommuterPreferencesService.current,
+      builder: (context, preferences, _) {
+        final layer = TileLayer(
+          urlTemplate: AppConstants.mapTileUrl,
+          userAgentPackageName: AppConstants.appPackageName,
+          maxZoom: AppConstants.maxZoom,
+          tileProvider: CancellableNetworkTileProvider(),
+          tileDisplay: const TileDisplay.instantaneous(),
+          panBuffer: 2,
+          keepBuffer: 4,
+        );
+        final overlay = preferences.highContrastMap
+            ? const Color(0x22FFFFFF)
+            : tint.overlay;
+        if (overlay == null) return layer;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            layer,
+            IgnorePointer(child: ColoredBox(color: overlay)),
+          ],
+        );
+      },
     );
   }
 }

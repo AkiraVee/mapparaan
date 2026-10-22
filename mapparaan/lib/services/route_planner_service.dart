@@ -107,7 +107,7 @@ class RoutePlannerService {
         etaMinutes: (distanceKm * 7.2).round() + 12,
         fare: 30,
         transfers: 1,
-        preference: preference,
+        preference: RoutePreference.fastest,
       ),
       RouteOption(
         title: 'Cheapest route',
@@ -116,7 +116,7 @@ class RoutePlannerService {
         etaMinutes: (distanceKm * 9.5).round() + 18,
         fare: 18,
         transfers: 2,
-        preference: preference,
+        preference: RoutePreference.cheapest,
       ),
       RouteOption(
         title: 'Fewest transfers',
@@ -125,7 +125,7 @@ class RoutePlannerService {
         etaMinutes: (distanceKm * 8.4).round() + 16,
         fare: 40,
         transfers: 0,
-        preference: preference,
+        preference: RoutePreference.fewestTransfers,
       ),
     ];
 

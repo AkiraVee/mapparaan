@@ -127,6 +127,24 @@ class TransitLeg {
       path: points,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'type': type,
+    'from': from,
+    'to': to,
+    'minutes': minutes,
+    'meters': meters,
+    'mode': mode,
+    'mode_label': modeLabel,
+    'route_id': routeId,
+    'route_code': routeCode,
+    'route_name': routeName,
+    'stops': stops,
+    'wait_minutes': waitMinutes,
+    'km': km,
+    'fare': fare,
+    'path': path.map((point) => [point.latitude, point.longitude]).toList(),
+  };
 }
 
 /// A complete route option (fastest / cheapest / fewest transfers) returned by the transit planner.
@@ -137,6 +155,7 @@ class TransitPlanOption {
   final int etaMinutes;
   final int fare;
   final int fareDiscounted;
+  final String fareSource;
   final int transfers;
   final List<String> modes;
   final List<TransitLeg> legs;
@@ -149,6 +168,7 @@ class TransitPlanOption {
     required this.etaMinutes,
     required this.fare,
     required this.fareDiscounted,
+    this.fareSource = 'Static fare estimate; verify before travel',
     required this.transfers,
     this.modes = const [],
     this.legs = const [],
@@ -201,12 +221,28 @@ class TransitPlanOption {
       fareDiscounted:
           (json['fare_discounted'] as num?)?.toInt() ??
           ((json['fare'] as num?)?.toInt() ?? 0),
+      fareSource:
+          json['fare_source'] as String? ??
+          'Static fare estimate; verify before travel',
       transfers: (json['transfers'] as num?)?.toInt() ?? 0,
       modes: parsedModes,
       legs: parsedLegs,
       isMock: false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'preference': preference,
+    'title': title,
+    'summary': summary,
+    'eta_minutes': etaMinutes,
+    'fare': fare,
+    'fare_discounted': fareDiscounted,
+    'fare_source': fareSource,
+    'transfers': transfers,
+    'modes': modes,
+    'legs': legs.map((leg) => leg.toJson()).toList(),
+  };
 
   /// Converts a legacy RouteOption to TransitPlanOption fallback
   factory TransitPlanOption.fromMock(
@@ -272,14 +308,28 @@ class TransitPlannerService {
     required LatLng origin,
     required LatLng destination,
     PassengerType passengerType = PassengerType.general,
+    DateTime? departureTime,
+    Set<String> avoidModes = const {},
     Duration timeout = const Duration(seconds: 5),
   }) async {
     final baseUrl = effectiveBaseUrl.replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.parse(
-      '$baseUrl/plan'
-      '?from=${origin.latitude},${origin.longitude}'
-      '&to=${destination.latitude},${destination.longitude}'
-      '&passenger=${passengerType.apiValue}',
+    final query = <String, String>{
+      'from': '${origin.latitude},${origin.longitude}',
+      'to': '${destination.latitude},${destination.longitude}',
+      'passenger': passengerType.apiValue,
+    };
+    if (departureTime != null) {
+      query['when'] = departureTime.toIso8601String();
+    }
+    if (avoidModes.isNotEmpty) {
+      query['avoid'] = avoidModes.join(',');
+    }
+    final uri = Uri(
+      scheme: Uri.parse(baseUrl).scheme,
+      host: Uri.parse(baseUrl).host,
+      port: Uri.parse(baseUrl).port == 0 ? null : Uri.parse(baseUrl).port,
+      path: '${Uri.parse(baseUrl).path.replaceAll(RegExp(r'/+$'), '')}/plan',
+      queryParameters: query,
     );
 
     try {
@@ -317,6 +367,7 @@ class TransitPlannerService {
     required LatLng? userLocation,
     RoutePreference preference = RoutePreference.fastest,
     PassengerType passengerType = PassengerType.general,
+    Set<String> avoidModes = const {},
     List<LatLng>? fallbackPath,
   }) {
     final origin = userLocation ?? const LatLng(14.5943, 120.9721);
@@ -327,6 +378,11 @@ class TransitPlannerService {
     );
 
     return mocked
+        .where(
+          (option) => !avoidModes.any(
+            (mode) => option.modeLabel.toLowerCase().contains(mode),
+          ),
+        )
         .map(
           (m) => TransitPlanOption.fromMock(
             m,

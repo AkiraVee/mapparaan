@@ -16,6 +16,7 @@ import json
 import os
 import sys
 import time
+import datetime
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 
@@ -94,6 +95,24 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 query_params.get("passenger", ["general"])[0]
                 or query_params.get("passenger_type", ["general"])[0]
             )
+            when_param = query_params.get("when", [None])[0]
+            when = None
+            if when_param:
+                try:
+                    when = datetime.datetime.fromisoformat(
+                        when_param.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    self._send_json(400, {
+                        "status": "error",
+                        "error": "Invalid 'when'. Use an ISO-8601 date/time.",
+                    })
+                    return
+            avoid_modes = {
+                item.strip().lower()
+                for item in query_params.get("avoid", [""])[0].split(",")
+                if item.strip()
+            }
 
             origin = parse_coords(from_param)
             destination = parse_coords(to_param)
@@ -112,7 +131,13 @@ class TransitApiHandler(BaseHTTPRequestHandler):
 
             t0 = time.time()
             try:
-                options = _PLANNER.plan(origin, destination, passenger=passenger)
+                options = _PLANNER.plan(
+                    origin,
+                    destination,
+                    passenger=passenger,
+                    when=when,
+                    avoid_modes=avoid_modes,
+                )
                 elapsed = time.time() - t0
                 print(f"[PLAN] from={origin} to={destination} passenger={passenger} -> {len(options)} options ({elapsed:.3f}s)")
                 self._send_json(200, {
@@ -120,6 +145,7 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                     "origin": [origin[0], origin[1]],
                     "destination": [destination[0], destination[1]],
                     "passenger": passenger,
+                    "data_notice": "Static GTFS and fare estimates; verify before travel.",
                     "options": options,
                 })
             except Exception as e:

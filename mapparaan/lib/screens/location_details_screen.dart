@@ -14,6 +14,8 @@ import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transit_planner_service.dart';
 import '../services/trip_history_service.dart';
+import '../services/last_route_service.dart';
+import '../services/commuter_preference_service.dart';
 import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
@@ -61,6 +63,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
   late RoutePreference _selectedPreference;
   late PassengerType _passengerType;
+  DateTime? _departureTime;
+  Set<String> _avoidModes = {};
 
   List<TransitPlanOption> _routeOptions = const [];
   TransitPlanOption? _selectedOption;
@@ -91,7 +95,16 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       final savedPlaces = await SavedPlacesService.load();
       if (!mounted) return;
       setState(() {
-        _isSaved = savedPlaces.any((s) => s.id == _savedPlaceId);
+        _isSaved = savedPlaces.any(
+          (s) =>
+              s.name == widget.resolvedPlaceName &&
+              (s.coordinates.latitude - widget.resolvedDestination.latitude)
+                      .abs() <
+                  0.00001 &&
+              (s.coordinates.longitude - widget.resolvedDestination.longitude)
+                      .abs() <
+                  0.00001,
+        );
       });
     } catch (_) {}
   }
@@ -134,6 +147,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       origin: origin,
       destination: destination,
       passengerType: _passengerType,
+      departureTime: _departureTime,
+      avoidModes: _avoidModes,
     );
 
     if (!mounted) return;
@@ -153,41 +168,101 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         _isLoadingRoute = false;
       });
 
-      _fitCameraToBounds(points);
-    } else {
-      final geometry = await RoutePlannerService.fetchRoute(
+      await LastRouteService.save(
         origin: origin,
         destination: destination,
-        profile: 'foot',
+        option: selected,
       );
 
-      if (!mounted) return;
+      _fitCameraToBounds(points);
+    } else {
+      final cached = await LastRouteService.load();
+      final cacheMatches =
+          cached != null &&
+          const Distance().as(
+                LengthUnit.Meter,
+                cached.destination,
+                destination,
+              ) <
+              100;
 
-      final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
-          ? geometry.points
-          : [origin, destination];
+      if (cacheMatches) {
+        final cachedOption = cached.option;
+        final cachedPoints = cachedOption.allPoints.isNotEmpty
+            ? cachedOption.allPoints
+            : [cached.origin, cached.destination];
+        final cachedFallbackOptions = TransitPlannerService.getFallbackOptions(
+          destination: destination,
+          userLocation: cached.origin,
+          preference: _selectedPreference,
+          passengerType: _passengerType,
+          avoidModes: _avoidModes,
+          fallbackPath: cachedPoints,
+        );
+        final offlineOptions = cachedFallbackOptions.isNotEmpty
+            ? cachedFallbackOptions
+            : [cachedOption];
+        final matching = offlineOptions.where(
+          (option) => option.routePreference == _selectedPreference,
+        );
+        final selected = matching.isNotEmpty
+            ? matching.first
+            : offlineOptions.first;
+        final selectedPoints = selected.allPoints.isNotEmpty
+            ? selected.allPoints
+            : cachedPoints;
+        setState(() {
+          _isOfflineFallback = true;
+          _routeOptions = offlineOptions;
+          _selectedOption = selected;
+          _routePoints = selectedPoints;
+          _isLoadingRoute = false;
+        });
+        _fitCameraToBounds(selectedPoints);
+      } else {
+        final geometry = await RoutePlannerService.fetchRoute(
+          origin: origin,
+          destination: destination,
+          profile: 'foot',
+        );
 
-      final fallbackOptions = TransitPlannerService.getFallbackOptions(
-        destination: destination,
-        userLocation: origin,
-        preference: _selectedPreference,
-        passengerType: _passengerType,
-        fallbackPath: fallbackPoints,
-      );
+        if (!mounted) return;
 
-      final selected = fallbackOptions.isNotEmpty
-          ? fallbackOptions.first
-          : null;
+        final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
+            ? geometry.points
+            : [origin, destination];
 
-      setState(() {
-        _isOfflineFallback = true;
-        _routeOptions = fallbackOptions;
-        _selectedOption = selected;
-        _routePoints = fallbackPoints;
-        _isLoadingRoute = false;
-      });
+        final fallbackOptions = TransitPlannerService.getFallbackOptions(
+          destination: destination,
+          userLocation: origin,
+          preference: _selectedPreference,
+          passengerType: _passengerType,
+          avoidModes: _avoidModes,
+          fallbackPath: fallbackPoints,
+        );
 
-      _fitCameraToBounds(fallbackPoints);
+        final selected = fallbackOptions.isNotEmpty
+            ? fallbackOptions.first
+            : null;
+
+        setState(() {
+          _isOfflineFallback = true;
+          _routeOptions = fallbackOptions;
+          _selectedOption = selected;
+          _routePoints = fallbackPoints;
+          _isLoadingRoute = false;
+        });
+
+        if (selected != null) {
+          await LastRouteService.save(
+            origin: origin,
+            destination: destination,
+            option: selected,
+          );
+        }
+
+        _fitCameraToBounds(fallbackPoints);
+      }
     }
 
     if (!_tripLogged && _routeOptions.isNotEmpty) {
@@ -240,6 +315,39 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   void _selectPassengerType(PassengerType type) {
     if (type == _passengerType) return;
     setState(() => _passengerType = type);
+    _refreshRoute();
+  }
+
+  Future<void> _pickDepartureTime() async {
+    final now = DateTime.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_departureTime ?? now),
+      helpText: 'Choose departure time',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _departureTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        picked.hour,
+        picked.minute,
+      );
+    });
+    _refreshRoute();
+  }
+
+  void _toggleAvoidMode(String mode, bool selected) {
+    setState(() {
+      final updated = {..._avoidModes};
+      if (selected) {
+        updated.add(mode);
+      } else {
+        updated.remove(mode);
+      }
+      _avoidModes = updated;
+    });
     _refreshRoute();
   }
 
@@ -313,6 +421,41 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _reportProblem() async {
+    const categories = [
+      'Wrong fare',
+      'Route or stop is incorrect',
+      'Route does not exist',
+      'Safety concern',
+    ];
+    final category = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Report a problem'),
+        children: categories
+            .map(
+              (item) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, item),
+                child: Text(item),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (category == null || !mounted) return;
+    await SharePlus.instance.share(
+      ShareParams(
+        text:
+            'Mapparaan route report\n'
+            'Category: $category\n'
+            'Place: ${widget.resolvedPlaceName}\n'
+            'Coordinates: ${widget.resolvedDestination.latitude}, '
+            '${widget.resolvedDestination.longitude}',
+        subject: 'Mapparaan route report',
+      ),
+    );
   }
 
   void _centerOnMyLocation() {
@@ -503,6 +646,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 isOfflineFallback: _isOfflineFallback,
                 selectedPreference: _selectedPreference,
                 passengerType: _passengerType,
+                departureTime: _departureTime,
+                avoidModes: _avoidModes,
                 routeOptions: _routeOptions,
                 selectedOption: _selectedOption,
                 onSaveToggle: _handleSaveToggle,
@@ -511,6 +656,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 onPreferenceSelected: _selectPreference,
                 onPassengerTypeSelected: _selectPassengerType,
                 onOptionSelected: _selectOption,
+                onReportProblem: _reportProblem,
+                onDepartureTimeSelected: _pickDepartureTime,
+                onAvoidModeChanged: _toggleAvoidMode,
               ),
             ],
           );
@@ -530,6 +678,8 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final bool isOfflineFallback;
   final RoutePreference selectedPreference;
   final PassengerType passengerType;
+  final DateTime? departureTime;
+  final Set<String> avoidModes;
   final List<TransitPlanOption> routeOptions;
   final TransitPlanOption? selectedOption;
   final VoidCallback onSaveToggle;
@@ -538,6 +688,9 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final ValueChanged<RoutePreference> onPreferenceSelected;
   final ValueChanged<PassengerType> onPassengerTypeSelected;
   final ValueChanged<TransitPlanOption> onOptionSelected;
+  final VoidCallback onReportProblem;
+  final VoidCallback onDepartureTimeSelected;
+  final void Function(String mode, bool selected) onAvoidModeChanged;
 
   const _PlaceDetailsSheet({
     required this.placeName,
@@ -547,6 +700,8 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.isOfflineFallback,
     required this.selectedPreference,
     required this.passengerType,
+    required this.departureTime,
+    required this.avoidModes,
     required this.routeOptions,
     required this.selectedOption,
     required this.onSaveToggle,
@@ -555,6 +710,9 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.onPreferenceSelected,
     required this.onPassengerTypeSelected,
     required this.onOptionSelected,
+    required this.onReportProblem,
+    required this.onDepartureTimeSelected,
+    required this.onAvoidModeChanged,
   });
 
   @override
@@ -660,6 +818,152 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showBudgetCalculator() async {
+    final route = widget.selectedOption;
+    if (route == null) {
+      _showMemoryPhotoMessage('Choose a route first to calculate its budget.');
+      return;
+    }
+    final fareController = TextEditingController(
+      text: '${route.effectiveFare(widget.passengerType)}',
+    );
+    final tripsController = TextEditingController(text: '2');
+    final daysController = TextEditingController(text: '22');
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final fare = double.tryParse(fareController.text) ?? 0;
+          final trips = double.tryParse(tripsController.text) ?? 0;
+          final days = double.tryParse(daysController.text) ?? 0;
+          final daily = fare * trips;
+          final monthly = daily * days;
+          return AlertDialog(
+            title: const Text('Commute budget'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: fareController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'One-way fare (₱)',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  TextField(
+                    controller: tripsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Trips per day',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  TextField(
+                    controller: daysController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Commute days per month',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Daily: ₱${daily.toStringAsFixed(2)}\nMonthly: ₱${monthly.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    fareController.dispose();
+    tripsController.dispose();
+    daysController.dispose();
+  }
+
+  Future<void> _showFareChecker() async {
+    final route = widget.selectedOption;
+    if (route == null) {
+      _showMemoryPhotoMessage('Choose a route first to check the fare.');
+      return;
+    }
+    final chargedController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Fare checker'),
+        content: TextField(
+          controller: chargedController,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'What were you charged? (₱)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final charged = double.tryParse(chargedController.text);
+              if (charged == null) return;
+              final expected = route.effectiveFare(widget.passengerType);
+              Navigator.pop(dialogContext);
+              final difference = charged - expected;
+              final result = difference.abs() < 0.01
+                  ? 'This matches the current estimate of ₱$expected.'
+                  : difference > 0
+                  ? 'This is ₱${difference.toStringAsFixed(2)} above the estimate of ₱$expected.'
+                  : 'This is ₱${difference.abs().toStringAsFixed(2)} below the estimate of ₱$expected.';
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(result)));
+            },
+            child: const Text('Check'),
+          ),
+        ],
+      ),
+    );
+    chargedController.dispose();
+  }
+
+  Future<void> _showEmergencyInfo() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Emergency information'),
+        content: const Text(
+          'National emergency hotline: 911\n\n'
+          'Police, fire, and medical assistance: 911\n\n'
+          'If you are in immediate danger, move to a staffed public area and contact local authorities.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onDragUpdate(DragUpdateDetails details) {
     final screenHeight = MediaQuery.of(context).size.height;
     setState(() {
@@ -687,12 +991,23 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
     final colorScheme = Theme.of(context).colorScheme;
     final primary = colorScheme.primary;
     final screenHeight = MediaQuery.of(context).size.height;
+    final compactUi = CommuterPreferencesService.current.value.compactUi;
+    const modeLabels = {
+      'jeepney': 'Jeepney',
+      'bus': 'Bus',
+      'lrt1': 'LRT-1',
+      'lrt2': 'LRT-2',
+      'mrt3': 'MRT-3',
+      'pnr': 'PNR',
+    };
 
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      height: screenHeight * _heightFactor,
+      height:
+          screenHeight *
+          (compactUi ? _heightFactor.clamp(0.25, 0.55) : _heightFactor),
       child: Material(
         color: colorScheme.surface,
         elevation: 12,
@@ -738,6 +1053,9 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           ),
                         ),
                         IconButton(
+                          tooltip: widget.isSaved
+                              ? 'Remove saved place'
+                              : 'Save place',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(
                             widget.isSaved
@@ -750,11 +1068,13 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           onPressed: widget.onSaveToggle,
                         ),
                         IconButton(
+                          tooltip: 'Share place',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(Icons.share, color: colorScheme.onSurface),
                           onPressed: widget.onShare,
                         ),
                         IconButton(
+                          tooltip: 'Close route details',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(Icons.close, color: colorScheme.onSurface),
                           onPressed: widget.onClose,
@@ -813,6 +1133,29 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                   ),
                   const SizedBox(height: 10),
 
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _showBudgetCalculator,
+                        icon: const Icon(Icons.calculate_outlined, size: 17),
+                        label: const Text('Budget'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _showFareChecker,
+                        icon: const Icon(Icons.receipt_long_outlined, size: 17),
+                        label: const Text('Check fare'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _showEmergencyInfo,
+                        icon: const Icon(Icons.emergency_outlined, size: 17),
+                        label: const Text('Emergency'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
                   Row(
                     children: [
                       _PreferenceButton(
@@ -849,6 +1192,41 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: widget.onDepartureTimeSelected,
+                    icon: const Icon(Icons.schedule, size: 17),
+                    label: Text(
+                      widget.departureTime == null
+                          ? 'Leave now'
+                          : 'Depart at ${widget.departureTime!.hour.toString().padLeft(2, '0')}:${widget.departureTime!.minute.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Avoid modes (optional)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: modeLabels.entries
+                        .map(
+                          (entry) => FilterChip(
+                            label: Text(entry.value),
+                            selected: widget.avoidModes.contains(entry.key),
+                            onSelected: (selected) =>
+                                widget.onAvoidModeChanged(entry.key, selected),
+                          ),
+                        )
+                        .toList(),
+                  ),
 
                   if (widget.isOfflineFallback)
                     Container(
@@ -882,6 +1260,15 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                         ],
                       ),
                     ),
+
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: widget.onReportProblem,
+                      icon: const Icon(Icons.flag_outlined, size: 16),
+                      label: const Text('Report a problem'),
+                    ),
+                  ),
 
                   const SizedBox(height: 12),
 
@@ -1069,195 +1456,284 @@ class _RouteResultCard extends StatelessWidget {
     final primary = colorScheme.primary;
     final container = colorScheme.primaryContainer;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? container.withValues(alpha: 0.35)
-              : colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? primary : colorScheme.outlineVariant,
-            width: isSelected ? 2 : 1,
+    return Semantics(
+      button: true,
+      label:
+          '${route.title}, estimated ${route.etaMinutes} minutes, '
+          'estimated fare $effectiveFare pesos',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? container.withValues(alpha: 0.35)
+                : colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? primary : colorScheme.outlineVariant,
+              width: isSelected ? 2 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? container
-                    : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? container
+                      : colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(_getLeadingIcon(), size: 22, color: primary),
               ),
-              child: Icon(_getLeadingIcon(), size: 22, color: primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        route.title,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          route.title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      if (isSelected) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: primary,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Active map route',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: colorScheme.onPrimary,
+                        if (isSelected) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: primary,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Active map route',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onPrimary,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (route.legs.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: route.legs.map((leg) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: leg.color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: leg.color.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                leg.isWalk
-                                    ? Icons.directions_walk
-                                    : Icons.directions_bus,
-                                size: 11,
-                                color: leg.color,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                leg.isWalk
-                                    ? '${leg.minutes}m'
-                                    : '${leg.modeLabel ?? 'Ride'} ${leg.routeCode ?? ''} (${leg.minutes}m)',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: leg.color,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  if (route.summary.isNotEmpty) ...[
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
-                      route.summary,
+                      '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colorScheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '₱$effectiveFare',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: primary,
-                    ),
-                  ),
-                  if (isDiscounted) ...[
-                    Text(
-                      '₱${route.fare}',
-                      style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: colorScheme.onSurfaceVariant,
-                        decoration: TextDecoration.lineThrough,
                       ),
                     ),
-                    const SizedBox(height: 1),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
+                    if (route.legs.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: route.legs.map((leg) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: leg.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: leg.color.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  leg.isWalk
+                                      ? Icons.directions_walk
+                                      : Icons.directions_bus,
+                                  size: 11,
+                                  color: leg.color,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  leg.isWalk
+                                      ? '${leg.minutes}m'
+                                      : '${leg.modeLabel ?? 'Ride'} ${leg.routeCode ?? ''} (${leg.minutes}m)',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: leg.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
                       ),
-                      decoration: BoxDecoration(
-                        color: container,
-                        borderRadius: BorderRadius.circular(4),
+                    ],
+                    if (route.summary.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        route.summary,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                      child: Text(
-                        '-20%',
+                    ],
+                    if (route.legs.isNotEmpty)
+                      Material(
+                        type: MaterialType.transparency,
+                        child: ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text(
+                            'View step-by-step directions',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          children: route.legs.asMap().entries.map((entry) {
+                            final index = entry.key + 1;
+                            final leg = entry.value;
+                            final distance = leg.meters == null
+                                ? ''
+                                : ' • ${(leg.meters! / 1000).toStringAsFixed(1)} km';
+                            final detail = leg.isWalk
+                                ? 'Walk from ${leg.from} to ${leg.to}'
+                                : 'Take ${leg.modeLabel ?? 'transit'}'
+                                      '${leg.routeCode == null ? '' : ' ${leg.routeCode}'} '
+                                      'from ${leg.from} to ${leg.to}';
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                radius: 13,
+                                backgroundColor: leg.color.withValues(
+                                  alpha: 0.15,
+                                ),
+                                child: Text(
+                                  '$index',
+                                  style: TextStyle(color: leg.color),
+                                ),
+                              ),
+                              title: Text(
+                                detail,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              subtitle: Text(
+                                '${leg.minutes} min$distance${leg.stops == null ? '' : ' • ${leg.stops} stops'}',
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '₱$effectiveFare',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: primary,
+                      ),
+                    ),
+                    Text(
+                      'Estimated',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Round trip ₱${effectiveFare * 2}',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (isDiscounted) ...[
+                      Text(
+                        '₱${route.fare}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: colorScheme.onSurfaceVariant,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: container,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '-20%',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (isDiscounted)
+                      Text(
+                        'Bring a valid ID',
                         style: TextStyle(
                           fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: primary,
+                          color: colorScheme.onSurfaceVariant,
                         ),
+                      ),
+                    Text(
+                      route.fareSource,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

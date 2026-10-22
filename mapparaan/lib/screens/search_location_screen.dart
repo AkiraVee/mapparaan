@@ -10,7 +10,6 @@ import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
-import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 
 class SearchLocationScreen extends StatefulWidget {
@@ -36,7 +35,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
 
   bool _hasConnectionError = false;
   bool _isSearching = false;
-  bool _isAiResolving = false;
+  final bool _isAiResolving = false;
 
   LatLng? _userLocation;
   List<PlaceResult> _searchResults = [];
@@ -48,36 +47,92 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       _PopularPlace('SM Mall of Asia', 'Pasay City', LatLng(14.5351, 120.9822)),
       _PopularPlace('SM North EDSA', 'Quezon City', LatLng(14.6569, 121.0307)),
       _PopularPlace('Robinsons Manila', 'Manila', LatLng(14.5750, 120.9830)),
-      _PopularPlace('Ayala Malls Manila Bay', 'Pasay', LatLng(14.5358, 120.9815)),
+      _PopularPlace(
+        'Ayala Malls Manila Bay',
+        'Pasay',
+        LatLng(14.5358, 120.9815),
+      ),
       _PopularPlace('Greenbelt', 'Makati', LatLng(14.5520, 121.0240)),
       _PopularPlace('Trinoma', 'Quezon City', LatLng(14.6535, 121.0325)),
     ],
     'Hospital': [
-      _PopularPlace('Philippine General Hospital', 'Manila', LatLng(14.5778, 120.9856)),
-      _PopularPlace('St. Luke\'s Medical Center', 'Quezon City', LatLng(14.6400, 121.0450)),
-      _PopularPlace('Makati Medical Center', 'Makati', LatLng(14.5580, 121.0140)),
-      _PopularPlace('Chinese General Hospital', 'Manila', LatLng(14.6250, 120.9850)),
+      _PopularPlace(
+        'Philippine General Hospital',
+        'Manila',
+        LatLng(14.5778, 120.9856),
+      ),
+      _PopularPlace(
+        'St. Luke\'s Medical Center',
+        'Quezon City',
+        LatLng(14.6400, 121.0450),
+      ),
+      _PopularPlace(
+        'Makati Medical Center',
+        'Makati',
+        LatLng(14.5580, 121.0140),
+      ),
+      _PopularPlace(
+        'Chinese General Hospital',
+        'Manila',
+        LatLng(14.6250, 120.9850),
+      ),
       _PopularPlace('The Medical City', 'Pasig', LatLng(14.5700, 121.0650)),
     ],
     'School': [
-      _PopularPlace('University of Santo Tomas', 'España, Manila', LatLng(14.6091, 120.9894)),
-      _PopularPlace('University of the Philippines Diliman', 'Quezon City', LatLng(14.6537, 121.0687)),
-      _PopularPlace('Ateneo de Manila University', 'Quezon City', LatLng(14.6390, 121.0780)),
-      _PopularPlace('De La Salle University', 'Manila', LatLng(14.5647, 120.9932)),
-      _PopularPlace('Polytechnic University of the Philippines', 'Manila', LatLng(14.5980, 121.0100)),
+      _PopularPlace(
+        'University of Santo Tomas',
+        'España, Manila',
+        LatLng(14.6091, 120.9894),
+      ),
+      _PopularPlace(
+        'University of the Philippines Diliman',
+        'Quezon City',
+        LatLng(14.6537, 121.0687),
+      ),
+      _PopularPlace(
+        'Ateneo de Manila University',
+        'Quezon City',
+        LatLng(14.6390, 121.0780),
+      ),
+      _PopularPlace(
+        'De La Salle University',
+        'Manila',
+        LatLng(14.5647, 120.9932),
+      ),
+      _PopularPlace(
+        'Polytechnic University of the Philippines',
+        'Manila',
+        LatLng(14.5980, 121.0100),
+      ),
     ],
     'LRT/MRT': [
       _PopularPlace('LRT-1 Baclaran', 'Pasay', LatLng(14.5340, 120.9950)),
       _PopularPlace('LRT-1 Doroteo Jose', 'Manila', LatLng(14.6040, 120.9820)),
-      _PopularPlace('MRT-3 North Avenue', 'Quezon City', LatLng(14.6520, 121.0330)),
+      _PopularPlace(
+        'MRT-3 North Avenue',
+        'Quezon City',
+        LatLng(14.6520, 121.0330),
+      ),
       _PopularPlace('MRT-3 Ayala', 'Makati', LatLng(14.5490, 121.0270)),
       _PopularPlace('LRT-2 Recto', 'Manila', LatLng(14.6030, 120.9830)),
     ],
     'Park': [
       _PopularPlace('Rizal Park (Luneta)', 'Manila', LatLng(14.5832, 120.9794)),
-      _PopularPlace('Quezon City Memorial Circle', 'Quezon City', LatLng(14.6510, 121.0490)),
-      _PopularPlace('Arroceros Forest Park', 'Manila', LatLng(14.5930, 120.9810)),
-      _PopularPlace('La Mesa Eco Park', 'Quezon City', LatLng(14.7120, 121.0920)),
+      _PopularPlace(
+        'Quezon City Memorial Circle',
+        'Quezon City',
+        LatLng(14.6510, 121.0490),
+      ),
+      _PopularPlace(
+        'Arroceros Forest Park',
+        'Manila',
+        LatLng(14.5930, 120.9810),
+      ),
+      _PopularPlace(
+        'La Mesa Eco Park',
+        'Quezon City',
+        LatLng(14.7120, 121.0920),
+      ),
     ],
     'Market': [
       _PopularPlace('Divisoria Market', 'Manila', LatLng(14.6040, 120.9700)),
@@ -90,9 +145,17 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   static const _defaultPopular = [
     _PopularPlace('SM Mall of Asia', 'Pasay City', LatLng(14.5351, 120.9822)),
     _PopularPlace('Intramuros', 'Manila', LatLng(14.5896, 120.9747)),
-    _PopularPlace('Quezon City Circle', 'Quezon City', LatLng(14.6510, 121.0490)),
+    _PopularPlace(
+      'Quezon City Circle',
+      'Quezon City',
+      LatLng(14.6510, 121.0490),
+    ),
     _PopularPlace('BGC High Street', 'Taguig', LatLng(14.5515, 121.0510)),
-    _PopularPlace('University of Santo Tomas', 'España, Manila', LatLng(14.6091, 120.9894)),
+    _PopularPlace(
+      'University of Santo Tomas',
+      'España, Manila',
+      LatLng(14.6091, 120.9894),
+    ),
     _PopularPlace('NAIA Terminal 3', 'Pasay', LatLng(14.5086, 121.0197)),
   ];
 
@@ -250,7 +313,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               child: FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
-                  initialCenter: _userLocation ??
+                  initialCenter:
+                      _userLocation ??
                       const LatLng(
                         AppConstants.defaultLat,
                         AppConstants.defaultLng,
@@ -296,9 +360,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
               ),
             )
           else
-            Positioned.fill(
-              child: ColoredBox(color: colorScheme.surface),
-            ),
+            Positioned.fill(child: ColoredBox(color: colorScheme.surface)),
 
           // FULL UI OVERLAY (always on top, always receives taps)
           Positioned.fill(
@@ -342,19 +404,19 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                         child: _hasConnectionError
                             ? _NoConnectionState(onRetry: _retry)
                             : (_isAiResolving || _isSearching)
-                                ? const _SearchSkeleton()
-                                : _searchResults.isNotEmpty
-                                    ? _SearchDropdown(
-                                        results: _searchResults,
-                                        onSelect: _selectPlace,
-                                      )
-                                    : _EmptySearchState(
-                                        popularPlaces: _displayedPlaces,
-                                        chips: _quickChips,
-                                        selectedCategory: _selectedCategory,
-                                        onPopularTap: _onPopularTap,
-                                        onChipTap: _onChipTap,
-                                      ),
+                            ? const _SearchSkeleton()
+                            : _searchResults.isNotEmpty
+                            ? _SearchDropdown(
+                                results: _searchResults,
+                                onSelect: _selectPlace,
+                              )
+                            : _EmptySearchState(
+                                popularPlaces: _displayedPlaces,
+                                chips: _quickChips,
+                                selectedCategory: _selectedCategory,
+                                onPopularTap: _onPopularTap,
+                                onChipTap: _onChipTap,
+                              ),
                       ),
                     ),
                   ),
@@ -479,7 +541,7 @@ class _SearchSkeleton extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       itemCount: 6,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         return Row(
           children: [
@@ -509,8 +571,9 @@ class _SearchSkeleton extends StatelessWidget {
                     height: 12,
                     width: 160,
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.6),
+                      color: colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.6,
+                      ),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -536,7 +599,7 @@ class _SearchDropdown extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: results.length,
-      separatorBuilder: (_, __) =>
+      separatorBuilder: (_, _) =>
           const Divider(height: 1, indent: 16, endIndent: 16),
       itemBuilder: (context, index) {
         final place = results[index];
@@ -555,10 +618,7 @@ class _SearchDropdown extends StatelessWidget {
             place.subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
           onTap: () => onSelect(place),
         );
@@ -589,10 +649,7 @@ class _NoConnectionState extends StatelessWidget {
           Text(
             'Check your connection. Your search is still here.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
           ElevatedButton(

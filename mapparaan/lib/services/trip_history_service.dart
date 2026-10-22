@@ -33,15 +33,22 @@ class TripHistoryEntry {
 typedef TripRecord = TripHistoryEntry;
 
 class TripHistoryService {
-  static final SupabaseClient _client = Supabase.instance.client;
+  static SupabaseClient? get _clientOrNull {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<List<TripHistoryEntry>> load() => fetchTripHistory();
 
   static Future<List<TripHistoryEntry>> fetchTripHistory() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return [];
 
-    final List<dynamic> response = await _client
+    final List<dynamic> response = await client!
         .from('trip_history')
         .select('*')
         .eq('user_id', userId)
@@ -71,15 +78,17 @@ class TripHistoryService {
   );
 
   static Future<void> clear() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
-    await _client.from('trip_history').delete().eq('user_id', userId);
+    await client!.from('trip_history').delete().eq('user_id', userId);
   }
 
   static Future<void> deleteEntry(String id) async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
-    await _client
+    await client!
         .from('trip_history')
         .delete()
         .eq('user_id', userId)
@@ -94,10 +103,11 @@ class TripHistoryService {
     required double fareEstimate,
     required String routeSummary,
   }) async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
 
-    await _client.from('trip_history').insert({
+    await client!.from('trip_history').insert({
       'user_id': userId,
       'origin_name': origin,
       'dest_name': destination,

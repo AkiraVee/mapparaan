@@ -45,20 +45,30 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() => _isLoading = true);
     try {
+      bool authenticated;
       if (_isLogin) {
-        await AuthService.signIn(
+        authenticated = await AuthService.signIn(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } else {
-        await AuthService.createAccount(
+        authenticated = await AuthService.createAccount(
           _nameController.text.trim(),
           _emailController.text.trim(),
           _passwordController.text,
         );
       }
 
-      if (mounted && Navigator.of(context).canPop()) {
+      if (!authenticated && !_isLogin) {
+        if (mounted) {
+          setState(
+            () => _errorMessage = 'Account created. Check your email to confirm your account, then sign in.',
+          );
+        }
+        return;
+      }
+
+      if (authenticated && mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } on AuthException catch (error) {
@@ -73,7 +83,7 @@ class _AuthScreenState extends State<AuthScreen> {
       );
       if (mounted) {
         setState(
-          () => _errorMessage = 'Unable to complete your request. Try again.',
+          () => _errorMessage = error is StateError ? error.message : 'Unable to complete your request. Check your connection and try again.',
         );
       }
     } finally {

@@ -50,11 +50,19 @@ LatLng parseMemoryPinPoint(Object? geometry) {
 }
 
 class MemoryPinService {
-  static final SupabaseClient _client = Supabase.instance.client;
+  static SupabaseClient? get _clientOrNull {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static final ValueNotifier<List<MemoryPin>> pins = ValueNotifier([]);
 
   static Future<void> loadMemoryPins() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) {
       pins.value = [];
       return;
@@ -63,7 +71,7 @@ class MemoryPinService {
     late final List<dynamic> response;
     var includesImagePath = true;
     try {
-      response = await _client
+      response = await client!
           .from('memory_pins')
           .select('id, place_name, address, geom, image_url, image_path')
           .eq('user_id', userId);
@@ -75,7 +83,7 @@ class MemoryPinService {
                   error.message.contains('schema cache')));
       if (!missingImagePath) rethrow;
       includesImagePath = false;
-      response = await _client
+      response = await client!
           .from('memory_pins')
           .select('id, place_name, address, geom, image_url')
           .eq('user_id', userId);
@@ -127,7 +135,8 @@ class MemoryPinService {
     required String contentType,
     required Uint8List imageBytes,
   }) async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) {
       throw StateError('Sign in before uploading a memory photo');
     }
@@ -138,7 +147,7 @@ class MemoryPinService {
     }
     final filePath = '$userId/$safeFileName';
 
-    await _client.storage
+    await client!.storage
         .from('memory-photos')
         .uploadBinary(
           filePath,
@@ -150,7 +159,7 @@ class MemoryPinService {
     var hasPinId = false;
     late final String imageUrl;
     try {
-      final inserted = await _client
+      final inserted = await client
           .from('memory_pins')
           .insert({
             'user_id': userId,
@@ -167,7 +176,7 @@ class MemoryPinService {
     } catch (error, stackTrace) {
       if (hasPinId) {
         try {
-          await _client.from('memory_pins').delete().eq('id', pinId);
+          await client.from('memory_pins').delete().eq('id', pinId);
         } catch (cleanupError, cleanupStackTrace) {
           FlutterError.reportError(
             FlutterErrorDetails(
@@ -181,7 +190,7 @@ class MemoryPinService {
         }
       }
       try {
-        await _client.storage.from('memory-photos').remove([filePath]);
+        await client.storage.from('memory-photos').remove([filePath]);
       } catch (cleanupError, cleanupStackTrace) {
         FlutterError.reportError(
           FlutterErrorDetails(
@@ -209,12 +218,13 @@ class MemoryPinService {
   }
 
   static Future<void> deletePin(String pinId) async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) {
       throw StateError('Sign in before deleting a memory photo');
     }
 
-    final row = await _client
+    final row = await client!
         .from('memory_pins')
         .select('id, image_path, image_url')
         .eq('id', pinId)
@@ -232,7 +242,7 @@ class MemoryPinService {
       throw StateError('Memory photo path does not belong to the current user');
     }
 
-    await _client
+    await client
         .from('memory_pins')
         .delete()
         .eq('id', pinId)
@@ -242,7 +252,7 @@ class MemoryPinService {
 
     if (imagePath != null) {
       try {
-        await _client.storage.from('memory-photos').remove([imagePath]);
+        await client.storage.from('memory-photos').remove([imagePath]);
       } catch (_, stackTrace) {
         Error.throwWithStackTrace(
           StateError(
@@ -259,7 +269,11 @@ class MemoryPinService {
     if (_ownerIdFromPath(imagePath) != userId) {
       throw StateError('Memory photo path does not belong to the current user');
     }
-    return _client.storage
+    final client = _clientOrNull;
+    if (client == null) {
+      throw StateError('Cloud services are not configured');
+    }
+    return client.storage
         .from('memory-photos')
         .createSignedUrl(imagePath, 3600);
   }
