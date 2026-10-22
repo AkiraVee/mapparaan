@@ -1,6 +1,8 @@
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/geo_point_parser.dart';
+
 class SavedPlace {
   final String id;
   final String name;
@@ -41,25 +43,14 @@ class SavedPlacesService {
         .eq('user_id', userId);
 
     return response.map((row) {
-      final geomStr = row['geom']?.toString() ?? '';
-      double lat = 0.0;
-      double lng = 0.0;
-
-      final point = RegExp(
-        r'POINT\s*\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)',
-        caseSensitive: false,
-      ).firstMatch(geomStr);
-      if (point != null) {
-        lng = double.tryParse(point.group(1)!) ?? 0;
-        lat = double.tryParse(point.group(2)!) ?? 0;
-      }
+      final point = parseGeoPointGeometry(row['geom']);
 
       return SavedPlace(
         id: row['id'],
         name: row['name'],
         subtitle: row['subtitle'] ?? '',
-        latitude: lat,
-        longitude: lng,
+        latitude: point.latitude,
+        longitude: point.longitude,
       );
     }).toList();
   }

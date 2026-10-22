@@ -200,9 +200,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       if (!mounted) return;
       setState(() => _userLocation = userLatLng);
       _mapController.move(userLatLng, 14.0);
-    } catch (e) {
-      debugPrint('Location fetch failed: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _runSearch(String query) async {
@@ -252,7 +250,6 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   void _onChipTap(String chip) {
-    debugPrint('CHIP TAPPED: $chip');
     setState(() {
       _selectedCategory = _selectedCategory == chip ? null : chip;
       _searchResults = [];
@@ -262,7 +259,6 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   void _onPopularTap(_PopularPlace popular) {
-    debugPrint('POPULAR TAPPED: ${popular.name}');
     final query = popular.name;
     _topSearchController.text = query;
     _topSearchController.selection = TextSelection.fromPosition(
@@ -273,7 +269,6 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   void _selectPlace(PlaceResult place) {
-    debugPrint('PLACE SELECTED: ${place.name}');
     Navigator.of(context).pop(
       SearchSelection(
         place: place,
@@ -474,7 +469,6 @@ class _EmptySearchState extends StatelessWidget {
               label: Text(chip),
               selected: isSelected,
               onSelected: (_) {
-                debugPrint('FilterChip onSelected: $chip');
                 onChipTap(chip);
               },
               selectedColor: colorScheme.primaryContainer,
@@ -521,7 +515,6 @@ class _EmptySearchState extends StatelessWidget {
               ),
             ),
             onTap: () {
-              debugPrint('ListTile onTap: ${place.name}');
               onPopularTap(place);
             },
           );

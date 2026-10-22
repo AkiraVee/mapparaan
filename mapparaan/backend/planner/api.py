@@ -4,11 +4,11 @@ Lightweight transit planning HTTP API for Mapparaan.
 Uses Python standard library only (no pip dependencies required).
 
 Usage:
-  python backend/planner/api.py [--port 8080] [--host 0.0.0.0]
+  python backend/planner/api.py [--port 8080] [--host 127.0.0.1]
   python backend/planner/api.py --data-dir path/to/data
 
 Endpoint:
-  GET /plan?from=14.5918,120.9786&to=14.6567,121.0287&passenger=student
+  POST /plan with JSON fields: from, to, passenger, when, and avoid
 
 Service area:
   The data covers the City of Manila only. If the origin or destination is more
@@ -30,7 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 
 # Ensure current directory is on sys.path for direct imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gtfs_planner import Planner, resolve_data_dir
+from gtfs_planner import Planner
 
 try:
     from gtfs_planner import ACCESS_RADII_M
@@ -42,6 +42,23 @@ except ImportError:
 _PLANNER = None
 # Outer ring(s) of the City of Manila boundary, or None if the file is missing
 _AREA = None
+
+
+def resolve_data_dir(data_dir=None):
+    """Resolve the project data directory and fail clearly if it is missing."""
+    if data_dir is None:
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+    resolved = os.path.abspath(data_dir)
+    required = (
+        os.path.join(resolved, "gtfs", "stops.txt"),
+        os.path.join(resolved, "reference", "fare_config.json"),
+        os.path.join(resolved, "reference", "route_modes.csv"),
+    )
+    if not all(os.path.isfile(path) for path in required):
+        raise FileNotFoundError(
+            "Transit planner data is incomplete; check the configured data directory."
+        )
+    return resolved
 
 
 def load_service_area(data_dir):
@@ -99,19 +116,60 @@ def parse_coords(val):
         parts = val.strip().split(",")
         if len(parts) != 2:
             return None
-        return (float(parts[0].strip()), float(parts[1].strip()))
+        latitude, longitude = (
+            float(parts[0].strip()),
+            float(parts[1].strip()),
+        )
+        if (
+            not math.isfinite(latitude)
+            or not math.isfinite(longitude)
+            or not (-90 <= latitude <= 90)
+            or not (-180 <= longitude <= 180)
+        ):
+            return None
+        return latitude, longitude
     except (ValueError, AttributeError):
         return None
+
+
+def _allowed_origins():
+    configured = os.environ.get("MAPPARAAN_ALLOWED_ORIGINS", "").strip()
+    if configured:
+        return {
+            origin.strip().rstrip("/")
+            for origin in configured.split(",")
+            if origin.strip()
+        }
+    return None
+
+
+def _is_allowed_origin(origin):
+    if not origin:
+        return False
+    configured = _allowed_origins()
+    if configured is not None:
+        return origin.rstrip("/") in configured
+
+    parsed = urllib.parse.urlparse(origin)
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname in {"localhost", "127.0.0.1"}
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 class TransitApiHandler(BaseHTTPRequestHandler):
     server_version = "MapparaanPlanner/1.0"
 
     def _send_cors_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-        self.send_header("Access-Control-Max-Age", "86400")
+        origin = self.headers.get("Origin")
+        if _is_allowed_origin(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Vary", "Origin")
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -124,9 +182,45 @@ class TransitApiHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self._send_cors_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        parsed_url = urllib.parse.urlparse(self.path)
+        if parsed_url.path.rstrip("/") != "/plan":
+            self._send_json(404, {"status": "error", "error": "Route not found."})
+            return
+        if self.headers.get_content_type() != "application/json":
+            self._send_json(
+                415,
+                {"status": "error", "error": "Content-Type must be application/json."},
+            )
+            return
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0 or content_length > 4096:
+                raise ValueError("invalid body size")
+            payload = json.loads(self.rfile.read(content_length))
+            if not isinstance(payload, dict):
+                raise ValueError("request body must be an object")
+            query = urllib.parse.urlencode(
+                {
+                    key: value
+                    for key, value in payload.items()
+                    if key in {"from", "to", "origin", "destination", "dest",
+                               "passenger", "passenger_type", "when", "avoid"}
+                    and isinstance(value, (str, int, float))
+                }
+            )
+        except (ValueError, TypeError, json.JSONDecodeError):
+            self._send_json(400, {"status": "error", "error": "Invalid request body."})
+            return
+
+        self.path = f"/plan?{query}"
+        self.do_GET()
 
     def do_GET(self):
         parsed_url = urllib.parse.urlparse(self.path)
@@ -183,23 +277,22 @@ class TransitApiHandler(BaseHTTPRequestHandler):
             if not origin or not destination:
                 self._send_json(400, {
                     "status": "error",
-                    "error": (
-                        "Invalid or missing coordinates. Please specify 'from=lat,lon' "
-                        "and 'to=lat,lon', e.g. /plan?from=14.5918,120.9786&to=14.6567,121.0287"
-                    ),
-                    "received_from": from_param,
-                    "received_to": to_param,
+                    "error": "Invalid or missing coordinates.",
+                })
+                return
+            if passenger not in {"general", "student", "senior", "pwd"}:
+                self._send_json(400, {
+                    "status": "error",
+                    "error": "Invalid passenger type.",
                 })
                 return
 
             # Data covers the City of Manila only: say so instead of returning a
             # bare empty list the app would mistake for "no route found".
             if not (in_service_area(origin) and in_service_area(destination)):
-                print(f"[PLAN] from={origin} to={destination} -> outside service area")
+                print("[PLAN] Request outside service area.")
                 self._send_json(200, {
                     "status": "ok",
-                    "origin": [origin[0], origin[1]],
-                    "destination": [destination[0], destination[1]],
                     "passenger": passenger,
                     "options": [],
                     "reason": "outside_service_area",
@@ -217,20 +310,21 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                     avoid_modes=avoid_modes,
                 )
                 elapsed = time.time() - t0
-                print(f"[PLAN] from={origin} to={destination} passenger={passenger} -> {len(options)} options ({elapsed:.3f}s)")
+                print(
+                    f"[PLAN] passenger={passenger} options={len(options)} "
+                    f"duration={elapsed:.3f}s"
+                )
                 self._send_json(200, {
                     "status": "ok",
-                    "origin": [origin[0], origin[1]],
-                    "destination": [destination[0], destination[1]],
                     "passenger": passenger,
                     "data_notice": "Static GTFS and fare estimates; verify before travel.",
                     "options": options,
                 })
-            except Exception as e:
-                print(f"[ERROR] Planning failed: {e}")
+            except Exception as error:
+                print(f"[ERROR] Planning failed ({type(error).__name__}).")
                 self._send_json(500, {
                     "status": "error",
-                    "error": f"Internal planning error: {str(e)}",
+                    "error": "Route planning is temporarily unavailable.",
                 })
             return
 
@@ -241,13 +335,20 @@ class TransitApiHandler(BaseHTTPRequestHandler):
         })
 
     def log_message(self, format, *args):
-        # Override default stderr logging to keep terminal output clean
-        sys.stdout.write(f"[{self.log_date_time_string()}] {format % args}\n")
+        message = format % args
+        request_path = urllib.parse.urlparse(self.path).path
+        if self.path and self.path in message:
+            message = message.replace(self.path, request_path)
+        sys.stdout.write(f"[{self.log_date_time_string()}] {message}\n")
         sys.stdout.flush()
 
 
-def run_server(host="0.0.0.0", port=8080, data_dir=None):
+def run_server(host="127.0.0.1", port=8080, data_dir=None):
     global _PLANNER, _AREA
+    if host not in {"127.0.0.1", "localhost", "::1"} and not _allowed_origins():
+        raise ValueError(
+            "Set MAPPARAAN_ALLOWED_ORIGINS before binding beyond loopback."
+        )
     resolved_dir = resolve_data_dir(data_dir)
     print("=" * 64)
     print(" Mapparaan Local Transit Planner API")
@@ -262,8 +363,7 @@ def run_server(host="0.0.0.0", port=8080, data_dir=None):
           "Service area: manila_boundary.geojson not found, not restricting requests.")
     print("-" * 64)
     print(f"Server listening on http://{host}:{port}/")
-    print(f"Local test:       http://localhost:{port}/plan?from=14.5918,120.9786&to=14.6567,121.0287&passenger=student")
-    print(f"Android emulator: http://10.0.2.2:{port}/plan?from=14.5918,120.9786&to=14.6567,121.0287&passenger=student")
+    print(f"Local health check: http://localhost:{port}/health")
     print("=" * 64)
 
     server_class = ThreadingHTTPServer if hasattr(ThreadingHTTPServer, "__mro__") else HTTPServer
@@ -277,7 +377,11 @@ def run_server(host="0.0.0.0", port=8080, data_dir=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Mapparaan Transit Planner API")
-    parser.add_argument("--host", default="0.0.0.0", help="Host interface to bind to (default: 0.0.0.0)")
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind to (default: 127.0.0.1; use 0.0.0.0 only on a trusted network)",
+    )
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)), help="Port to listen on (default: 8080)")
     parser.add_argument("--data-dir", default=None, help="Path to data directory containing gtfs and references")
     args = parser.parse_args()

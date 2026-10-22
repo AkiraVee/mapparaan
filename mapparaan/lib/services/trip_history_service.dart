@@ -50,7 +50,10 @@ class TripHistoryService {
 
     final List<dynamic> response = await client!
         .from('trip_history')
-        .select('*')
+        .select(
+          'id, origin_name, dest_name, preference, duration_minutes, '
+          'fare_estimate, route_summary, created_at',
+        )
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 

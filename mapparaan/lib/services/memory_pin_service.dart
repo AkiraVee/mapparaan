@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/geo_point_parser.dart';
+
 class MemoryPin {
   final String id;
   final String placeName;
@@ -22,32 +24,7 @@ class MemoryPin {
   });
 }
 
-LatLng parseMemoryPinPoint(Object? geometry) {
-  if (geometry is Map) {
-    if (geometry['type'] != 'Point') {
-      throw const FormatException('Memory geometry is not a point');
-    }
-
-    final coordinates = geometry['coordinates'];
-    if (coordinates is! List ||
-        coordinates.length < 2 ||
-        coordinates[0] is! num ||
-        coordinates[1] is! num) {
-      throw const FormatException('Invalid GeoJSON point coordinates');
-    }
-    return LatLng(
-      (coordinates[1] as num).toDouble(),
-      (coordinates[0] as num).toDouble(),
-    );
-  }
-
-  if (geometry is! String) {
-    throw const FormatException('Unsupported point geometry encoding');
-  }
-
-  final point = MemoryPinService._parsePointString(geometry);
-  return point;
-}
+enum MemoryPinLoadStatus { idle, loading, loaded, error }
 
 class MemoryPinService {
   static SupabaseClient? get _clientOrNull {
@@ -59,8 +36,22 @@ class MemoryPinService {
   }
 
   static final ValueNotifier<List<MemoryPin>> pins = ValueNotifier([]);
+  static final ValueNotifier<MemoryPinLoadStatus> loadStatus = ValueNotifier(
+    MemoryPinLoadStatus.idle,
+  );
 
   static Future<void> loadMemoryPins() async {
+    loadStatus.value = MemoryPinLoadStatus.loading;
+    try {
+      await _loadMemoryPins();
+      loadStatus.value = MemoryPinLoadStatus.loaded;
+    } catch (_) {
+      loadStatus.value = MemoryPinLoadStatus.error;
+      rethrow;
+    }
+  }
+
+  static Future<void> _loadMemoryPins() async {
     final client = _clientOrNull;
     final userId = client?.auth.currentUser?.id;
     if (userId == null) {
@@ -91,7 +82,7 @@ class MemoryPinService {
 
     final loadedPins = await Future.wait(
       response.map((row) async {
-        final coordinates = parseMemoryPinPoint(row['geom']);
+        final coordinates = parseGeoPointGeometry(row['geom']);
 
         final imagePath =
             (includesImagePath ? row['image_path'] as String? : null) ??
@@ -292,44 +283,5 @@ class MemoryPinService {
   static String? _ownerIdFromPath(String path) {
     final segments = path.split('/');
     return segments.length >= 2 ? segments.first : null;
-  }
-
-  static LatLng _parsePointString(String geometry) {
-    final wktMatch = RegExp(
-      r'^POINT\s*\(\s*(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s*\)$',
-      caseSensitive: false,
-    ).firstMatch(geometry.trim());
-    if (wktMatch != null) {
-      return LatLng(
-        double.parse(wktMatch.group(2)!),
-        double.parse(wktMatch.group(1)!),
-      );
-    }
-
-    final hex = geometry.trim();
-    if (hex.length < 42 ||
-        hex.length.isOdd ||
-        !RegExp(r'^[0-9a-fA-F]+$').hasMatch(hex)) {
-      throw FormatException('Unsupported point geometry encoding');
-    }
-    final bytes = Uint8List.fromList([
-      for (var index = 0; index < hex.length; index += 2)
-        int.parse(hex.substring(index, index + 2), radix: 16),
-    ]);
-    final data = ByteData.sublistView(bytes);
-    final endian = bytes[0] == 1 ? Endian.little : Endian.big;
-    if (bytes[0] != 0 && bytes[0] != 1) {
-      throw FormatException('Invalid point geometry byte order');
-    }
-
-    final geometryType = data.getUint32(1, endian);
-    if ((geometryType & 0x000000FF) != 1) {
-      throw FormatException('Memory geometry is not a point');
-    }
-    final hasSrid = (geometryType & 0x20000000) != 0;
-    final coordinateOffset = hasSrid ? 9 : 5;
-    final longitude = data.getFloat64(coordinateOffset, endian);
-    final latitude = data.getFloat64(coordinateOffset + 8, endian);
-    return LatLng(latitude, longitude);
   }
 }

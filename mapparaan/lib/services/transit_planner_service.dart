@@ -292,6 +292,7 @@ class TransitPlannerService {
   /// Resolves the API base URL based on runtime platform
   static String get effectiveBaseUrl {
     final configured = AppConstants.transitApiBaseUrl.trim();
+    if (configured.isEmpty) return '';
     // In web browsers, 10.0.2.2 cannot be reached; translate to localhost automatically
     if (kIsWeb && configured.contains('10.0.2.2')) {
       return configured.replaceAll('10.0.2.2', 'localhost');
@@ -299,8 +300,8 @@ class TransitPlannerService {
     return configured;
   }
 
-  /// Calls the local Python transit planner API:
-  /// `GET /plan?from=lat,lon&to=lat,lon&passenger=student`
+  /// Calls the transit planner API using a JSON body so coordinates are not
+  /// placed in request URLs or routine access logs.
   ///
   /// Returns a list of real options on success, or `null` if the API is offline
   /// or unreachable.
@@ -312,28 +313,24 @@ class TransitPlannerService {
     Set<String> avoidModes = const {},
     Duration timeout = const Duration(seconds: 5),
   }) async {
-    final baseUrl = effectiveBaseUrl.replaceAll(RegExp(r'/+$'), '');
-    final query = <String, String>{
-      'from': '${origin.latitude},${origin.longitude}',
-      'to': '${destination.latitude},${destination.longitude}',
-      'passenger': passengerType.apiValue,
-    };
-    if (departureTime != null) {
-      query['when'] = departureTime.toIso8601String();
-    }
-    if (avoidModes.isNotEmpty) {
-      query['avoid'] = avoidModes.join(',');
-    }
-    final uri = Uri(
-      scheme: Uri.parse(baseUrl).scheme,
-      host: Uri.parse(baseUrl).host,
-      port: Uri.parse(baseUrl).port == 0 ? null : Uri.parse(baseUrl).port,
-      path: '${Uri.parse(baseUrl).path.replaceAll(RegExp(r'/+$'), '')}/plan',
-      queryParameters: query,
-    );
-
     try {
-      final response = await http.get(uri).timeout(timeout);
+      final baseUrl = effectiveBaseUrl;
+      if (baseUrl.isEmpty) return null;
+      final uri = Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/plan');
+      final request = <String, dynamic>{
+        'from': '${origin.latitude},${origin.longitude}',
+        'to': '${destination.latitude},${destination.longitude}',
+        'passenger': passengerType.apiValue,
+        if (departureTime != null) 'when': departureTime.toIso8601String(),
+        if (avoidModes.isNotEmpty) 'avoid': avoidModes.join(','),
+      };
+      final response = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode(request),
+          )
+          .timeout(timeout);
       if (response.statusCode != 200) {
         debugPrint('Transit planner API returned HTTP ${response.statusCode}');
         return null;
@@ -347,6 +344,7 @@ class TransitPlannerService {
           decoded['options'] is List) {
         rawOptions = decoded['options'] as List;
       } else {
+        debugPrint('Transit planner API returned an invalid response shape');
         return null;
       }
 
@@ -355,8 +353,10 @@ class TransitPlannerService {
             (item) => TransitPlanOption.fromJson(item as Map<String, dynamic>),
           )
           .toList();
-    } catch (e) {
-      debugPrint('Transit planner API offline or unreachable ($baseUrl): $e');
+    } catch (error) {
+      debugPrint(
+        'Transit planner API unavailable (${error.runtimeType}); using fallback routes.',
+      );
       return null;
     }
   }

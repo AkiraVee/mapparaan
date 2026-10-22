@@ -95,7 +95,10 @@ class CommuterPreferencesService {
 
     final response = await client!
         .from('user_preferences')
-        .select('*')
+        .select(
+          'theme_mode, color_palette, high_contrast_map, compact_ui, '
+          'use_metric_units',
+        )
         .eq('user_id', userId)
         .maybeSingle();
     final row = response ?? const <String, dynamic>{};
@@ -152,7 +155,10 @@ class CommuterPreferencesService {
 
     final response = await client!
         .from('user_preferences')
-        .select('*')
+        .select(
+          'passenger_type, theme_mode, color_palette, high_contrast_map, '
+          'compact_ui, use_metric_units',
+        )
         .eq('user_id', userId)
         .maybeSingle();
 

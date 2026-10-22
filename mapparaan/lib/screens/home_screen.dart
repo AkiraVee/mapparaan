@@ -43,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _initUserLocation();
   }
 
-  // Automatically fetches live location on startup or prompts the user if disabled.
   Future<void> _initUserLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -79,8 +78,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final userLatLng = LatLng(position.latitude, position.longitude);
       setState(() => _userLocation = userLatLng);
       _mapController.move(userLatLng, 15.0);
-    } catch (e) {
-      if (mounted) debugPrint('Auto-location error: $e');
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not get your current location.');
+      }
     }
   }
 
@@ -93,8 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _selectPlace(
@@ -212,113 +212,249 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Displays the saved location details when a memory pin is tapped.
-  void _showMemoryPinDialog(MemoryPin pin) {
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      useSafeArea: false,
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMemoryAlbumDialog(List<MemoryPin> album) {
+    int currentIndex = 0;
+    final pageController = PageController();
+
     showDialog(
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            pin.placeName,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 150,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: pin.imageUrl.isEmpty
-                    ? Center(
-                        child: Icon(
-                          Icons.image_not_supported_outlined,
-                          size: 50,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    : Image.network(
-                        pin.imageUrl,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          final expected = progress.expectedTotalBytes;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: expected == null
-                                  ? null
-                                  : progress.cumulativeBytesLoaded / expected,
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) => Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.broken_image_outlined,
-                                size: 42,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Photo could not be loaded',
-                                style: TextStyle(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
+        
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final currentPin = album[currentIndex];
+            
+            return AlertDialog(
+              contentPadding: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      currentPin.placeName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (album.length > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${currentIndex + 1} / ${album.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onPrimaryContainer,
                         ),
                       ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                pin.address,
-                style: TextStyle(color: colorScheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Close',
-                style: TextStyle(color: colorScheme.onSurfaceVariant),
-              ),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              icon: const Icon(Icons.directions, size: 18),
-              label: const Text('Go Here'),
-              onPressed: () {
-                Navigator.pop(context);
-                _selectPlace(
-                  PlaceResult(
-                    name: pin.placeName,
-                    subtitle: pin.address,
-                    coordinates: pin.coordinates,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 250,
+                    width: double.infinity,
+                    child: Stack(
+                      children: [
+                        PageView.builder(
+                          controller: pageController,
+                          itemCount: album.length,
+                          onPageChanged: (index) => setState(() => currentIndex = index),
+                          itemBuilder: (context, index) {
+                            final pin = album[index];
+                            return GestureDetector(
+                              onTap: () {
+                                if (pin.imageUrl.isNotEmpty) {
+                                  _showFullScreenImage(context, pin.imageUrl);
+                                }
+                              },
+                              child: Container(
+                                color: colorScheme.surfaceContainerHighest,
+                                child: pin.imageUrl.isEmpty
+                                    ? Center(
+                                        child: Icon(
+                                          Icons.image_not_supported_outlined,
+                                          size: 50,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      )
+                                    : Image.network(
+                                        pin.imageUrl,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder: (context, child, progress) {
+                                          if (progress == null) return child;
+                                          return const Center(child: CircularProgressIndicator());
+                                        },
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Icon(
+                                            Icons.broken_image_outlined,
+                                            size: 42,
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                        
+                        // Navigation Arrows
+                        if (album.length > 1) ...[
+                          if (currentIndex > 0)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black45,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.chevron_left, color: Colors.white),
+                                    onPressed: () {
+                                      pageController.previousPage(
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (currentIndex < album.length - 1)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black45,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.chevron_right, color: Colors.white),
+                                    onPressed: () {
+                                      pageController.nextPage(
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
-          ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            currentPin.address,
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                  label: const Text('Add Photo'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _selectPlace(
+                      PlaceResult(
+                        name: currentPin.placeName,
+                        subtitle: currentPin.address,
+                        coordinates: currentPin.coordinates,
+                      ),
+                    );
+                  },
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  icon: const Icon(Icons.directions, size: 18),
+                  label: const Text('Go Here'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _selectPlace(
+                      PlaceResult(
+                        name: currentPin.placeName,
+                        subtitle: currentPin.address,
+                        coordinates: currentPin.coordinates,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -330,11 +466,17 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: MapparaanDrawer(onPlaceSelected: _selectPlace),
       body: Stack(
         children: [
-          // ===== MAP WITH MEMORY PINS =====
           if (widget.showMap)
             ValueListenableBuilder<List<MemoryPin>>(
               valueListenable: MemoryPinService.pins,
               builder: (context, memoryPins, _) {
+                
+                final albumsMap = <String, List<MemoryPin>>{};
+                for (final pin in memoryPins) {
+                  albumsMap.putIfAbsent(pin.placeName, () => []).add(pin);
+                }
+                final albums = albumsMap.values.toList();
+
                 return FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
@@ -381,25 +523,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                    if (memoryPins.isNotEmpty)
+                    
+                    if (albums.isNotEmpty)
                       MarkerLayer(
-                        markers: memoryPins.map((pin) {
+                        markers: albums.map((album) {
+                          final latestPin = album.last; 
                           return Marker(
-                            point: pin.coordinates,
+                            point: latestPin.coordinates,
                             width: 52,
                             height: 60,
                             alignment: Alignment.bottomCenter,
                             child: GestureDetector(
-                              onTap: () => _showMemoryPinDialog(pin),
+                              onTap: () => _showMemoryAlbumDialog(album),
                               child: Stack(
                                 alignment: Alignment.topCenter,
                                 children: [
                                   Icon(
                                     Icons.location_on,
                                     size: 52,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                                   Positioned(
                                     top: 5,
@@ -407,35 +549,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                       width: 25,
                                       height: 25,
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
+                                        color: Theme.of(context).colorScheme.surface,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface,
+                                          color: Theme.of(context).colorScheme.surface,
                                           width: 2,
                                         ),
                                       ),
                                       clipBehavior: Clip.antiAlias,
-                                      child: pin.imageUrl.isEmpty
+                                      child: latestPin.imageUrl.isEmpty
                                           ? Icon(
                                               Icons.photo,
                                               size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
+                                              color: Theme.of(context).colorScheme.primary,
                                             )
                                           : Image.network(
-                                              pin.imageUrl,
+                                              latestPin.imageUrl,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, _, _) => Icon(
                                                 Icons.photo,
                                                 size: 16,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
+                                                color: Theme.of(context).colorScheme.primary,
                                               ),
                                             ),
                                     ),
@@ -452,12 +586,9 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           else
             Positioned.fill(
-              child: ColoredBox(
-                color: Theme.of(context).scaffoldBackgroundColor,
-              ),
+              child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
             ),
 
-          // ===== TOP BAR =====
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -492,7 +623,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ===== ASK BAR =====
           Align(
             alignment: Alignment.bottomCenter,
             child: SafeArea(
@@ -502,8 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: _bottomAskController,
                   hintText: 'Ask MapParaan',
                   onTap: () => _goToSearchScreen(_bottomAskController.text),
-                  onLeadingTap: () =>
-                      _goToSearchScreen(_bottomAskController.text),
+                  onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
                   onSubmitted: _handleAiQuery,
                 ),
               ),

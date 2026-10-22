@@ -19,6 +19,20 @@ enum DrawerDestination {
   helpSupport,
 }
 
+Future<void> _retryMemoryPinLoad() async {
+  try {
+    await MemoryPinService.loadMemoryPins();
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        context: ErrorDescription('while retrying memory photo loading'),
+      ),
+    );
+  }
+}
+
 class DrawerDestinationScreen extends StatelessWidget {
   final DrawerDestination destination;
 
@@ -205,7 +219,6 @@ class _ProfilePage extends StatelessWidget {
             children: [
               const SizedBox(height: 12),
 
-              // 1. CENTERED AVATAR WITH EDIT BADGE
               Center(
                 child: Stack(
                   children: [
@@ -251,7 +264,6 @@ class _ProfilePage extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              // 2. CENTERED NAME AND EMAIL
               Text(
                 user?.userMetadata?['full_name'] ?? 'Commuter User',
                 textAlign: TextAlign.center,
@@ -272,7 +284,6 @@ class _ProfilePage extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // 3. ACTIVITY STATS ROW
               ValueListenableBuilder<List<MemoryPin>>(
                 valueListenable: MemoryPinService.pins,
                 builder: (context, pins, _) {
@@ -341,7 +352,6 @@ class _ProfilePage extends StatelessWidget {
 
               const SizedBox(height: 28),
 
-              // 4. UPLOADED PICTURES GALLERY SECTION
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -363,65 +373,143 @@ class _ProfilePage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              ValueListenableBuilder<List<MemoryPin>>(
-                valueListenable: MemoryPinService.pins,
-                builder: (context, pins, _) {
-                  if (pins.isEmpty) {
+              ValueListenableBuilder<MemoryPinLoadStatus>(
+                valueListenable: MemoryPinService.loadStatus,
+                builder: (context, status, _) {
+                  if (status == MemoryPinLoadStatus.loading &&
+                      MemoryPinService.pins.value.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('Loading your memories...'),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (status == MemoryPinLoadStatus.error &&
+                      MemoryPinService.pins.value.isEmpty) {
                     return Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
+                        color: Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.grey.withValues(alpha: 0.2),
-                        ),
                       ),
                       child: Column(
                         children: [
-                          Icon(
-                            Icons.add_a_photo_outlined,
-                            size: 36,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'No pictures uploaded yet',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
                           Text(
-                            'Visit a place and tap "Add Memory Photo" on the location details screen to save pictures here.',
+                            'Your memories could not be loaded. Check your connection and try again.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 12,
                               color: Theme.of(context)
                                   .colorScheme
-                                  .onSurfaceVariant,
+                                  .onErrorContainer,
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Try again'),
+                            onPressed: _retryMemoryPinLoad,
                           ),
                         ],
                       ),
                     );
                   }
 
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.85,
-                        ),
-                    itemCount: pins.length,
-                    itemBuilder: (context, index) {
-                      final pin = pins[index];
-                      return _MemoryPhotoCard(pin: pin);
+                  return ValueListenableBuilder<List<MemoryPin>>(
+                    valueListenable: MemoryPinService.pins,
+                    builder: (context, pins, _) {
+                      if (pins.isEmpty) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.grey.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.add_a_photo_outlined,
+                                size: 36,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'No pictures uploaded yet',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Visit a place and tap "Add Memory Photo" on the location details screen to save pictures here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final albumsMap = <String, List<MemoryPin>>{};
+                      for (final pin in pins) {
+                        albumsMap.putIfAbsent(pin.placeName, () => []).add(pin);
+                      }
+                      final albumsList = albumsMap.values.toList();
+
+                      return Column(
+                        children: [
+                          if (status == MemoryPinLoadStatus.error)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Could not refresh memories. Showing saved items.',
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _retryMemoryPinLoad,
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.85,
+                                ),
+                            itemCount: albumsList.length,
+                            itemBuilder: (context, index) {
+                              return _MemoryAlbumCard(album: albumsList[index]);
+                            },
+                          ),
+                        ],
+                      );
                     },
                   );
                 },
@@ -429,7 +517,6 @@ class _ProfilePage extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              // 5. SIGN OUT BUTTON
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -492,26 +579,248 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _MemoryPhotoCard extends StatefulWidget {
-  final MemoryPin pin;
+class _MemoryAlbumCard extends StatefulWidget {
+  final List<MemoryPin> album;
 
-  const _MemoryPhotoCard({required this.pin});
+  const _MemoryAlbumCard({required this.album});
 
   @override
-  State<_MemoryPhotoCard> createState() => _MemoryPhotoCardState();
+  State<_MemoryAlbumCard> createState() => _MemoryAlbumCardState();
 }
 
-class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
+class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
   bool _isDeleting = false;
 
-  Future<void> _deletePhoto() async {
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      useSafeArea: false,
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMemoryAlbumDialog() {
+    int currentIndex = 0;
+    final pageController = PageController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final currentPin = widget.album[currentIndex];
+            
+            return AlertDialog(
+              contentPadding: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      currentPin.placeName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.album.length > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${currentIndex + 1} / ${widget.album.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 250,
+                    width: double.infinity,
+                    child: Stack(
+                      children: [
+                        PageView.builder(
+                          controller: pageController,
+                          itemCount: widget.album.length,
+                          onPageChanged: (index) => setState(() => currentIndex = index),
+                          itemBuilder: (context, index) {
+                            final pin = widget.album[index];
+                            return GestureDetector(
+                              onTap: () {
+                                if (pin.imageUrl.isNotEmpty) {
+                                  _showFullScreenImage(context, pin.imageUrl);
+                                }
+                              },
+                              child: Container(
+                                color: colorScheme.surfaceContainerHighest,
+                                child: pin.imageUrl.isEmpty
+                                    ? Center(
+                                        child: Icon(
+                                          Icons.image_not_supported_outlined,
+                                          size: 50,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      )
+                                    : Image.network(
+                                        pin.imageUrl,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder: (context, child, progress) {
+                                          if (progress == null) return child;
+                                          return const Center(child: CircularProgressIndicator());
+                                        },
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Icon(
+                                            Icons.broken_image_outlined,
+                                            size: 42,
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                        
+                        // Navigation Arrows
+                        if (widget.album.length > 1) ...[
+                          if (currentIndex > 0)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black45,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.chevron_left, color: Colors.white),
+                                    onPressed: () {
+                                      pageController.previousPage(
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (currentIndex < widget.album.length - 1)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black45,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.chevron_right, color: Colors.white),
+                                    onPressed: () {
+                                      pageController.nextPage(
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            currentPin.address,
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Delete Photo'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _deleteSpecificPhoto(currentPin);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteSpecificPhoto(MemoryPin pin) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete memory photo?'),
-        content: Text(
-          'This will permanently remove the photo for ${widget.pin.placeName}.',
-        ),
+        content: Text('This will permanently remove this photo from your ${pin.placeName} album.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -528,7 +837,7 @@ class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
 
     setState(() => _isDeleting = true);
     try {
-      await MemoryPinService.deletePin(widget.pin.id);
+      await MemoryPinService.deletePin(pin.id);
       if (mounted) _showMessage('Memory photo deleted.');
     } catch (error, stackTrace) {
       FlutterError.reportError(
@@ -539,11 +848,7 @@ class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
         ),
       );
       if (mounted) {
-        final message =
-            error.toString().contains('Memory removed from your account')
-            ? 'The memory was removed, but its stored photo could not be deleted. Contact support.'
-            : 'Could not delete the memory photo. Please try again.';
-        _showMessage(message);
+        _showMessage('Could not delete the memory photo. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _isDeleting = false);
@@ -558,6 +863,7 @@ class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final latestPin = widget.album.last;
 
     return Container(
       decoration: BoxDecoration(
@@ -571,88 +877,125 @@ class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: colorScheme.primaryContainer,
-                    child: widget.pin.imageUrl.isEmpty
-                        ? Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 40,
-                              color: colorScheme.primary,
-                            ),
-                          )
-                        : Image.network(
-                            widget.pin.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                size: 40,
-                                color: colorScheme.primary,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _showMemoryAlbumDialog,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(
+                        color: colorScheme.primaryContainer,
+                        child: latestPin.imageUrl.isEmpty
+                            ? Center(
+                                child: Icon(
+                                  Icons.image,
+                                  size: 40,
+                                  color: colorScheme.primary,
+                                ),
+                              )
+                            : Image.network(
+                                latestPin.imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Center(
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 40,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
                               ),
+                      ),
+                      
+                      if (widget.album.length > 1)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.photo_library, size: 11, color: Colors.white),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${widget.album.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white, 
+                                    fontSize: 11, 
+                                    fontWeight: FontWeight.bold
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                        ),
+
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton.filledTonal(
+                          tooltip: 'Delete this photo',
+                          onPressed: _isDeleting ? null : () => _deleteSpecificPhoto(latestPin),
+                          icon: _isDeleting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.delete_outline),
+                        ),
+                      ),
+                    ],
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Delete memory photo',
-                      onPressed: _isDeleting ? null : _deletePhoto,
-                      icon: _isDeleting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.delete_outline),
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        latestPin.placeName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        latestPin.address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.pin.placeName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.pin.address,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
+// (The remaining classes for SavedPlaces, TripHistory, Settings, and HelpSupport stay exactly the same as your previous code)
 
 class _SavedPlacesPage extends StatefulWidget {
   const _SavedPlacesPage();
@@ -909,7 +1252,6 @@ class _SettingsPageState extends State<_SettingsPage> {
 
     return ListView(
       children: [
-        // ── 1. THEME MODE SELECTOR ──
         const Text(
           'Appearance & Theme Mode',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -941,7 +1283,6 @@ class _SettingsPageState extends State<_SettingsPage> {
 
         const Divider(height: 32),
 
-        // ── 2. MANILA LANDMARK COLOR PALETTES ──
         const Text(
           'Color Palette Accent',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -968,7 +1309,6 @@ class _SettingsPageState extends State<_SettingsPage> {
               label: Text(
                 palette.label,
                 style: TextStyle(
-                  // Keep selected chip text legible on its tinted background.
                   color: isSelected
                       ? palette.onContainer
                       : Theme.of(context).colorScheme.onSurface,
@@ -988,7 +1328,6 @@ class _SettingsPageState extends State<_SettingsPage> {
 
         const Divider(height: 32),
 
-        // ── 3. DISPLAY CONTROLS ──
         const Text(
           'Display & Map Controls',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -1027,13 +1366,20 @@ class _SettingsPageState extends State<_SettingsPage> {
         ),
 
         const Divider(height: 32),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
           leading: Icon(Icons.privacy_tip_outlined, color: activeColor),
           title: const Text('Privacy & Location Access'),
-          subtitle: const Text(
-            'Location permission is used strictly to calculate live routes and center the map on request.',
-          ),
+          subtitle: const Text('How location and account data are used'),
+          children: const [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                'Your device location is used when you ask to center the map or plan a route. Place searches send your search text to OpenStreetMap Nominatim. Map tiles are loaded from the configured tile provider, which can infer the area you view. Route requests send the origin and destination to the configured transit planner. When signed in, saved places, trip history, preferences, and uploaded memory photos are stored in the configured Supabase project. Release builds require HTTPS for Supabase and the transit API; local development may use HTTP. This app does not provide end-to-end encryption. You can deny location access and still search manually.',
+                style: TextStyle(height: 1.45),
+              ),
+            ),
+          ],
         ),
       ],
     );

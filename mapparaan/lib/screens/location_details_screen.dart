@@ -772,8 +772,6 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
         'jpeg': 'image/jpeg',
         'png': 'image/png',
         'webp': 'image/webp',
-        'heic': 'image/heic',
-        'heif': 'image/heif',
       };
       final contentType = contentTypes[extension];
       if (contentType == null) {

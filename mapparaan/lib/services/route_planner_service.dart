@@ -80,8 +80,8 @@ class RoutePlannerService {
         durationSeconds: (route['duration'] as num).toDouble(),
         profile: profile,
       );
-    } catch (e) {
-      debugPrint('OSRM error: $e');
+    } catch (error) {
+      debugPrint('Route lookup failed (${error.runtimeType}).');
       return null;
     }
   }

@@ -1,5 +1,5 @@
 -- Safe, repeatable schema setup for Mapparaan.
--- This script does not drop application tables or delete user data.
+-- This script does not drop application tables or user-owned rows.
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS postgis SCHEMA public;
@@ -10,17 +10,25 @@ FROM anon, authenticated, PUBLIC;
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT,
-  email TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Keep authentication email in auth.users, not duplicated in the app profile.
+ALTER TABLE public.users DROP COLUMN IF EXISTS email;
 
 CREATE TABLE IF NOT EXISTS public.user_preferences (
   user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   passenger_type TEXT
     CHECK (passenger_type IN ('general', 'student', 'senior', 'pwd'))
     DEFAULT 'general',
-  theme_mode TEXT DEFAULT 'system',
-  color_palette TEXT DEFAULT 'pasigDusk',
+  theme_mode TEXT
+    CONSTRAINT user_preferences_theme_mode_valid
+    CHECK (theme_mode IN ('system', 'light', 'dark'))
+    DEFAULT 'system',
+  color_palette TEXT
+    CONSTRAINT user_preferences_color_palette_valid
+    CHECK (color_palette IN ('pasigDusk', 'intramuros', 'manilaBay', 'binondo'))
+    DEFAULT 'pasigDusk',
   use_metric_units BOOLEAN DEFAULT true,
   high_contrast_map BOOLEAN DEFAULT false,
   compact_ui BOOLEAN DEFAULT false
@@ -29,7 +37,9 @@ CREATE TABLE IF NOT EXISTS public.user_preferences (
 CREATE TABLE IF NOT EXISTS public.saved_places (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL
+    CONSTRAINT saved_places_name_nonempty
+    CHECK (length(btrim(name)) > 0),
   subtitle TEXT,
   geom GEOMETRY(Point, 4326),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -41,7 +51,9 @@ ON public.saved_places USING GIST (geom);
 CREATE TABLE IF NOT EXISTS public.memory_pins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  place_name TEXT NOT NULL,
+  place_name TEXT NOT NULL
+    CONSTRAINT memory_pins_place_name_nonempty
+    CHECK (length(btrim(place_name)) > 0),
   address TEXT,
   geom GEOMETRY(Point, 4326),
   image_url TEXT,
@@ -58,8 +70,12 @@ CREATE TABLE IF NOT EXISTS public.trip_history (
   origin_name TEXT,
   dest_name TEXT,
   preference TEXT,
-  duration_minutes INT,
-  fare_estimate NUMERIC,
+  duration_minutes INT
+    CONSTRAINT trip_history_duration_nonnegative
+    CHECK (duration_minutes IS NULL OR duration_minutes >= 0),
+  fare_estimate NUMERIC
+    CONSTRAINT trip_history_fare_nonnegative
+    CHECK (fare_estimate IS NULL OR fare_estimate >= 0),
   route_summary TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -71,6 +87,79 @@ ALTER TABLE public.saved_places
 ALTER TABLE public.memory_pins
   ADD COLUMN IF NOT EXISTS image_path TEXT;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.user_preferences'::regclass
+      AND conname = 'user_preferences_theme_mode_valid'
+  ) THEN
+    ALTER TABLE public.user_preferences
+      ADD CONSTRAINT user_preferences_theme_mode_valid
+      CHECK (theme_mode IN ('system', 'light', 'dark')) NOT VALID;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.user_preferences'::regclass
+      AND conname = 'user_preferences_color_palette_valid'
+  ) THEN
+    ALTER TABLE public.user_preferences
+      ADD CONSTRAINT user_preferences_color_palette_valid
+      CHECK (color_palette IN ('pasigDusk', 'intramuros', 'manilaBay', 'binondo'))
+      NOT VALID;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.saved_places'::regclass
+      AND conname = 'saved_places_name_nonempty'
+  ) THEN
+    ALTER TABLE public.saved_places
+      ADD CONSTRAINT saved_places_name_nonempty
+      CHECK (length(btrim(name)) > 0) NOT VALID;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.memory_pins'::regclass
+      AND conname = 'memory_pins_place_name_nonempty'
+  ) THEN
+    ALTER TABLE public.memory_pins
+      ADD CONSTRAINT memory_pins_place_name_nonempty
+      CHECK (length(btrim(place_name)) > 0) NOT VALID;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.trip_history'::regclass
+      AND conname = 'trip_history_duration_nonnegative'
+  ) THEN
+    ALTER TABLE public.trip_history
+      ADD CONSTRAINT trip_history_duration_nonnegative
+      CHECK (duration_minutes IS NULL OR duration_minutes >= 0) NOT VALID;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.trip_history'::regclass
+      AND conname = 'trip_history_fare_nonnegative'
+  ) THEN
+    ALTER TABLE public.trip_history
+      ADD CONSTRAINT trip_history_fare_nonnegative
+      CHECK (fare_estimate IS NULL OR fare_estimate >= 0) NOT VALID;
+  END IF;
+END
+$$;
+
+ALTER TABLE public.user_preferences
+  VALIDATE CONSTRAINT user_preferences_theme_mode_valid;
+ALTER TABLE public.user_preferences
+  VALIDATE CONSTRAINT user_preferences_color_palette_valid;
+ALTER TABLE public.saved_places
+  VALIDATE CONSTRAINT saved_places_name_nonempty;
+ALTER TABLE public.memory_pins
+  VALIDATE CONSTRAINT memory_pins_place_name_nonempty;
+ALTER TABLE public.trip_history
+  VALIDATE CONSTRAINT trip_history_duration_nonnegative;
+ALTER TABLE public.trip_history
+  VALIDATE CONSTRAINT trip_history_fare_nonnegative;
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -78,8 +167,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  INSERT INTO public.users (id, full_name, email)
-  VALUES (NEW.id, NEW.raw_user_meta_data ->> 'full_name', NEW.email)
+  INSERT INTO public.users (id, full_name)
+  VALUES (NEW.id, NEW.raw_user_meta_data ->> 'full_name')
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO public.user_preferences (user_id)
@@ -118,12 +207,30 @@ TO authenticated
 USING ((SELECT auth.uid()) = id)
 WITH CHECK ((SELECT auth.uid()) = id);
 
+DROP POLICY IF EXISTS "Enforce own profile boundary" ON public.users;
+CREATE POLICY "Enforce own profile boundary"
+ON public.users
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (auth.uid() IS NOT NULL AND auth.uid() = id)
+WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = id);
+
 CREATE POLICY "Access own preferences"
 ON public.user_preferences
 FOR ALL
 TO authenticated
 USING ((SELECT auth.uid()) = user_id)
 WITH CHECK ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Enforce own preferences boundary" ON public.user_preferences;
+CREATE POLICY "Enforce own preferences boundary"
+ON public.user_preferences
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (auth.uid() IS NOT NULL AND auth.uid() = user_id)
+WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
 
 CREATE POLICY "Access own saved places"
 ON public.saved_places
@@ -132,6 +239,15 @@ TO authenticated
 USING ((SELECT auth.uid()) = user_id)
 WITH CHECK ((SELECT auth.uid()) = user_id);
 
+DROP POLICY IF EXISTS "Enforce own saved places boundary" ON public.saved_places;
+CREATE POLICY "Enforce own saved places boundary"
+ON public.saved_places
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (auth.uid() IS NOT NULL AND auth.uid() = user_id)
+WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
+
 CREATE POLICY "Access own memory pins"
 ON public.memory_pins
 FOR ALL
@@ -139,12 +255,30 @@ TO authenticated
 USING ((SELECT auth.uid()) = user_id)
 WITH CHECK ((SELECT auth.uid()) = user_id);
 
+DROP POLICY IF EXISTS "Enforce own memory pins boundary" ON public.memory_pins;
+CREATE POLICY "Enforce own memory pins boundary"
+ON public.memory_pins
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (auth.uid() IS NOT NULL AND auth.uid() = user_id)
+WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
+
 CREATE POLICY "Access own trip history"
 ON public.trip_history
 FOR ALL
 TO authenticated
 USING ((SELECT auth.uid()) = user_id)
 WITH CHECK ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "Enforce own trip history boundary" ON public.trip_history;
+CREATE POLICY "Enforce own trip history boundary"
+ON public.trip_history
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (auth.uid() IS NOT NULL AND auth.uid() = user_id)
+WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
 
 DO $$
 BEGIN
@@ -159,7 +293,9 @@ END
 $$;
 
 UPDATE storage.buckets
-SET public = false
+SET public = false,
+    file_size_limit = 10485760,
+    allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']
 WHERE id = 'memory-photos';
 
 DROP POLICY IF EXISTS "Users can upload memory photos" ON storage.objects;
@@ -188,18 +324,14 @@ WITH CHECK (
   AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
 );
 
-CREATE POLICY "Owners can update memory photos"
+DROP POLICY IF EXISTS "Block memory photo updates" ON storage.objects;
+CREATE POLICY "Block memory photo updates"
 ON storage.objects
+AS RESTRICTIVE
 FOR UPDATE
-TO authenticated
-USING (
-  bucket_id = 'memory-photos'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
-)
-WITH CHECK (
-  bucket_id = 'memory-photos'
-  AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
-);
+TO public
+USING (bucket_id <> 'memory-photos')
+WITH CHECK (bucket_id <> 'memory-photos');
 
 CREATE POLICY "Owners can delete memory photos"
 ON storage.objects
@@ -209,5 +341,35 @@ USING (
   bucket_id = 'memory-photos'
   AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
 );
+
+DROP POLICY IF EXISTS "Enforce memory photo owner boundary" ON storage.objects;
+CREATE POLICY "Enforce memory photo owner boundary"
+ON storage.objects
+AS RESTRICTIVE
+FOR ALL
+TO public
+USING (
+  bucket_id <> 'memory-photos'
+  OR (
+    auth.uid() IS NOT NULL
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  )
+)
+WITH CHECK (
+  bucket_id <> 'memory-photos'
+  OR (
+    auth.uid() IS NOT NULL
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_places_user_created
+ON public.saved_places (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_memory_pins_user_created
+ON public.memory_pins (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_trip_history_user_created
+ON public.trip_history (user_id, created_at DESC);
 
 COMMIT;

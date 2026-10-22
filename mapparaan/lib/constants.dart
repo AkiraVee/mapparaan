@@ -1,6 +1,7 @@
 /// App-wide constants for Mapparaan.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -8,14 +9,50 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class AppConstants {
   AppConstants._();
 
-  static String get supabaseUrl => _requiredEnv('SUPABASE_URL');
+  static String get supabaseUrl {
+    final value = _requiredEnv('SUPABASE_URL');
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        !{'http', 'https'}.contains(uri.scheme) ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw StateError('SUPABASE_URL must be a valid HTTP(S) URL');
+    }
+    if (kReleaseMode && uri.scheme != 'https') {
+      throw StateError('SUPABASE_URL must use HTTPS in release builds');
+    }
+    return value;
+  }
+
   static String get supabaseClientKey =>
       _optionalEnv('SUPABASE_PUBLISHABLE_KEY') ??
       _requiredEnv('SUPABASE_ANON_KEY');
 
   static String get cartoApiKey => _optionalEnv('CARTO_API_KEY') ?? '';
-  static String get transitApiBaseUrl =>
-      _optionalEnv('TRANSIT_API_URL') ?? 'http://127.0.0.1:8080';
+  static String get transitApiBaseUrl {
+    final configured = _optionalEnv('TRANSIT_API_URL');
+    if (configured == null) {
+      return kReleaseMode ? '' : 'http://127.0.0.1:8080';
+    }
+
+    final uri = Uri.tryParse(configured);
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        !{'http', 'https'}.contains(uri.scheme) ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw StateError('TRANSIT_API_URL must be a valid HTTP(S) URL');
+    }
+    if (kReleaseMode && uri.scheme != 'https') {
+      throw StateError('TRANSIT_API_URL must use HTTPS in release builds');
+    }
+    return configured;
+  }
 
   static String _requiredEnv(String name) {
     final value = _optionalEnv(name);

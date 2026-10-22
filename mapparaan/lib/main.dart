@@ -154,6 +154,7 @@ class _AuthGateState extends State<AuthGate> {
       if (state.event == AuthChangeEvent.signedOut) {
         CommuterPreferencesService.current.value = const CommuterPreferences();
         MemoryPinService.pins.value = [];
+        MemoryPinService.loadStatus.value = MemoryPinLoadStatus.idle;
         return;
       }
       if (state.session != null) {
