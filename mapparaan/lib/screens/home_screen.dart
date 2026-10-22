@@ -237,13 +237,50 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Center(
-                  child: Icon(
-                    Icons.image,
-                    size: 50,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
+                clipBehavior: Clip.antiAlias,
+                child: pin.imageUrl.isEmpty
+                    ? Center(
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 50,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : Image.network(
+                        pin.imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          final expected = progress.expectedTotalBytes;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: expected == null
+                                  ? null
+                                  : progress.cumulativeBytesLoaded / expected,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.broken_image_outlined,
+                                size: 42,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Photo could not be loaded',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(height: 12),
               Text(
@@ -349,15 +386,61 @@ class _HomeScreenState extends State<HomeScreen> {
                         markers: memoryPins.map((pin) {
                           return Marker(
                             point: pin.coordinates,
-                            width: 50,
-                            height: 50,
-                            alignment: Alignment.topCenter,
+                            width: 52,
+                            height: 60,
+                            alignment: Alignment.bottomCenter,
                             child: GestureDetector(
                               onTap: () => _showMemoryPinDialog(pin),
-                              child: Icon(
-                                Icons.photo_camera_front,
-                                size: 40,
-                                color: Theme.of(context).colorScheme.primary,
+                              child: Stack(
+                                alignment: Alignment.topCenter,
+                                children: [
+                                  Icon(
+                                    Icons.location_on,
+                                    size: 52,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
+                                  Positioned(
+                                    top: 5,
+                                    child: Container(
+                                      width: 25,
+                                      height: 25,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surface,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: pin.imageUrl.isEmpty
+                                          ? Icon(
+                                              Icons.photo,
+                                              size: 16,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                            )
+                                          : Image.network(
+                                              pin.imageUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) => Icon(
+                                                Icons.photo,
+                                                size: 16,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           );

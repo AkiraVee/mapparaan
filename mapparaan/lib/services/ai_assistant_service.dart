@@ -1,5 +1,5 @@
-import 'package:mapparaan/services/place_search_service.dart';
-import 'package:mapparaan/services/route_planner_service.dart';
+import 'place_search_service.dart';
+import 'route_planner_service.dart';
 
 enum PassengerType { general, student, senior, pwd }
 
