@@ -39,6 +39,7 @@ WALK_WEIGHT = 1.5             # walking feels longer than riding the same time
 
 # Rail fares are not in the config yet (table: null) -> rough placeholder.
 RAIL_FALLBACK = {"base_fare": 15.0, "base_km": 0, "per_km": 1.5}
+FARE_SOURCE_LABEL = "Mapparaan fare configuration; verify current fare"
 
 MODE_LABEL = {
     "jeepney": "Jeepney", "bus": "Bus", "uv_express": "UV Express",
@@ -227,7 +228,8 @@ class Planner:
         return max(headway / 2 if headway else floor, floor)
 
     # ── search ───────────────────────────────────────────────────────────────
-    def _search(self, origin, dest, pref, when):
+    def _search(self, origin, dest, pref, when, avoid_modes=None):
+        avoid_modes = avoid_modes or set()
         transfer_pen, peso_w = PREFS[pref]
         ns = self.n_stops
 
@@ -235,6 +237,8 @@ class Planner:
         waits, offset, ridx_trip, ridx_pos = {}, {}, [], []
         boardings = defaultdict(list)
         for ti, t in enumerate(self.trips):
+            if t["mode"].lower() in avoid_modes:
+                continue
             w = self.trip_wait_s(t, when)
             if w is None:
                 continue
@@ -385,7 +389,7 @@ class Planner:
         }
 
     # ── public API ───────────────────────────────────────────────────────────
-    def plan(self, origin, dest, passenger="general", when=None):
+    def plan(self, origin, dest, passenger="general", when=None, avoid_modes=None):
         """origin/dest = (lat, lon). Returns a list of route options."""
         when = when or datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         
@@ -404,10 +408,13 @@ class Planner:
         titles = {"fastest": "Fastest route", "cheapest": "Cheapest route",
                   "fewest_transfers": "Fewest transfers"}
         for pref in ("fastest", "cheapest", "fewest_transfers"):
-            legs = self._search(origin, dest, pref, when)
+            legs = self._search(origin, dest, pref, when, avoid_modes=avoid_modes)
             if not legs:
                 continue
-            key = tuple(l.get("route_id", "w") for l in legs)
+            # Keep one result for each preference even when the same physical
+            # route wins multiple cost functions. The client uses the
+            # preference label to let commuters switch between route goals.
+            key = (pref, tuple(l.get("route_id", "w") for l in legs))
             if key in seen:
                 continue
             seen.add(key)
@@ -433,6 +440,7 @@ class Planner:
             "eta_minutes": minutes,
             "fare": fare,
             "fare_discounted": round(fare * discount),
+            "fare_source": FARE_SOURCE_LABEL,
             "transfers": max(0, len(rides) - 1),
             "modes": sorted({l["mode"] for l in rides}),
             "legs": legs,

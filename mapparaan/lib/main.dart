@@ -8,31 +8,56 @@ import 'services/commuter_preference_service.dart';
 import 'services/memory_pin_service.dart';
 import 'screens/home_screen.dart';
 import 'constants.dart';
+import 'services/auth_service.dart';
 
-// Global reference for Supabase queries
-final supabase = Supabase.instance.client;
+// Resolve the client lazily. Accessing Supabase.instance.client at top-level
+// would happen before Supabase.initialize() during application startup.
+SupabaseClient get supabase => Supabase.instance.client;
+bool supabaseReady = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load client configuration before initializing Supabase.
-  await dotenv.load(fileName: '.env');
-
-  await Supabase.initialize(
-    url: AppConstants.supabaseUrl,
-    publishableKey: AppConstants.supabaseClientKey,
-  );
-
+  // Load client configuration before initializing Supabase. A missing local
+  // file is handled below so tests and a first launch can show a useful error.
+  String? configurationError;
   try {
-    await CommuterPreferencesService.load();
-  } catch (error, stackTrace) {
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        context: ErrorDescription('while loading initial commuter preferences'),
-      ),
-    );
+    await dotenv.load(fileName: '.env');
+  } catch (error) {
+    configurationError = 'Local cloud configuration is unavailable.';
+  }
+
+  if (configurationError == null) {
+    try {
+      await Supabase.initialize(
+        url: AppConstants.supabaseUrl,
+        publishableKey: AppConstants.supabaseClientKey,
+      );
+    } catch (error) {
+      configurationError = 'Cloud services are unavailable: $error';
+    }
+  }
+
+  if (configurationError == null) {
+    supabaseReady = true;
+    try {
+      await CommuterPreferencesService.load();
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription(
+            'while loading initial commuter preferences',
+          ),
+        ),
+      );
+    }
+  } else {
+    // The map, search, location, and local route cache remain usable without
+    // cloud configuration. Account-backed features fail gracefully in their
+    // own services instead of blocking the whole application.
+    debugPrint(configurationError);
   }
   runApp(const MyApp());
 }
@@ -114,13 +139,18 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final StreamSubscription<AuthState> _authSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
+    if (!supabaseReady) return;
+    AuthService.isLoggedIn.value = supabase.auth.currentSession != null;
+    AuthService.isGuest.value = false;
     _loadMemoryPins();
     _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+      AuthService.isLoggedIn.value = state.session != null;
+      if (state.session != null) AuthService.isGuest.value = false;
       if (state.event == AuthChangeEvent.signedOut) {
         CommuterPreferencesService.current.value = const CommuterPreferences();
         MemoryPinService.pins.value = [];
@@ -166,7 +196,7 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
-    _authSubscription.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 

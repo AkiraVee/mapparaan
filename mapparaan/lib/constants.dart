@@ -32,8 +32,9 @@ class AppConstants {
   }
 
   // ── Map tiles ───────────────────────────────────────────────────────────────
-  static String get mapTileUrl =>
-      'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=$cartoApiKey';
+  static String get mapTileUrl => cartoApiKey.isEmpty
+      ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+      : 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=$cartoApiKey';
 
   static const List<String> mapTileSubdomains = ['a', 'b', 'c', 'd'];
   static const String appPackageName = 'com.example.mapparaan';

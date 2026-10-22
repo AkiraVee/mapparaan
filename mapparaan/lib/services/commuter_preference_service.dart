@@ -73,19 +73,27 @@ class CommuterPreferences {
 }
 
 class CommuterPreferencesService {
-  static final SupabaseClient _client = Supabase.instance.client;
+  static SupabaseClient? get _clientOrNull {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static final ValueNotifier<CommuterPreferences> current = ValueNotifier(
     const CommuterPreferences(),
   );
 
   static Future<CommuterPreferences> load() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) {
       current.value = const CommuterPreferences();
       return current.value;
     }
 
-    final response = await _client
+    final response = await client!
         .from('user_preferences')
         .select('*')
         .eq('user_id', userId)
@@ -112,10 +120,11 @@ class CommuterPreferencesService {
 
   static Future<void> save(CommuterPreferences preferences) async {
     current.value = preferences;
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
 
-    await _client.from('user_preferences').upsert({
+    await client!.from('user_preferences').upsert({
       'user_id': userId,
       'theme_mode': preferences.themeMode.name,
       'color_palette': preferences.colorPalette.name,
@@ -137,10 +146,11 @@ class CommuterPreferencesService {
   }
 
   static Future<Map<String, dynamic>> loadPreferences() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return {};
 
-    final response = await _client
+    final response = await client!
         .from('user_preferences')
         .select('*')
         .eq('user_id', userId)
@@ -150,10 +160,11 @@ class CommuterPreferencesService {
   }
 
   static Future<void> updatePassengerType(String passengerType) async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _clientOrNull;
+    final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
 
-    await _client.from('user_preferences').upsert({
+    await client!.from('user_preferences').upsert({
       'user_id': userId,
       'passenger_type': passengerType,
     });
