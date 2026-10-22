@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
@@ -560,9 +563,102 @@ class _PlaceDetailsSheet extends StatefulWidget {
 
 class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
   double _heightFactor = 0.42;
+  bool _isUploadingMemory = false;
 
   static const double _minFactor = 0.30;
   static const double _maxFactor = 0.90;
+  static const int _maxMemoryPhotoBytes = 10 * 1024 * 1024;
+
+  Future<void> _addMemoryPhoto() async {
+    if (_isUploadingMemory) return;
+    setState(() => _isUploadingMemory = true);
+
+    try {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (source == null || !mounted) return;
+
+      final pickedFile = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (pickedFile == null || !mounted) return;
+
+      final imageBytes = await pickedFile.readAsBytes();
+      if (imageBytes.lengthInBytes > _maxMemoryPhotoBytes) {
+        _showMemoryPhotoMessage('Choose an image smaller than 10 MB.');
+        return;
+      }
+
+      final extension = pickedFile.name.split('.').last.toLowerCase();
+      const contentTypes = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+      };
+      final contentType = contentTypes[extension];
+      if (contentType == null) {
+        _showMemoryPhotoMessage(
+          'This image format is not supported. Choose JPG, PNG, or WebP.',
+        );
+        return;
+      }
+
+      await MemoryPinService.addPin(
+        placeName: widget.placeName,
+        address: widget.address,
+        coordinates: widget.coordinates,
+        fileName: 'memory-${const Uuid().v4()}.$extension',
+        contentType: contentType,
+        imageBytes: imageBytes,
+      );
+
+      if (mounted) {
+        _showMemoryPhotoMessage('Memory photo uploaded.');
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while uploading a memory photo'),
+        ),
+      );
+      if (mounted) {
+        _showMemoryPhotoMessage(
+          'Could not upload the photo. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingMemory = false);
+    }
+  }
+
+  void _showMemoryPhotoMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 
   void _onDragUpdate(DragUpdateDetails details) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -682,8 +778,20 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: OutlinedButton.icon(
-                          icon: const Icon(Icons.camera_alt, size: 18),
-                          label: const Text('Add Memory Photo'),
+                          icon: _isUploadingMemory
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.camera_alt, size: 18),
+                          label: Text(
+                            _isUploadingMemory
+                                ? 'Uploading photo...'
+                                : 'Add Memory Photo',
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: primary,
                             side: BorderSide(color: primary),
@@ -691,15 +799,9 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                               borderRadius: BorderRadius.circular(24),
                             ),
                           ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Memory photo upload is not available yet.',
-                                ),
-                              ),
-                            );
-                          },
+                          onPressed: _isUploadingMemory
+                              ? null
+                              : _addMemoryPhoto,
                         ),
                       );
                     },

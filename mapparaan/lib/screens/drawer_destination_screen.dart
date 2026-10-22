@@ -106,10 +106,7 @@ class _AccountRequiredPage extends StatelessWidget {
                 Text(
                   'You can keep using the map without an account. Sign in or create an account when you want to access your $feature.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
+                  style: TextStyle(color: scheme.onSurfaceVariant, height: 1.4),
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
@@ -424,72 +421,7 @@ class _ProfilePage extends StatelessWidget {
                     itemCount: pins.length,
                     itemBuilder: (context, index) {
                       final pin = pins[index];
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.image,
-                                      size: 40,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      pin.placeName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      pin.address,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
+                      return _MemoryPhotoCard(pin: pin);
                     },
                   );
                 },
@@ -556,6 +488,168 @@ class _StatItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MemoryPhotoCard extends StatefulWidget {
+  final MemoryPin pin;
+
+  const _MemoryPhotoCard({required this.pin});
+
+  @override
+  State<_MemoryPhotoCard> createState() => _MemoryPhotoCardState();
+}
+
+class _MemoryPhotoCardState extends State<_MemoryPhotoCard> {
+  bool _isDeleting = false;
+
+  Future<void> _deletePhoto() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete memory photo?'),
+        content: Text(
+          'This will permanently remove the photo for ${widget.pin.placeName}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      await MemoryPinService.deletePin(widget.pin.id);
+      if (mounted) _showMessage('Memory photo deleted.');
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while deleting a memory photo'),
+        ),
+      );
+      if (mounted) {
+        final message =
+            error.toString().contains('Memory removed from your account')
+            ? 'The memory was removed, but its stored photo could not be deleted. Contact support.'
+            : 'Could not delete the memory photo. Please try again.';
+        _showMessage(message);
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: colorScheme.primaryContainer,
+                    child: widget.pin.imageUrl.isEmpty
+                        ? Center(
+                            child: Icon(
+                              Icons.image,
+                              size: 40,
+                              color: colorScheme.primary,
+                            ),
+                          )
+                        : Image.network(
+                            widget.pin.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                size: 40,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Delete memory photo',
+                      onPressed: _isDeleting ? null : _deletePhoto,
+                      icon: _isDeleting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.pin.placeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.pin.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

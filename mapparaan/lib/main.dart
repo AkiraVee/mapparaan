@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'services/commuter_preference_service.dart';
+import 'services/memory_pin_service.dart';
 import 'screens/home_screen.dart';
+import 'constants.dart';
 
 // Global reference for Supabase queries
 final supabase = Supabase.instance.client;
@@ -12,12 +15,25 @@ final supabase = Supabase.instance.client;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load client configuration before initializing Supabase.
+  await dotenv.load(fileName: '.env');
+
   await Supabase.initialize(
-    url: 'https://ghrtgzqtucifnzmfmfjw.supabase.co', // Changed the 'q' to a 'g'
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocnRnenF0dWNpZm56bWZtZmp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTc2MTksImV4cCI6MjEwODE3MzYxOX0.HQMIyN5pYE3BrQmLvClZD8MWXKaPezG9SVFew8kpheo',
+    url: AppConstants.supabaseUrl,
+    publishableKey: AppConstants.supabaseClientKey,
   );
 
-  await CommuterPreferencesService.load();
+  try {
+    await CommuterPreferencesService.load();
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        context: ErrorDescription('while loading initial commuter preferences'),
+      ),
+    );
+  }
   runApp(const MyApp());
 }
 
@@ -103,13 +119,20 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    _loadMemoryPins();
     _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.signedOut) {
-        CommuterPreferencesService.current.value =
-            const CommuterPreferences();
+        CommuterPreferencesService.current.value = const CommuterPreferences();
+        MemoryPinService.pins.value = [];
         return;
       }
-      if (state.session != null) _loadUserPreferences();
+      if (state.session != null) {
+        _loadUserPreferences();
+        if (state.event == AuthChangeEvent.initialSession ||
+            state.event == AuthChangeEvent.signedIn) {
+          _loadMemoryPins();
+        }
+      }
     });
   }
 
@@ -122,6 +145,20 @@ class _AuthGateState extends State<AuthGate> {
           exception: error,
           stack: stackTrace,
           context: ErrorDescription('while loading commuter preferences'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadMemoryPins() async {
+    try {
+      await MemoryPinService.loadMemoryPins();
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while loading memory photos'),
         ),
       );
     }
