@@ -17,16 +17,18 @@
   },
   "modes": {
     "jeepney": {
-      "verified": false,
-      "base_fare": 13.0,
+      "verified": "provisional",
+      "base_fare": 14.0,
       "base_km": 4,
-      "per_km": 1.8
+      "per_km": 2.0,
+      "note": "Traditional jeepney, LTFRB provisional fare eff. 2026-03-19 (Philstar 2026-03-18). base_km is an assumption. Modern jeepney: 17.00 + 2.40/km."
     },
     "bus": {
-      "verified": false,
-      "base_fare": 13.0,
+      "verified": "provisional",
+      "base_fare": 15.0,
       "base_km": 5,
-      "per_km": 2.25
+      "per_km": 2.49,
+      "note": "Ordinary bus, LTFRB provisional fare eff. 2026-03-19. Aircon: 18.00 + 2.98/km. Feed cannot tell ordinary from aircon. base_km is an assumption."
     },
     "uv_express": {
       "verified": false,
