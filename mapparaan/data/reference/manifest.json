@@ -1,7 +1,7 @@
 {
   "built_on": "2026-10-22",
   "source": "https://github.com/sakayph/gtfs (DOTC data, ~2013-15)",
-  "clipped_to": "City of Manila (PSGC 1380600000), faeldon/philippines-json-maps 2023",
+  "clipped_to": "City of Manila (PSGC 1380600000), faeldon/philippines-json-maps 2023; stops within 50 m of the boundary kept unless named for another city",
   "calendar_patched_to": [
     "20200101",
     "20351231"
@@ -18,17 +18,18 @@
     "agency.txt": 3,
     "calendar.txt": 8,
     "feed_info.txt": 1,
-    "frequencies.txt": 672,
+    "frequencies.txt": 671,
     "routes.txt": 600,
     "shapes.txt": 233,
-    "stop_times.txt": 11252,
-    "stops.txt": 540,
-    "trips.txt": 672
+    "stop_times.txt": 11256,
+    "stops.txt": 543,
+    "trips.txt": 671
   },
   "known_gaps": [
     "No road geometry for jeepney/bus routes (only 10 shapes)",
     "No UV Express routes",
     "No fares in GTFS; fare_config.json values are placeholders",
     "Schedules are headway-based and approximate"
-  ]
+  ],
+  "stop_edge_tolerance_m": 50
 }

@@ -10,7 +10,15 @@ to that backend, not to these files directly.
 of Manila boundary (`reference/manila_boundary.geojson`, PSGC 1380600000,
 from faeldon/philippines-json-maps, 2023, MIT):
 
-- a stop is kept only if it is inside the boundary (real polygon, not a box)
+- a stop is kept if it is inside the boundary (real polygon, not a box) **or within
+  50 m of its edge** (`--tolerance-m`, default 50). Source coordinates are rounded to
+  about 3 decimals (up to ~55 m error), so a stop on the city line can land just
+  outside the polygon: a strict test wrongly dropped "Bonifacio Dr, Manila",
+  "Halcon / Florentino Intersection, Manila" and "Roxas Blvd / Pablo Ocampo Sr.,
+  Manila", and split a North Harbor trip in two. A stop in that 50 m band is skipped
+  if its name names another city (e.g. "Quezon City"). Names are never used to add a
+  stop or to drop one inside the polygon. `--tolerance-m 0` gives a strict test.
+  Stops 50-250 m outside are listed in `tools`' `--review-csv` output for manual review
 - each trip is cut into runs of consecutive inside-stops; a trip that leaves and
   re-enters becomes two trips (`_a`, `_b`); runs under 2 stops are dropped
 - shapes are cut to the inside part
@@ -19,7 +27,7 @@ from faeldon/philippines-json-maps, 2023, MIT):
   the coordinates are inside the boundary (border stops such as LRT Roosevelt-side
   stations)
 
-Result: 540 stops, 600 routes (561 jeepney, 36 bus, LRT-1, LRT-2, PNR), 672 trips.
+Result: 543 stops, 600 routes (561 jeepney, 36 bus, LRT-1, LRT-2, PNR), 671 trips.
     
 ## Layout
 
@@ -31,9 +39,9 @@ data/
 ├── gtfs/                     patched, standard GTFS files only
 │   ├── agency.txt            3 agencies (LRTA, LTFRB, PNR)
 │   ├── routes.txt            600 routes
-│   ├── trips.txt             672 trips
-│   ├── stops.txt             540 stops
-│   ├── stop_times.txt        11,252 rows (times relative to trip start)
+│   ├── trips.txt             671 trips
+│   ├── stops.txt             543 stops
+│   ├── stop_times.txt        11,256 rows (times relative to trip start)
 │   ├── frequencies.txt       headway-based service (no fixed timetables)
 │   ├── calendar.txt          8 service patterns
 │   ├── shapes.txt            7 shapes (rail + 1 route), clipped
@@ -54,8 +62,14 @@ at any time. Hand edits belong in the script, not in the generated files.
 ## Rebuild
 
 ```
-python3 tools/patch_gtfs.py data/raw/sakay_gtfs data data/reference/manila_boundary.geojson
+# 1. patch the full feed (calendar dates + route_short_name, see "Patches" below),
+#    then clip it to Manila:
+python3 tools/clip_gtfs.py <patched_full_feed_dir> data/reference/manila_boundary.geojson data/gtfs
+# options:  --tolerance-m 50 (default; 0 = strict polygon)   --review-csv stops_to_review.csv
 ```
+
+`clip_gtfs.py` expects the already-patched full Metro Manila feed as input. With
+`--tolerance-m 0` it reproduces the previous 540-stop / 672-trip feed exactly.
 
 ## Schemas
 
