@@ -1,30 +1,29 @@
 {
-  "built_on": "2026-10-19",
+  "built_on": "2026-10-22",
   "source": "https://github.com/sakayph/gtfs (DOTC data, ~2013-15)",
+  "clipped_to": "City of Manila (PSGC 1380600000), faeldon/philippines-json-maps 2023",
   "calendar_patched_to": [
     "20200101",
     "20351231"
   ],
-  "services": 20,
+  "services": 8,
   "routes_by_mode": {
     "lrt1": 1,
     "lrt2": 1,
-    "bus": 189,
-    "jeepney": 1522,
-    "mrt3": 1,
-    "pnr": 1,
-    "fort_bus": 2
+    "bus": 36,
+    "jeepney": 561,
+    "pnr": 1
   },
   "rows": {
-    "agency.txt": 6,
-    "calendar.txt": 20,
+    "agency.txt": 3,
+    "calendar.txt": 8,
     "feed_info.txt": 1,
-    "frequencies.txt": 1864,
-    "routes.txt": 1717,
-    "shapes.txt": 520,
-    "stop_times.txt": 79414,
-    "stops.txt": 4858,
-    "trips.txt": 1864
+    "frequencies.txt": 672,
+    "routes.txt": 600,
+    "shapes.txt": 233,
+    "stop_times.txt": 11252,
+    "stops.txt": 540,
+    "trips.txt": 672
   },
   "known_gaps": [
     "No road geometry for jeepney/bus routes (only 10 shapes)",

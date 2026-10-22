@@ -1,8 +1,26 @@
 # Mapparaan transit data
 
-Static, schedule-based transit data for Metro Manila. This folder is read by the
-routing backend (OpenTripPlanner + fare engine), not by the Flutter app directly.
+Static, schedule-based transit data **for the City of Manila only**. The routing
+backend (`backend/planner`) reads `gtfs/` and `reference/`; the Flutter app talks
+to that backend, not to these files directly.
 
+## Scope: City of Manila
+
+`raw/` keeps the full Metro Manila feed. `gtfs/` is clipped to the official City
+of Manila boundary (`reference/manila_boundary.geojson`, PSGC 1380600000,
+from faeldon/philippines-json-maps, 2023, MIT):
+
+- a stop is kept only if it is inside the boundary (real polygon, not a box)
+- each trip is cut into runs of consecutive inside-stops; a trip that leaves and
+  re-enters becomes two trips (`_a`, `_b`); runs under 2 stops are dropped
+- shapes are cut to the inside part
+- MRT-3 does not enter the City of Manila, so it is not in the feed
+- some LTFRB stop names say Quezon City / Caloocan: those are LTFRB's labels,
+  the coordinates are inside the boundary (border stops such as LRT Roosevelt-side
+  stations)
+
+Result: 540 stops, 600 routes (561 jeepney, 36 bus, LRT-1, LRT-2, PNR), 672 trips.
+    
 ## Layout
 
 ```
@@ -11,16 +29,17 @@ data/
 ├── raw/
 │   └── sakay_gtfs/           UNTOUCHED copy of the source feed (incl. LICENSE.md)
 ├── gtfs/                     patched, standard GTFS files only
-│   ├── agency.txt            6 agencies (LRTA, LTFRB, MRTC, MARINA, PNR, Fort Bus)
-│   ├── routes.txt            1,717 routes
-│   ├── trips.txt             1,864 trips
-│   ├── stops.txt             4,858 stops
-│   ├── stop_times.txt        79,414 rows (times relative to trip start)
+│   ├── agency.txt            3 agencies (LRTA, LTFRB, PNR)
+│   ├── routes.txt            600 routes
+│   ├── trips.txt             672 trips
+│   ├── stops.txt             540 stops
+│   ├── stop_times.txt        11,252 rows (times relative to trip start)
 │   ├── frequencies.txt       headway-based service (no fixed timetables)
-│   ├── calendar.txt          20 service patterns
-│   ├── shapes.txt            only 10 shapes (rail + 2 routes)
+│   ├── calendar.txt          8 service patterns
+│   ├── shapes.txt            7 shapes (rail + 1 route), clipped
 │   └── feed_info.txt
 ├── reference/                Mapparaan's own data (NOT part of GTFS)
+│   ├── manila_boundary.geojson  City of Manila polygon used for clipping
 │   ├── route_modes.csv       route_id -> mode
 │   ├── fare_config.json      fare rules + discounts
 │   └── manifest.json         row counts and build info
@@ -35,7 +54,7 @@ at any time. Hand edits belong in the script, not in the generated files.
 ## Rebuild
 
 ```
-python3 tools/patch_gtfs.py data/raw/sakay_gtfs data
+python3 tools/patch_gtfs.py data/raw/sakay_gtfs data data/reference/manila_boundary.geojson
 ```
 
 ## Schemas
@@ -47,7 +66,7 @@ python3 tools/patch_gtfs.py data/raw/sakay_gtfs data
 | route_id | matches `routes.txt` |
 | mode | `jeepney`, `bus`, `lrt1`, `lrt2`, `mrt3`, `pnr`, `fort_bus` (`uv_express` reserved, none in data yet) |
 
-Mode comes from LTFRB's route codes: `PUJ` = jeepney (1,522), `PUB` = bus (189).
+Mode comes from LTFRB's route codes: `PUJ` = jeepney (561 here), `PUB` = bus (36 here).
 
 **reference/fare_config.json**
 
