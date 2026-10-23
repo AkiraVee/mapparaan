@@ -187,7 +187,14 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _serverErrorMessage = result?.message ?? 'The route planner is temporarily unavailable. Showing an estimated route.';
     }
 
-    if (result != null && result.options.isEmpty && !result.isServerError) {
+    // Some API versions return an empty options list without a reason. Treat
+    // that as an unavailable/insufficient planner response and use the same
+    // fallback route as an API error. Only an explicit service-area response
+    // should intentionally leave the result list empty.
+    if (result != null &&
+        result.options.isEmpty &&
+        !result.isServerError &&
+        result.isOutsideServiceArea) {
       setState(() {
         _isOfflineFallback = false;
         if (result.isOutsideServiceArea) {
@@ -203,6 +210,13 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         _isLoadingRoute = false;
       });
       return;
+    }
+
+    if (result != null &&
+        result.options.isEmpty &&
+        !result.isServerError &&
+        !result.isOutsideServiceArea) {
+      _serverErrorMessage = 'The transit planner returned no route data. Showing an estimated route.';
     }
 
     final realPlans = result?.options;
