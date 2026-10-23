@@ -8,9 +8,6 @@ import '../services/ai_assistant_service.dart';
 import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
-import '../services/saved_commute_service.dart';
-import '../services/last_route_service.dart';
-import '../services/local_ui_preferences_service.dart';
 import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
@@ -39,31 +36,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
 
   LatLng? _userLocation;
-  final RoutePreference _homePreference = RoutePreference.fastest;
-  List<SavedCommute> _savedCommutes = const [];
-  LocalUiPreferences _localPreferences = const LocalUiPreferences();
 
   @override
   void initState() {
     super.initState();
     _initUserLocation();
-    _loadSavedCommutes();
-    _loadLocalPreferences();
-  }
-
-  Future<void> _loadLocalPreferences() async {
-    final preferences = await LocalUiPreferencesService.load();
-    if (mounted) setState(() => _localPreferences = preferences);
-  }
-
-  Future<void> _saveLocalPreferences(LocalUiPreferences preferences) async {
-    await LocalUiPreferencesService.save(preferences);
-    if (mounted) setState(() => _localPreferences = preferences);
-  }
-
-  Future<void> _loadSavedCommutes() async {
-    final saved = await SavedCommuteService.load();
-    if (mounted) setState(() => _savedCommutes = saved);
   }
 
   Future<void> _initUserLocation() async {
@@ -117,8 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _selectPlace(
@@ -134,313 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => LocationDetailsScreen(
           place: place,
           userLocation: _userLocation,
-          initialPreference: preference ?? _homePreference,
+          initialPreference: preference ?? RoutePreference.fastest,
           passengerType: passengerType ?? PassengerType.general,
-          localPreferences: _localPreferences,
         ),
       ),
     );
 
     if (!mounted) return;
     _searchController.clear();
-  }
-
-  Future<void> _openSavedCommute(SavedCommute commute) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LocationDetailsScreen(
-          place: PlaceResult(
-            name: commute.destinationName,
-            subtitle: commute.originName,
-            coordinates: commute.destination,
-          ),
-          userLocation: commute.origin,
-          origin: commute.originName,
-          initialPreference: commute.preference,
-          passengerType: commute.passengerType,
-          localPreferences: _localPreferences,
-        ),
-      ),
-    );
-    if (mounted) _loadSavedCommutes();
-  }
-
-  Future<void> _showLocalTools() async {
-    var sheetPreferences = _localPreferences;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          final preferences = sheetPreferences;
-
-          Future<void> update(LocalUiPreferences next) async {
-            sheetPreferences = next;
-            setSheetState(() {});
-            await _saveLocalPreferences(next);
-          }
-
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Commute tools',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Close',
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(sheetContext),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'These settings are saved on this device and do not change transit data.',
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile.adaptive(
-                    title: const Text('Senior-friendly mode'),
-                    subtitle: const Text('Larger controls and simpler choices'),
-                    value: preferences.seniorMode,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(seniorMode: value)),
-                  ),
-                  SwitchListTile.adaptive(
-                    title: const Text('Simple-words mode'),
-                    subtitle: const Text('Use shorter labels and explanations'),
-                    value: preferences.simpleWords,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(simpleWords: value)),
-                  ),
-                  SwitchListTile.adaptive(
-                    title: const Text('Data-saver mode'),
-                    subtitle: const Text('Reduce map detail and image loading'),
-                    value: preferences.dataSaver,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(dataSaver: value)),
-                  ),
-                  SwitchListTile.adaptive(
-                    title: const Text('Accessible-route preference'),
-                    subtitle: const Text('Prefer routes marked as accessible'),
-                    value: preferences.accessibleOnly,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(accessibleOnly: value)),
-                  ),
-                  SwitchListTile.adaptive(
-                    title: const Text('Avoid stairs'),
-                    value: preferences.avoidStairs,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(avoidStairs: value)),
-                  ),
-                  SwitchListTile.adaptive(
-                    title: const Text('Avoid flood-prone areas'),
-                    subtitle: const Text(
-                      'Requires advisory data when available',
-                    ),
-                    value: preferences.avoidFloods,
-                    onChanged: (value) =>
-                        update(preferences.copyWith(avoidFloods: value)),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Language'),
-                    subtitle: const Text('UI translation preference'),
-                    trailing: DropdownButton<String>(
-                      value: preferences.language,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'English',
-                          child: Text('English'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Filipino',
-                          child: Text('Filipino'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          update(preferences.copyWith(language: value));
-                        }
-                      },
-                    ),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Walking-distance limit'),
-                    subtitle: Text(
-                      preferences.walkingLimitKm == null
-                          ? 'No limit set'
-                          : '${preferences.walkingLimitKm!.toStringAsFixed(1)} km maximum',
-                    ),
-                    trailing: PopupMenuButton<double?>(
-                      tooltip: 'Set walking limit',
-                      initialValue: preferences.walkingLimitKm,
-                      onSelected: (value) =>
-                          update(preferences.copyWith(walkingLimitKm: value)),
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: null, child: Text('No limit')),
-                        PopupMenuItem(value: 0.5, child: Text('0.5 km')),
-                        PopupMenuItem(value: 1.0, child: Text('1.0 km')),
-                        PopupMenuItem(value: 2.0, child: Text('2.0 km')),
-                      ],
-                      child: const Icon(Icons.tune),
-                    ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.calculate_outlined),
-                    title: const Text('Offline budget insights'),
-                    subtitle: const Text('Use the last saved route estimate'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _showBudgetInsights();
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.alt_route),
-                    title: const Text('Draft a multi-stop trip'),
-                    subtitle: const Text(
-                      'Prepare stops before route support is available',
-                    ),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _showMultiStopDraft();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _showBudgetInsights() async {
-    final cached = await LastRouteService.load();
-    if (!mounted) return;
-    if (cached == null) {
-      _showMessage('Plan and save a route first to see budget insights.');
-      return;
-    }
-    final fare = cached.option.effectiveFare(PassengerType.general);
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Offline budget insights'),
-        content: Text(
-          'Based on the last saved estimate:\n\n'
-          'Daily return commute: ₱${(fare * 2).toStringAsFixed(2)}\n'
-          'Monthly estimate (22 days): ₱${(fare * 2 * 22).toStringAsFixed(2)}\n\n'
-          'This is an estimate. Verify the fare before travelling.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showMultiStopDraft() async {
-    final stopController = TextEditingController();
-    final stops = <String>[];
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Multi-stop trip draft'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Add stops in visit order.'),
-                ),
-                const SizedBox(height: 8),
-                ...stops.asMap().entries.map(
-                  (entry) => ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      radius: 12,
-                      child: Text('${entry.key + 1}'),
-                    ),
-                    title: Text(entry.value),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () =>
-                          setDialogState(() => stops.removeAt(entry.key)),
-                    ),
-                  ),
-                ),
-                TextField(
-                  controller: stopController,
-                  textInputAction: TextInputAction.done,
-                  decoration: InputDecoration(
-                    labelText: stops.isEmpty
-                        ? 'First stop'
-                        : 'Add another stop',
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: () {
-                        final value = stopController.text.trim();
-                        if (value.isEmpty) return;
-                        setDialogState(() {
-                          stops.add(value);
-                          stopController.clear();
-                        });
-                      },
-                    ),
-                  ),
-                  onSubmitted: (_) {
-                    final value = stopController.text.trim();
-                    if (value.isEmpty) return;
-                    setDialogState(() {
-                      stops.add(value);
-                      stopController.clear();
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: stops.length < 2
-                  ? null
-                  : () {
-                      Navigator.pop(dialogContext);
-                      _showMessage(
-                        'Trip draft saved for ${stops.length} stops. Route calculation will be available when multi-stop planning is connected.',
-                      );
-                    },
-              child: const Text('Save draft'),
-            ),
-          ],
-        ),
-      ),
-    );
-    stopController.dispose();
   }
 
   Future<void> _goToSearchScreen([String? prefilledQuery]) async {
@@ -561,11 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 30,
-                    ),
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -585,11 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-
+        
         return StatefulBuilder(
           builder: (context, setState) {
             final currentPin = album[currentIndex];
-
+            
             return AlertDialog(
               contentPadding: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,
@@ -602,20 +275,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: Text(
                       currentPin.placeName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (album.length > 1)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
@@ -643,8 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         PageView.builder(
                           controller: pageController,
                           itemCount: album.length,
-                          onPageChanged: (index) =>
-                              setState(() => currentIndex = index),
+                          onPageChanged: (index) => setState(() => currentIndex = index),
                           itemBuilder: (context, index) {
                             final pin = album[index];
                             return GestureDetector(
@@ -666,16 +332,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : Image.network(
                                         pin.imageUrl,
                                         fit: BoxFit.cover,
-                                        loadingBuilder:
-                                            (context, child, progress) {
-                                              if (progress == null) {
-                                                return child;
-                                              }
-                                              return const Center(
-                                                child:
-                                                    CircularProgressIndicator(),
-                                              );
-                                            },
+                                        loadingBuilder: (context, child, progress) {
+                                          if (progress == null) return child;
+                                          return const Center(child: CircularProgressIndicator());
+                                        },
                                         errorBuilder: (_, _, _) => Center(
                                           child: Icon(
                                             Icons.broken_image_outlined,
@@ -688,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                         ),
-
+                        
                         // Navigation Arrows
                         if (album.length > 1) ...[
                           if (currentIndex > 0)
@@ -699,15 +359,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: CircleAvatar(
                                   backgroundColor: Colors.black45,
                                   child: IconButton(
-                                    icon: const Icon(
-                                      Icons.chevron_left,
-                                      color: Colors.white,
-                                    ),
+                                    icon: const Icon(Icons.chevron_left, color: Colors.white),
                                     onPressed: () {
                                       pageController.previousPage(
-                                        duration: const Duration(
-                                          milliseconds: 300,
-                                        ),
+                                        duration: const Duration(milliseconds: 300),
                                         curve: Curves.easeInOut,
                                       );
                                     },
@@ -723,15 +378,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: CircleAvatar(
                                   backgroundColor: Colors.black45,
                                   child: IconButton(
-                                    icon: const Icon(
-                                      Icons.chevron_right,
-                                      color: Colors.white,
-                                    ),
+                                    icon: const Icon(Icons.chevron_right, color: Colors.white),
                                     onPressed: () {
                                       pageController.nextPage(
-                                        duration: const Duration(
-                                          milliseconds: 300,
-                                        ),
+                                        duration: const Duration(milliseconds: 300),
                                         curve: Curves.easeInOut,
                                       );
                                     },
@@ -748,19 +398,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                        Icon(Icons.location_on_outlined, size: 18, color: colorScheme.onSurfaceVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             currentPin.address,
-                            style: TextStyle(
-                              color: colorScheme.onSurfaceVariant,
-                              fontSize: 13,
-                            ),
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -774,10 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Close',
-                    style: TextStyle(color: colorScheme.onSurfaceVariant),
-                  ),
+                  child: Text('Close', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.add_a_photo_outlined, size: 18),
@@ -797,9 +437,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
                   icon: const Icon(Icons.directions, size: 18),
                   label: const Text('Go Here'),
@@ -832,11 +470,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ValueListenableBuilder<List<MemoryPin>>(
               valueListenable: MemoryPinService.pins,
               builder: (context, memoryPins, _) {
-                final visibleMemoryPins = _localPreferences.dataSaver
-                    ? const <MemoryPin>[]
-                    : memoryPins;
+                
                 final albumsMap = <String, List<MemoryPin>>{};
-                for (final pin in visibleMemoryPins) {
+                for (final pin in memoryPins) {
                   albumsMap.putIfAbsent(pin.placeName, () => []).add(pin);
                 }
                 final albums = albumsMap.values.toList();
@@ -887,11 +523,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-
+                    
                     if (albums.isNotEmpty)
                       MarkerLayer(
                         markers: albums.map((album) {
-                          final latestPin = album.last;
+                          final latestPin = album.last; 
                           return Marker(
                             point: latestPin.coordinates,
                             width: 52,
@@ -905,9 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Icon(
                                     Icons.location_on,
                                     size: 52,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                                   Positioned(
                                     top: 5,
@@ -915,14 +549,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                       width: 25,
                                       height: 25,
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
+                                        color: Theme.of(context).colorScheme.surface,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface,
+                                          color: Theme.of(context).colorScheme.surface,
                                           width: 2,
                                         ),
                                       ),
@@ -931,9 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ? Icon(
                                               Icons.photo,
                                               size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
+                                              color: Theme.of(context).colorScheme.primary,
                                             )
                                           : Image.network(
                                               latestPin.imageUrl,
@@ -941,9 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               errorBuilder: (_, _, _) => Icon(
                                                 Icons.photo,
                                                 size: 16,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
+                                                color: Theme.of(context).colorScheme.primary,
                                               ),
                                             ),
                                     ),
@@ -960,9 +586,7 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           else
             Positioned.fill(
-              child: ColoredBox(
-                color: Theme.of(context).scaffoldBackgroundColor,
-              ),
+              child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
             ),
 
           SafeArea(
@@ -990,8 +614,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  CircleIconButton(icon: Icons.tune, onTap: _showLocalTools),
-                  const SizedBox(width: 6),
                   CircleIconButton(
                     icon: Icons.my_location,
                     onTap: _goToMyLocation,
@@ -1000,58 +622,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
-          if (_savedCommutes.isNotEmpty)
-            Positioned(
-              top: 88,
-              left: 16,
-              right: 16,
-              child: Card(
-                elevation: 4,
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.route_outlined, size: 18),
-                          const SizedBox(width: 6),
-                          const Expanded(
-                            child: Text(
-                              'Saved commutes',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Refresh saved commutes',
-                            icon: const Icon(Icons.refresh, size: 18),
-                            onPressed: _loadSavedCommutes,
-                          ),
-                        ],
-                      ),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: _savedCommutes.take(3).map((commute) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                avatar: const Icon(Icons.play_arrow, size: 16),
-                                label: Text(commute.label),
-                                onPressed: () => _openSavedCommute(commute),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
           Align(
             alignment: Alignment.bottomCenter,
@@ -1062,8 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: _bottomAskController,
                   hintText: 'Ask MapParaan',
                   onTap: () => _goToSearchScreen(_bottomAskController.text),
-                  onLeadingTap: () =>
-                      _goToSearchScreen(_bottomAskController.text),
+                  onLeadingTap: () => _goToSearchScreen(_bottomAskController.text),
                   onSubmitted: _handleAiQuery,
                 ),
               ),
