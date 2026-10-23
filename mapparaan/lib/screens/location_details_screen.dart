@@ -193,10 +193,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
     final realPlans = result?.options;
     if (realPlans != null && realPlans.isNotEmpty) {
-      final matching = realPlans.where(
-        (o) => o.routePreference == _selectedPreference,
-      );
-      final selected = matching.isNotEmpty ? matching.first : realPlans.first;
+      // Never pick the walk-only option as "Fastest" (or any tab). Walk-only
+      // trips have no transit option, so fall back to the first option.
+      final selected =
+          TransitPlanOption.pickForPreference(realPlans, _selectedPreference) ??
+          realPlans.first;
       final points = selected.allPoints;
 
       setState(() {
@@ -241,12 +242,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         final offlineOptions = cachedFallbackOptions.isNotEmpty
             ? cachedFallbackOptions
             : [cachedOption];
-        final matching = offlineOptions.where(
-          (option) => option.routePreference == _selectedPreference,
-        );
-        final selected = matching.isNotEmpty
-            ? matching.first
-            : offlineOptions.first;
+        final selected =
+            TransitPlanOption.pickForPreference(
+              offlineOptions,
+              _selectedPreference,
+            ) ??
+            offlineOptions.first;
         final selectedPoints = selected.allPoints.isNotEmpty
             ? selected.allPoints
             : cachedPoints;
@@ -338,11 +339,14 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   }
 
   void _selectPreference(RoutePreference preference) {
-    if (preference == _selectedPreference) return;
+    // The walk-only card is not one of the three tabs, so tapping the tab that
+    // already looks active must still switch away from a selected walk card.
+    final walkSelected = _selectedOption?.isWalkOption ?? false;
+    if (preference == _selectedPreference && !walkSelected) return;
     setState(() => _selectedPreference = preference);
 
     final matching = _routeOptions.where(
-      (o) => o.routePreference == preference,
+      (o) => !o.isWalkOption && o.routePreference == preference,
     );
     if (matching.isNotEmpty) {
       _selectOption(matching.first);
@@ -393,7 +397,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   void _selectOption(TransitPlanOption option) {
     setState(() {
       _selectedOption = option;
-      _selectedPreference = option.routePreference;
+      if (!option.isWalkOption) {
+        _selectedPreference = option.routePreference;
+      }
       _routePoints = option.allPoints;
     });
 

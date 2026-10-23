@@ -252,7 +252,16 @@ class TransitPlanOption {
       ? (((fare - fareDiscounted) / fare) * 100).round().clamp(0, 100).toInt()
       : 0;
 
-  /// Maps string preference to RoutePreference enum
+  /// True for the walk-only option the server adds when the trip is short.
+  /// It is not one of the three route goals, so it must never be treated as
+  /// the "Fastest" transit route.
+  bool get isWalkOption => preference.toLowerCase() == 'walk';
+
+  /// Maps string preference to RoutePreference enum.
+  ///
+  /// The walk option has no enum value of its own, so it returns `fastest`
+  /// here only to satisfy the return type. Do NOT use this getter to pick an
+  /// option for a preference: use [pickForPreference], which skips walk options.
   RoutePreference get routePreference {
     switch (preference.toLowerCase()) {
       case 'cheapest':
@@ -261,9 +270,24 @@ class TransitPlanOption {
       case 'fewest':
         return RoutePreference.fewestTransfers;
       case 'fastest':
+      case 'walk':
       default:
         return RoutePreference.fastest;
     }
+  }
+
+  /// Picks the option for [wanted] from [options], ignoring the walk-only
+  /// option. Falls back to the first transit option, then null (walk-only
+  /// trips have no transit option to pick).
+  static TransitPlanOption? pickForPreference(
+    List<TransitPlanOption> options,
+    RoutePreference wanted,
+  ) {
+    final transit = options.where((o) => !o.isWalkOption).toList();
+    for (final o in transit) {
+      if (o.routePreference == wanted) return o;
+    }
+    return transit.isEmpty ? null : transit.first;
   }
 
   /// All consecutive points forming the path for map rendering
