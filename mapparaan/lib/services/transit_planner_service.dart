@@ -13,6 +13,11 @@ import 'route_planner_service.dart';
 /// Reason the planner API sends when a trip is outside the City of Manila.
 const String outsideServiceAreaReason = 'outside_service_area';
 
+/// Set by the app (not the server) when the planner answered with an HTTP error.
+/// This is different from "unreachable": the server is up but could not plan the
+/// trip, so the app shows an error instead of sample routes.
+const String serverErrorReason = 'server_error';
+
 /// Formats a peso amount without the currency sign: whole pesos as "18",
 /// otherwise two decimals ("21.75", "14.50").
 String formatPesoPlain(num amount) {
@@ -373,6 +378,7 @@ class TransitPlanResult {
   const TransitPlanResult({this.options = const [], this.reason, this.message});
 
   bool get isOutsideServiceArea => reason == outsideServiceAreaReason;
+  bool get isServerError => reason == serverErrorReason;
 }
 
 /// Service that coordinates with the backend transit planner API,
@@ -384,9 +390,11 @@ class TransitPlannerService {
   static String get effectiveBaseUrl {
     final configured = AppConstants.transitApiBaseUrl.trim();
     if (configured.isEmpty) return '';
-    // In web browsers, 10.0.2.2 cannot be reached; translate to localhost automatically
+    // In web browsers, 10.0.2.2 cannot be reached; translate to the loopback
+    // address. 127.0.0.1 rather than "localhost": on Windows "localhost" can try
+    // IPv6 first, and each request then waits for a timeout before IPv4 is used.
     if (kIsWeb && configured.contains('10.0.2.2')) {
-      return configured.replaceAll('10.0.2.2', 'localhost');
+      return configured.replaceAll('10.0.2.2', '127.0.0.1');
     }
     return configured;
   }
@@ -413,12 +421,14 @@ class TransitPlannerService {
       avoidModes: avoidModes,
       timeout: timeout,
     );
-    return result?.options;
+    if (result == null || result.isServerError) return null;
+    return result.options;
   }
 
   /// Like [planTransit], but also reports the server's reason when it returns
-  /// no options (for example [outsideServiceAreaReason]). Returns `null` only
-  /// when the API is offline or unreachable.
+  /// no options (for example [outsideServiceAreaReason], or [serverErrorReason]
+  /// when the server answered with an HTTP error). Returns `null` only when the
+  /// API is offline or unreachable.
   static Future<TransitPlanResult?> planTransitResult({
     required LatLng origin,
     required LatLng destination,
@@ -447,7 +457,10 @@ class TransitPlannerService {
           .timeout(timeout);
       if (response.statusCode != 200) {
         debugPrint('Transit planner API returned HTTP ${response.statusCode}');
-        return null;
+        return const TransitPlanResult(
+          reason: serverErrorReason,
+          message: 'The route planner ran into a problem. Please try again.',
+        );
       }
 
       final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));

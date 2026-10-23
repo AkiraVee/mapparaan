@@ -164,10 +164,43 @@ class FareTests(unittest.TestCase):
         f = self.p.leg_fares("lrt1", 3.0, "  central terminal  lrt", "BAMBANG LRT")
         self.assertEqual(f["fare"], 19.0)
 
-    def test_lrt2_table_lookup(self):
+    def test_lrt2_table_lookup_with_all_passenger_discount(self):
+        # DOTr 50% cut for everyone (since 2026-03-23): regular = the discounted matrix.
         f = self.p.leg_fares("lrt2", 3.0, "Recto LRT", "V. Mapa LRT")
-        self.assertEqual((f["fare"], f["fare_discounted"]), (18.0, 9.0))
+        self.assertEqual((f["fare"], f["fare_max"], f["fare_discounted"]), (9.0, 9.0, 9.0))
         self.assertFalse(f["estimated"])
+
+    def test_lrt2_full_fare_when_the_discount_is_switched_off(self):
+        import copy
+        cfg = json.load(open(os.path.join(DATA_DIR, "reference", "fare_config.json"), encoding="utf-8"))
+        cfg = copy.deepcopy(cfg)
+        cfg["modes"]["lrt2"]["temporary_discount"]["active"] = False
+        tmp = tempfile.mkdtemp(prefix="mapparaan_promo_")
+        try:
+            build_feed(tmp)
+            with open(os.path.join(tmp, "reference", "fare_config.json"), "w", encoding="utf-8") as fh:
+                json.dump(cfg, fh)
+            p = Planner(tmp)
+            f = p.leg_fares("lrt2", 3.0, "Recto LRT", "V. Mapa LRT")
+            self.assertEqual((f["fare"], f["fare_discounted"]), (18.0, 9.0))
+            self.assertNotIn("lrt2", p.promo_modes)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_lrt2_discount_ends_on_its_end_date(self):
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+        base = {"active": True, "regular_uses": "discounted"}
+        self.assertIsNone(Planner._active_promo({**base, "end_date": yesterday}))
+        self.assertIsNotNone(Planner._active_promo({**base, "end_date": tomorrow}))
+        self.assertIsNotNone(Planner._active_promo({**base, "end_date": None}))
+        self.assertIsNone(Planner._active_promo({**base, "active": False}))
+        self.assertIsNone(Planner._active_promo(None))
+
+    def test_lrt1_is_not_discounted_for_everyone(self):
+        f = self.p.leg_fares("lrt1", 3.0, "Central Terminal LRT", "Bambang LRT")
+        self.assertEqual((f["fare"], f["fare_discounted"]), (19.0, 9.5))
+        self.assertNotIn("lrt1", self.p.promo_modes)
 
     def test_rail_discount_is_half(self):
         r = self.p.rail["lrt1"]
@@ -216,6 +249,14 @@ class FareTests(unittest.TestCase):
         self.assertEqual((opt["fare"], opt["fare_max"], opt["fare_discounted"]), (19.0, 19.0, 9.5))
         self.assertFalse(opt["fare_estimated"])
         self.assertIn("Beep", opt["fare_source"])
+        self.assertNotIn("temporary", opt["fare_source"])
+
+    def test_plan_lrt2_option_mentions_the_temporary_discount(self):
+        origin, dest = (14.700, 121.000), (14.700, 121.030)
+        options = self.p.plan(origin, dest, when=WHEN)
+        opt = next(o for o in options if o["modes"] == ["lrt2"])
+        self.assertEqual((opt["fare"], opt["fare_discounted"]), (9.0, 9.0))
+        self.assertIn("temporary 50% discount", opt["fare_source"])
 
     def test_walk_only_option_is_free(self):
         options = self.p.plan((14.600, 120.980), (14.604, 120.980), when=WHEN)

@@ -254,6 +254,7 @@ class Planner:
         # Rail modes: station-to-station tables
         feed_names = {norm_name(n) for n in self.stop_name}
         self.rail = {}
+        self.promo_modes = {}
         for mode in sorted(RAIL_MODES):
             cfg = modes.get(mode)
             if not cfg or cfg.get("type") != "station_matrix":
@@ -272,6 +273,16 @@ class Planner:
                     f"{mode}: {len(missing)} fare-table stop name(s) not found in stops.txt: "
                     + ", ".join(missing))
             reg, dis = table["regular"], table["discounted"]
+            promo = self._active_promo(cfg.get("temporary_discount"))
+            if promo:
+                # A temporary discount for ALL passengers (e.g. the 2026 LRT-2 / MRT-3
+                # 50% cut): the regular fare is the discounted matrix.
+                reg = dis
+                self.promo_modes[mode] = promo
+                self.warnings.append(
+                    f"{mode}: temporary all-passenger discount is applied "
+                    f"(since {promo.get('effective', '?')}); set temporary_discount.active "
+                    f"to false in fare_config.json when it ends.")
             n = len(reg)
             off_r = [reg[i][j] for i in range(n) for j in range(n) if i != j and reg[i][j] is not None]
             off_d = [dis[i][j] for i in range(n) for j in range(n) if i != j and dis[i][j] is not None]
@@ -283,6 +294,22 @@ class Planner:
                 # search heuristic only (the real fare comes from the table afterwards)
                 "board": board, "per_stop": (max(off_r) - board) / max(1, n - 1),
             }
+
+    @staticmethod
+    def _active_promo(promo):
+        """The temporary_discount block if it is switched on and has not ended, else None."""
+        if not isinstance(promo, dict) or promo.get("active") is not True:
+            return None
+        if promo.get("regular_uses") != "discounted":
+            return None
+        end = promo.get("end_date")
+        if end:
+            try:
+                if datetime.date.today() > datetime.date.fromisoformat(end):
+                    return None
+            except ValueError:
+                return None
+        return promo
 
     def _search_cost(self, mode):
         """(boarding fee, per-km, per-stop) used only to rank routes for 'cheapest'."""
@@ -575,6 +602,10 @@ class Planner:
             source = "Walking: no fare."
         else:
             source = FARE_SOURCE_LABEL + (RAIL_FARE_NOTE if has_rail else "")
+            promo_modes = sorted({l["mode"] for l in rides if l["mode"] in self.promo_modes})
+            if promo_modes:
+                names = " and ".join(MODE_LABEL.get(m, m) for m in promo_modes)
+                source += f" {names} fares include the temporary 50% discount for all passengers."
         parts = []
         for l in legs:
             if l["type"] == "walk":

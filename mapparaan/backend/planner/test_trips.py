@@ -84,11 +84,13 @@ def build_trips(stations):
              modes_any={"lrt1"}, fare=17.0),
         dict(name="LRT-1 Pedro Gil > Abad Santos", a=st("Pedro Gil LRT"), b=st("Abad Santos LRT"),
              modes_any={"lrt1"}, fare=25.0),
-        # ── LRT-2, answers read from the LRT-2 station table ──
+        # ── LRT-2, answers read from the LRT-2 station table. These are the fares with the
+        #    DOTr 50% all-passenger discount (since 2026-03-23); without it they would be
+        #    P18 and P15. Switch off with temporary_discount.active in fare_config.json. ──
         dict(name="LRT-2 Recto > V. Mapa", a=st("Recto LRT"), b=st("V. Mapa LRT"),
-             modes_any={"lrt2"}, fare=18.0),
+             modes_any={"lrt2"}, fare=9.0),
         dict(name="LRT-2 Legarda > Pureza (adjacent)", a=st("Legarda LRT"), b=st("Pureza LRT"),
-             modes_any={"lrt2"}, fare=15.0),
+             modes_any={"lrt2"}, fare=7.5),
         # ── transfer between the two lines ──
         dict(name="Transfer LRT-1 > LRT-2 (Vito Cruz > V. Mapa)", a=st("Vito Cruz LRT"), b=st("V. Mapa LRT"),
              modes_any={"lrt1", "lrt2"}, want_transfer=True),

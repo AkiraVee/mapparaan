@@ -67,6 +67,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   /// Set when the server answered but found no transit route.
   bool _noRouteFound = false;
 
+  /// Set when the server answered with an error (it is up, but could not plan).
+  String? _serverErrorMessage;
+
   late RoutePreference _selectedPreference;
   late PassengerType _passengerType;
   DateTime? _departureTime;
@@ -150,6 +153,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     setState(() {
       _isLoadingRoute = true;
       _serviceAreaMessage = null;
+      _serverErrorMessage = null;
       _noRouteFound = false;
     });
 
@@ -168,7 +172,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (result != null && result.options.isEmpty) {
       setState(() {
         _isOfflineFallback = false;
-        if (result.isOutsideServiceArea) {
+        if (result.isServerError) {
+          _serverErrorMessage =
+              result.message ??
+              'The route planner ran into a problem. Please try again.';
+        } else if (result.isOutsideServiceArea) {
           _serviceAreaMessage =
               result.message ??
               'Mapparaan currently covers the City of Manila only.';
@@ -676,6 +684,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 isSaved: _isSaved,
                 isOfflineFallback: _isOfflineFallback,
                 serviceAreaMessage: _serviceAreaMessage,
+                serverErrorMessage: _serverErrorMessage,
                 noRouteFound: _noRouteFound,
                 selectedPreference: _selectedPreference,
                 passengerType: _passengerType,
@@ -710,6 +719,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final bool isSaved;
   final bool isOfflineFallback;
   final String? serviceAreaMessage;
+  final String? serverErrorMessage;
   final bool noRouteFound;
   final RoutePreference selectedPreference;
   final PassengerType passengerType;
@@ -734,6 +744,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.isSaved,
     required this.isOfflineFallback,
     required this.serviceAreaMessage,
+    required this.serverErrorMessage,
     required this.noRouteFound,
     required this.selectedPreference,
     required this.passengerType,
@@ -1302,6 +1313,11 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       icon: Icons.location_off_outlined,
                       text:
                           '${widget.serviceAreaMessage} Choose a start and destination inside the City of Manila.',
+                    ),
+                  if (widget.serverErrorMessage != null)
+                    _NoticeBanner(
+                      icon: Icons.error_outline,
+                      text: widget.serverErrorMessage!,
                     ),
                   if (widget.noRouteFound)
                     const _NoticeBanner(

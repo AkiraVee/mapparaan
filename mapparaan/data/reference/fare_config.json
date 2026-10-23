@@ -225,6 +225,15 @@
         }
       },
       "regular_effective": "2023-08-02",
+      "temporary_discount": {
+        "active": true,
+        "effective": "2026-03-23",
+        "end_date": null,
+        "applies_to": "all passengers (blue Beep card and single journey ticket)",
+        "regular_uses": "discounted",
+        "note": "DOTr 50% across-the-board discount on LRT-2 and MRT-3. While active, the regular fare is read from the 'discounted' matrices (stored value P6.50-P16.50, single journey P8-P18, the same ranges LRTA publishes). Students, seniors and PWDs keep the same 50% fare: sources say their existing discount remains in effect, but none says whether it stacks, so it is NOT stacked here. No end date was announced. Set active to false (or set end_date) when it ends. LRT-1 is not included.",
+        "source": "LRTA Tickets and Fares page (lrta.gov.ph/tickets-and-fares, effective 2026-03-23); DOTr announcement 2026-03-19 reported by PNA, Manila Times, PhilStar and BusinessMirror; fare ranges confirmed by PhilStar 2026-03-22 and mypinas.ph (as of Sept 2026)."
+      },
       "discounted_year": 2026,
       "discount": {
         "rate": 0.5,
