@@ -715,7 +715,7 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                                           if (progress == null) return child;
                                           return const Center(child: CircularProgressIndicator());
                                         },
-                                        errorBuilder: (_, __, ___) => Center(
+                                        errorBuilder: (_, _, _) => Center(
                                           child: Icon(
                                             Icons.broken_image_outlined,
                                             size: 42,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
@@ -11,7 +12,14 @@ class RouteOption {
   final String summary;
   final String modeLabel;
   final int etaMinutes;
-  final int fare;
+
+  /// Lowest regular fare, with the highest in [fareMax] (modern / aircon).
+  final double fare;
+  final double? fareMax;
+
+  /// Student / senior / PWD fare, lowest and highest.
+  final double fareDiscounted;
+  final double? fareDiscountedMax;
   final int transfers;
   final RoutePreference preference;
 
@@ -21,9 +29,54 @@ class RouteOption {
     required this.modeLabel,
     required this.etaMinutes,
     required this.fare,
+    this.fareMax,
+    required this.fareDiscounted,
+    this.fareDiscountedMax,
     required this.transfers,
     required this.preference,
   });
+}
+
+/// Rough road fares for the offline fallback only. The real planner reads
+/// data/reference/fare_config.json; these constants copy its LTFRB rates
+/// (effective 2026-09-28), so update both together.
+class FareEstimator {
+  const FareEstimator._();
+
+  // base fare, base km, per km beyond base: regular, then student/senior/PWD
+  static const _jeepney = _Rate(14.0, 4, 2.0, 11.2, 1.6);
+  static const _modernJeepney = _Rate(17.0, 4, 2.4, 13.6, 1.92);
+  static const _bus = _Rate(15.0, 5, 2.49, 12.0, 1.99);
+  static const _airconBus = _Rate(18.0, 5, 2.98, 14.4, 2.38);
+
+  /// Straight-line distance to rough road distance, same as the planner.
+  static const double roadFactor = 1.3;
+
+  static double _round(double value) =>
+      ((value / 0.25) + 0.5 + 1e-9).floorToDouble() * 0.25;
+
+  static double _fare(_Rate r, double km, {required bool discounted}) {
+    final base = discounted ? r.discBase : r.base;
+    final perKm = discounted ? r.discPerKm : r.perKm;
+    return _round(base + perKm * math.max(0.0, km - r.baseKm));
+  }
+
+  /// Traditional jeepney (lowest) or modern jeepney (highest).
+  static double jeepney(double km, {bool modern = false, bool discounted = false}) =>
+      _fare(modern ? _modernJeepney : _jeepney, km, discounted: discounted);
+
+  /// Ordinary bus (lowest) or aircon bus (highest).
+  static double bus(double km, {bool aircon = false, bool discounted = false}) =>
+      _fare(aircon ? _airconBus : _bus, km, discounted: discounted);
+}
+
+class _Rate {
+  final double base;
+  final double baseKm;
+  final double perKm;
+  final double discBase;
+  final double discPerKm;
+  const _Rate(this.base, this.baseKm, this.perKm, this.discBase, this.discPerKm);
 }
 
 /// Real route geometry returned by OSRM
@@ -99,32 +152,58 @@ class RoutePlannerService {
       destination,
     );
 
+    // Offline samples only: fares come from the distance, using the same
+    // LTFRB rates as the planner, and are shown as rough estimates.
+    final roadKm = distanceKm * FareEstimator.roadFactor;
+    RouteOption jeepney({
+      required String title,
+      required String summary,
+      required int etaMinutes,
+      required RoutePreference preference,
+    }) => RouteOption(
+      title: title,
+      summary: summary,
+      modeLabel: 'Jeepney',
+      etaMinutes: etaMinutes,
+      fare: FareEstimator.jeepney(roadKm),
+      fareMax: FareEstimator.jeepney(roadKm, modern: true),
+      fareDiscounted: FareEstimator.jeepney(roadKm, discounted: true),
+      fareDiscountedMax: FareEstimator.jeepney(
+        roadKm,
+        modern: true,
+        discounted: true,
+      ),
+      transfers: 0,
+      preference: preference,
+    );
+
     final options = <RouteOption>[
       RouteOption(
         title: 'Fastest route',
-        summary: 'Direct jeepney ride with a brief walk',
-        modeLabel: 'Jeep + walk',
+        summary: 'Sample bus trip (offline estimate)',
+        modeLabel: 'Bus',
         etaMinutes: (distanceKm * 7.2).round() + 12,
-        fare: 30,
-        transfers: 1,
+        fare: FareEstimator.bus(roadKm),
+        fareMax: FareEstimator.bus(roadKm, aircon: true),
+        fareDiscounted: FareEstimator.bus(roadKm, discounted: true),
+        fareDiscountedMax: FareEstimator.bus(
+          roadKm,
+          aircon: true,
+          discounted: true,
+        ),
+        transfers: 0,
         preference: RoutePreference.fastest,
       ),
-      RouteOption(
+      jeepney(
         title: 'Cheapest route',
-        summary: 'Budget-friendly with one transfer',
-        modeLabel: 'Jeep + train',
+        summary: 'Sample jeepney trip (offline estimate)',
         etaMinutes: (distanceKm * 9.5).round() + 18,
-        fare: 18,
-        transfers: 2,
         preference: RoutePreference.cheapest,
       ),
-      RouteOption(
+      jeepney(
         title: 'Fewest transfers',
-        summary: 'Comfortable route with the least switching',
-        modeLabel: 'UV express',
+        summary: 'Sample direct jeepney trip (offline estimate)',
         etaMinutes: (distanceKm * 8.4).round() + 16,
-        fare: 40,
-        transfers: 0,
         preference: RoutePreference.fewestTransfers,
       ),
     ];

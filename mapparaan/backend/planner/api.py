@@ -358,6 +358,8 @@ def run_server(host="127.0.0.1", port=8080, data_dir=None):
     _PLANNER = Planner(resolved_dir)
     load_time = time.time() - t0
     print(f"Loaded {len(_PLANNER.trips)} trips and {_PLANNER.n_stops} stops in {load_time:.2f}s.")
+    for warning in _PLANNER.warnings:
+        print(f"[WARNING] {warning}")
     _AREA = load_service_area(resolved_dir)
     print("Service area: City of Manila boundary loaded." if _AREA else
           "Service area: manila_boundary.geojson not found, not restricting requests.")

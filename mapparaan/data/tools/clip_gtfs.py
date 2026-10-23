@@ -4,6 +4,7 @@
 Usage:
   python3 clip_gtfs.py <gtfs_in_dir> <boundary.geojson> <gtfs_out_dir>
                        [--tolerance-m 50] [--review-csv stops_to_review.csv]
+                       [--exclude-routes ROUTE_ID[,ROUTE_ID...]]
 
 Rules
   * A stop is kept if it lies inside the polygon, or within --tolerance-m
@@ -19,6 +20,8 @@ Rules
     sees a fake direct ride across a gap outside the city.
   * Stop times are re-based so each run starts at 00:00:00.
   * Shapes are cut to the part inside the polygon.
+  * --exclude-routes drops whole routes first (e.g. a line that has no service in
+    the city). Their stops, services, agencies and shapes go too if nothing else uses them.
   * Routes/services/agencies/stops/shapes that end up unused are removed.
 """
 import argparse, csv, json, math, sys, os, collections
@@ -101,7 +104,7 @@ def runs(flags):
     if cur: out.append(cur)
     return out
 
-def main(src, boundary, dst, tolerance_m=50.0, review_csv=None):
+def main(src, boundary, dst, tolerance_m=50.0, review_csv=None, exclude_routes=()):
     geoj = json.load(open(boundary))
     inside = make_inside(geoj)
     dist_to_edge = make_near(geoj)
@@ -119,6 +122,7 @@ def main(src, boundary, dst, tolerance_m=50.0, review_csv=None):
         elif d <= 250:
             review.append((s, d, "names another city" if d <= tolerance_m else f"more than {tolerance_m:g} m outside"))
     ff, trips = load(src, "trips"); stf, st = load(src, "stop_times")
+    trips = [t for t in trips if t["route_id"] not in set(exclude_routes)]
     ffr, freq = load(src, "frequencies")
     by = collections.defaultdict(list)
     for x in st: by[x["trip_id"]].append(x)
@@ -162,6 +166,8 @@ def main(src, boundary, dst, tolerance_m=50.0, review_csv=None):
             p = dict(pts[i]); p["shape_pt_sequence"] = str(n); new_shapes.append(p)
     for t in new_trips:
         if t.get("shape_id") and t["shape_id"] not in shape_ok: t["shape_id"] = ""
+    used_shapes = {t["shape_id"] for t in new_trips if t.get("shape_id")}
+    new_shapes = [p for p in new_shapes if p["shape_id"] in used_shapes]   # drop shapes no kept trip uses
 
     used_stops = {r["stop_id"] for r in new_st}
     new_stops = [s for s in stops if s["stop_id"] in used_stops]
@@ -204,5 +210,6 @@ if __name__ == "__main__":
     ap.add_argument("gtfs_in"); ap.add_argument("boundary"); ap.add_argument("gtfs_out")
     ap.add_argument("--tolerance-m", type=float, default=50.0)
     ap.add_argument("--review-csv", default=None)
+    ap.add_argument("--exclude-routes", default="", help="comma-separated route_ids to drop entirely")
     a = ap.parse_args()
-    main(a.gtfs_in, a.boundary, a.gtfs_out, a.tolerance_m, a.review_csv)
+    main(a.gtfs_in, a.boundary, a.gtfs_out, a.tolerance_m, a.review_csv, [r for r in a.exclude_routes.split(",") if r])

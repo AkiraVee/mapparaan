@@ -23,11 +23,13 @@ from faeldon/philippines-json-maps, 2023, MIT):
   re-enters becomes two trips (`_a`, `_b`); runs under 2 stops are dropped
 - shapes are cut to the inside part
 - MRT-3 does not enter the City of Manila, so it is not in the feed
+- PNR (Metro Commuter, `ROUTE_880872`) is out of service in Manila, so it is excluded with
+  `--exclude-routes`; its 9 stops, agency, 2 service patterns and 2 shapes go with it
 - some LTFRB stop names say Quezon City / Caloocan: those are LTFRB's labels,
   the coordinates are inside the boundary (border stops such as LRT Roosevelt-side
   stations)
 
-Result: 543 stops, 600 routes (561 jeepney, 36 bus, LRT-1, LRT-2, PNR), 671 trips.
+Result: 534 stops, 599 routes (561 jeepney, 36 bus, LRT-1, LRT-2), 661 trips.
     
 ## Layout
 
@@ -37,14 +39,14 @@ data/
 ├── raw/
 │   └── sakay_gtfs/           UNTOUCHED copy of the source feed (incl. LICENSE.md)
 ├── gtfs/                     patched, standard GTFS files only
-│   ├── agency.txt            3 agencies (LRTA, LTFRB, PNR)
-│   ├── routes.txt            600 routes
-│   ├── trips.txt             671 trips
-│   ├── stops.txt             543 stops
-│   ├── stop_times.txt        11,256 rows (times relative to trip start)
+│   ├── agency.txt            2 agencies (LRTA, LTFRB)
+│   ├── routes.txt            599 routes
+│   ├── trips.txt             661 trips
+│   ├── stops.txt             534 stops
+│   ├── stop_times.txt        11,166 rows (times relative to trip start)
 │   ├── frequencies.txt       headway-based service (no fixed timetables)
-│   ├── calendar.txt          8 service patterns
-│   ├── shapes.txt            7 shapes (rail + 1 route), clipped
+│   ├── calendar.txt          6 service patterns
+│   ├── shapes.txt            5 shapes (rail + 1 route), clipped
 │   └── feed_info.txt
 ├── reference/                Mapparaan's own data (NOT part of GTFS)
 │   ├── manila_boundary.geojson  City of Manila polygon used for clipping
@@ -66,10 +68,11 @@ at any time. Hand edits belong in the script, not in the generated files.
 #    then clip it to Manila:
 python3 tools/clip_gtfs.py <patched_full_feed_dir> data/reference/manila_boundary.geojson data/gtfs
 # options:  --tolerance-m 50 (default; 0 = strict polygon)   --review-csv stops_to_review.csv
+#           --exclude-routes ROUTE_880872   (PNR: no service in Manila)
 ```
 
 `clip_gtfs.py` expects the already-patched full Metro Manila feed as input. With
-`--tolerance-m 0` it reproduces the previous 540-stop / 672-trip feed exactly.
+`--tolerance-m 0` and no `--exclude-routes` it reproduces the earlier 540-stop / 672-trip feed (which still had PNR) exactly.
 
 ## Schemas
 

@@ -1,66 +1,337 @@
 {
-  "_note": "PLACEHOLDER VALUES - NOT OFFICIAL. Replace with the current LTFRB / DOTr fare orders before showing fares as real.",
+  "_note": "Check each mode's `verified` field. Modes with verified = true are checked against an official fare source (see that mode's `source`). Every other mode is still a PLACEHOLDER and must not be shown as real.",
   "currency": "PHP",
   "discount": {
-    "eligible_groups": [
-      "student",
-      "senior_citizen",
-      "pwd"
-    ],
+    "eligible_groups": ["student", "senior_citizen", "pwd"],
     "multiplier": 0.8,
     "stackable": false,
-    "legal_basis": [
-      "RA 11314",
-      "RA 9994",
-      "RA 10754"
-    ]
+    "legal_basis": ["RA 11314", "RA 9994", "RA 10754"]
   },
   "modes": {
     "jeepney": {
-      "verified": "provisional",
+      "verified": true,
+      "vehicle": "traditional",
       "base_fare": 14.0,
       "base_km": 4,
       "per_km": 2.0,
-      "note": "Traditional jeepney, LTFRB provisional fare eff. 2026-03-19 (Philstar 2026-03-18). base_km is an assumption. Modern jeepney: 17.00 + 2.40/km."
+      "round_to": 0.25,
+      "effective": "2026-09-28",
+      "source": "LTFRB PUJ General Fare Guide, new fare rate, effective 2026-09-28. Confirmed by DOTr approval of 2026-09-25 (reported by GMA News, The Manila Times, PhilSTAR).",
+      "discount_note": "20% discount. Student/elderly/PWD fare = discounted_base_fare + discounted_per_km x (km - base_km) beyond base_km, rounded to the nearest P0.25. This is the sheet's own add-on method; do not derive it as 0.8 x the regular fare (the shortcut is wrong on some rows for modern jeepney and city bus).",
+      "note": "Traditional jeepney only. Modern jeepney is a separate, higher fare (not yet added); the feed cannot tell the two apart.",
+      "discounted_base_fare": 11.2,
+      "discounted_per_km": 1.6
     },
     "bus": {
-      "verified": "provisional",
+      "verified": true,
+      "vehicle": "city ordinary",
       "base_fare": 15.0,
       "base_km": 5,
       "per_km": 2.49,
-      "note": "Ordinary bus, LTFRB provisional fare eff. 2026-03-19. Aircon: 18.00 + 2.98/km. Feed cannot tell ordinary from aircon. base_km is an assumption."
+      "discounted_base_fare": 12.0,
+      "discounted_per_km": 1.99,
+      "round_to": 0.25,
+      "effective": "2026-09-28",
+      "source": "LTFRB PUB City Ordinary General Fare Guide, new fare rate, effective 2026-09-28 (table runs to 60 km). Rates (P15 first 5 km, +P2.49/km) match the LTFRB March 2026 order (SunStar) and the DOTr Sept 2026 announcement (PhilSTAR).",
+      "discount_note": "20% discount. Student/elderly/PWD fare = discounted_base_fare + discounted_per_km x (km - base_km) beyond base_km, rounded to the nearest P0.25. This is the sheet's own add-on method; do not derive it as 0.8 x the regular fare (the shortcut is wrong on some rows for modern jeepney and city bus).",
+      "note": "City ordinary bus only. Air-conditioned bus is a separate, higher fare (not yet added); the feed cannot tell ordinary from aircon."
     },
     "uv_express": {
-      "verified": false,
-      "base_fare": 15.0,
-      "base_km": 5,
-      "per_km": 2.5
+      "verified": "provisional",
+      "vehicle": "traditional UV Express",
+      "base_fare": 0.0,
+      "base_km": 0,
+      "per_km": 2.6,
+      "discounted_base_fare": 0.0,
+      "discounted_per_km": 2.08,
+      "round_to": null,
+      "effective": "2026-09-28",
+      "valid_until": "2026-12-31",
+      "source": "LTFRB provisional UV Express rates effective 2026-09-28, supplied by the project owner and reported by PhilSTAR (2026-09-29), SunStar (2026-09-29), PTV News and Rappler. Previous rates were P2.40/km (traditional) and P2.50/km (modern).",
+      "discount_note": "20% discount for students, elderly and PWDs (P2.60 x 0.8 = P2.08/km).",
+      "note": "PROVISIONAL: LTFRB says these may change after its final evaluation. The temporary fare guide is valid only until 2026-12-31; official matrices are due from January 2027. Per-kilometer rate only: no base fare, minimum fare or rounding rule was found in the sources, so base_fare/base_km are 0 and round_to is unknown. UV Express has no routes in the Manila feed, so the planner does not use this."
     },
     "lrt1": {
-      "verified": false,
-      "type": "stored_value_by_distance",
-      "table": null
+      "verified": true,
+      "type": "station_matrix",
+      "stations": ["Vito Cruz", "Quirino", "Pedro Gil", "UN Avenue", "Central", "Carriedo", "D. Jose", "Bambang", "Tayuman", "Blumentritt", "Abad Santos", "R. Papa"],
+      "feed_stop_names": {
+        "Vito Cruz LRT": "Vito Cruz",
+        "Quirino Ave LRT": "Quirino",
+        "Pedro Gil LRT": "Pedro Gil",
+        "UN Ave LRT": "UN Avenue",
+        "Central Terminal LRT": "Central",
+        "Carriedo LRT": "Carriedo",
+        "Doroteo Jose LRT": "D. Jose",
+        "Bambang LRT": "Bambang",
+        "Tayuman LRT": "Tayuman",
+        "Blumentritt LRT": "Blumentritt",
+        "Abad Santos LRT": "Abad Santos",
+        "R. Papa LRT": "R. Papa"
+      },
+      "default_ticket": "stored_value",
+      "ticket_types": {
+        "stored_value": {
+          "label": "Stored value (Beep card)",
+          "regular": [
+            [16, 17, 19, 20, 22, 23, 24, 25, 25, 26, 28, 29],
+            [17, 16, 17, 19, 20, 21, 22, 23, 24, 25, 27, 28],
+            [19, 17, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26],
+            [20, 19, 17, 16, 18, 19, 20, 21, 22, 23, 24, 25],
+            [22, 20, 19, 18, 16, 17, 18, 19, 20, 21, 23, 23],
+            [23, 21, 20, 19, 17, 16, 17, 18, 19, 20, 21, 22],
+            [24, 22, 21, 20, 18, 17, 16, 17, 18, 19, 20, 21],
+            [25, 23, 22, 21, 19, 18, 17, 16, 17, 18, 20, 20],
+            [25, 24, 23, 22, 20, 19, 18, 17, 16, 17, 19, 20],
+            [26, 25, 24, 23, 21, 20, 19, 18, 17, 16, 18, 19],
+            [28, 27, 25, 24, 23, 21, 20, 20, 19, 18, 16, 17],
+            [29, 28, 26, 25, 23, 22, 21, 20, 20, 19, 17, 16]
+          ],
+          "discounted": [
+            [8.0, 8.5, 9.5, 10.0, 11.0, 11.5, 12.0, 12.5, 12.5, 13.0, 14.0, 14.5],
+            [8.5, 8.0, 8.5, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.5, 14.0],
+            [9.5, 8.5, 8.0, 8.5, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0],
+            [10.0, 9.5, 8.5, 8.0, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5],
+            [11.0, 10.0, 9.5, 9.0, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.5, 11.5],
+            [11.5, 10.5, 10.0, 9.5, 8.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0],
+            [12.0, 11.0, 10.5, 10.0, 9.0, 8.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5],
+            [12.5, 11.5, 11.0, 10.5, 9.5, 9.0, 8.5, 8.0, 8.5, 9.0, 10.0, 10.0],
+            [12.5, 12.0, 11.5, 11.0, 10.0, 9.5, 9.0, 8.5, 8.0, 8.5, 9.5, 10.0],
+            [13.0, 12.5, 12.0, 11.5, 10.5, 10.0, 9.5, 9.0, 8.5, 8.0, 9.0, 9.5],
+            [14.0, 13.5, 12.5, 12.0, 11.5, 10.5, 10.0, 10.0, 9.5, 9.0, 8.0, 8.5],
+            [14.5, 14.0, 13.0, 12.5, 11.5, 11.0, 10.5, 10.0, 10.0, 9.5, 8.5, 8.0]
+          ]
+        },
+        "single_journey": {
+          "label": "Single journey ticket",
+          "regular": [
+            [null, 20, 20, 20, 25, 25, 25, 25, 25, 30, 30, 30],
+            [20, null, 20, 20, 20, 25, 25, 25, 25, 25, 30, 30],
+            [20, 20, null, 20, 20, 20, 25, 25, 25, 25, 25, 30],
+            [20, 20, 20, null, 20, 20, 20, 25, 25, 25, 25, 25],
+            [25, 20, 20, 20, null, 20, 20, 20, 20, 25, 25, 25],
+            [25, 25, 20, 20, 20, null, 20, 20, 20, 20, 25, 25],
+            [25, 25, 25, 20, 20, 20, null, 20, 20, 20, 20, 25],
+            [25, 25, 25, 25, 20, 20, 20, null, 20, 20, 20, 20],
+            [25, 25, 25, 25, 20, 20, 20, 20, null, 20, 20, 20],
+            [30, 25, 25, 25, 25, 20, 20, 20, 20, null, 20, 20],
+            [30, 30, 25, 25, 25, 25, 20, 20, 20, 20, null, 20],
+            [30, 30, 30, 25, 25, 25, 25, 20, 20, 20, 20, null]
+          ],
+          "discounted": [
+            [null, 10, 10, 10, 13, 13, 13, 13, 13, 15, 15, 15],
+            [10, null, 10, 10, 10, 13, 13, 13, 13, 13, 15, 15],
+            [10, 10, null, 10, 10, 10, 13, 13, 13, 13, 13, 15],
+            [10, 10, 10, null, 10, 10, 10, 13, 13, 13, 13, 13],
+            [13, 10, 10, 10, null, 10, 10, 10, 10, 13, 13, 13],
+            [13, 13, 10, 10, 10, null, 10, 10, 10, 10, 13, 13],
+            [13, 13, 13, 10, 10, 10, null, 10, 10, 10, 10, 13],
+            [13, 13, 13, 13, 10, 10, 10, null, 10, 10, 10, 10],
+            [13, 13, 13, 13, 10, 10, 10, 10, null, 10, 10, 10],
+            [15, 13, 13, 13, 13, 10, 10, 10, 10, null, 10, 10],
+            [15, 15, 13, 13, 13, 13, 10, 10, 10, 10, null, 10],
+            [15, 15, 15, 13, 13, 13, 13, 10, 10, 10, 10, null]
+          ]
+        }
+      },
+      "regular_effective": "2025-04-02",
+      "discount": {
+        "rate": 0.5,
+        "applies_to": "students, senior citizens and PWDs, both ticket types",
+        "valid_until": "2028",
+        "derived": true,
+        "note": "The discounted matrices are DERIVED, not copied from a poster: stored value = regular / 2 exactly; single journey = regular / 2 rounded up to a whole peso (same as LRT-2). The only published check is the PhilSTAR/Top Gear report of a P10 minimum and P28 end-to-end discounted single journey fare (P55 / 2 = 27.5, rounded up). Replace with the official LRT-1 discounted matrices if LRMC publishes them."
+      },
+      "source": "LRMC 'New LRT-1 Stored Value Fare Matrix' and 'New LRT-1 Single Journey Fare Matrix', both effective April 2, 2025 (supplied as images); 50% discount rule supplied by the project owner and confirmed by news reports of the 2025 discount.",
+      "note": "Only the 12 stations that are in the Manila feed (Vito Cruz to R. Papa) are stored: a 12x12 corner of the official 25x25 matrix, read from enlarged crops of the posters. Rows = origin, columns = destination. The single journey diagonal is null; the stored value diagonal (P16) is the minimum fare. Baclaran to Gil Puyat and Monumento to Fernando Poe Jr. are outside the Manila feed and not stored."
     },
     "lrt2": {
-      "verified": false,
-      "type": "stored_value_by_distance",
-      "table": null
+      "verified": true,
+      "type": "station_matrix",
+      "stations": ["Recto", "Legarda", "Pureza", "V. Mapa", "J. Ruiz", "Gilmore", "Betty Go", "Cubao", "Anonas", "Katipunan", "Santolan", "Marikina", "Antipolo"],
+      "feed_stop_names": {
+        "Recto LRT": "Recto",
+        "Legarda LRT": "Legarda",
+        "Pureza LRT": "Pureza",
+        "V. Mapa LRT": "V. Mapa"
+      },
+      "default_ticket": "stored_value",
+      "ticket_types": {
+        "stored_value": {
+          "label": "Stored value (Beep card)",
+          "regular": [
+            [13, 15, 16, 18, 19, 21, 22, 23, 25, 26, 28, 31, 33],
+            [15, 13, 15, 17, 18, 19, 21, 22, 24, 25, 27, 29, 32],
+            [16, 15, 13, 15, 16, 18, 19, 20, 22, 23, 26, 28, 30],
+            [18, 17, 15, 13, 15, 16, 17, 19, 20, 22, 24, 26, 29],
+            [19, 18, 16, 15, 13, 14, 16, 17, 19, 20, 22, 24, 27],
+            [21, 19, 18, 16, 14, 13, 15, 16, 18, 19, 21, 23, 26],
+            [22, 21, 19, 17, 16, 15, 13, 15, 16, 18, 20, 22, 25],
+            [23, 22, 20, 19, 17, 16, 15, 13, 15, 16, 19, 21, 23],
+            [25, 24, 22, 20, 19, 18, 16, 15, 13, 14, 17, 19, 22],
+            [26, 25, 23, 22, 20, 19, 18, 16, 14, 13, 16, 18, 21],
+            [28, 27, 26, 24, 22, 21, 20, 19, 17, 16, 13, 15, 18],
+            [31, 29, 28, 26, 24, 23, 22, 21, 19, 18, 15, 13, 16],
+            [33, 32, 30, 29, 27, 26, 25, 23, 22, 21, 18, 16, 13]
+          ],
+          "discounted": [
+            [6.5, 7.5, 8.0, 9.0, 9.5, 10.5, 11.0, 11.5, 12.5, 13.0, 14.0, 15.5, 16.5],
+            [7.5, 6.5, 7.5, 8.5, 9.0, 9.5, 10.5, 11.0, 12.0, 12.5, 13.5, 14.5, 16.0],
+            [8.0, 7.5, 6.5, 7.5, 8.0, 9.0, 9.5, 10.0, 11.0, 11.5, 13.0, 14.0, 15.0],
+            [9.0, 8.5, 7.5, 6.5, 7.5, 8.0, 8.5, 9.5, 10.0, 11.0, 12.0, 13.0, 14.5],
+            [9.5, 9.0, 8.0, 7.5, 6.5, 7.0, 8.0, 8.5, 9.5, 10.0, 11.0, 12.0, 13.5],
+            [10.5, 9.5, 9.0, 8.0, 7.0, 6.5, 7.5, 8.0, 9.0, 9.5, 10.5, 11.5, 13.0],
+            [11.0, 10.5, 9.5, 8.5, 8.0, 7.5, 6.5, 7.5, 8.0, 9.0, 10.0, 11.0, 12.5],
+            [11.5, 11.0, 10.0, 9.5, 8.5, 8.0, 7.5, 6.5, 7.5, 8.0, 9.5, 10.5, 11.5],
+            [12.5, 12.0, 11.0, 10.0, 9.5, 9.0, 8.0, 7.5, 6.5, 7.0, 8.5, 9.5, 11.0],
+            [13.0, 12.5, 11.5, 11.0, 10.0, 9.5, 9.0, 8.0, 7.0, 6.5, 8.0, 9.0, 10.5],
+            [14.0, 13.5, 13.0, 12.0, 11.0, 10.5, 10.0, 9.5, 8.5, 8.0, 6.5, 7.5, 9.0],
+            [15.5, 14.5, 14.0, 13.0, 12.0, 11.5, 11.0, 10.5, 9.5, 9.0, 7.5, 6.5, 8.0],
+            [16.5, 16.0, 15.0, 14.5, 13.5, 13.0, 12.5, 11.5, 11.0, 10.5, 9.0, 8.0, 6.5]
+          ]
+        },
+        "single_journey": {
+          "label": "Single journey ticket",
+          "regular": [
+            [null, 15, 20, 20, 20, 25, 25, 25, 25, 30, 30, 35, 35],
+            [15, null, 15, 20, 20, 20, 25, 25, 25, 25, 30, 30, 35],
+            [20, 15, null, 15, 20, 20, 20, 20, 25, 25, 30, 30, 30],
+            [20, 20, 15, null, 15, 20, 20, 20, 20, 25, 25, 30, 30],
+            [20, 20, 20, 15, null, 15, 20, 20, 20, 20, 25, 25, 30],
+            [25, 20, 20, 20, 15, null, 15, 20, 20, 20, 25, 25, 30],
+            [25, 25, 20, 20, 20, 15, null, 15, 20, 20, 20, 25, 25],
+            [25, 25, 20, 20, 20, 20, 15, null, 15, 20, 20, 25, 25],
+            [25, 25, 25, 20, 20, 20, 20, 15, null, 15, 20, 20, 25],
+            [30, 25, 25, 25, 20, 20, 20, 20, 15, null, 20, 20, 25],
+            [30, 30, 30, 25, 25, 25, 20, 20, 20, 20, null, 15, 20],
+            [35, 30, 30, 30, 25, 25, 25, 25, 20, 20, 15, null, 20],
+            [35, 35, 30, 30, 30, 30, 25, 25, 25, 25, 20, 20, null]
+          ],
+          "discounted": [
+            [null, 8, 10, 10, 10, 13, 13, 13, 13, 15, 15, 18, 18],
+            [8, null, 8, 10, 10, 10, 13, 13, 13, 13, 15, 15, 18],
+            [10, 8, null, 8, 10, 10, 10, 10, 13, 13, 15, 15, 15],
+            [10, 10, 8, null, 8, 10, 10, 10, 10, 13, 13, 15, 15],
+            [10, 10, 10, 8, null, 8, 10, 10, 10, 10, 13, 13, 15],
+            [13, 10, 10, 10, 8, null, 8, 10, 10, 10, 13, 13, 15],
+            [13, 13, 10, 10, 10, 8, null, 8, 10, 10, 10, 13, 13],
+            [13, 13, 10, 10, 10, 10, 8, null, 8, 10, 10, 13, 13],
+            [13, 13, 13, 10, 10, 10, 10, 8, null, 8, 10, 10, 13],
+            [15, 13, 13, 13, 10, 10, 10, 10, 8, null, 10, 10, 13],
+            [15, 15, 15, 13, 13, 13, 10, 10, 10, 10, null, 8, 10],
+            [18, 15, 15, 15, 13, 13, 13, 13, 10, 10, 8, null, 10],
+            [18, 18, 15, 15, 15, 15, 13, 13, 13, 13, 10, 10, null]
+          ]
+        }
+      },
+      "regular_effective": "2023-08-02",
+      "discounted_year": 2026,
+      "discount": {
+        "rate": 0.5,
+        "applies_to": "students, senior citizens and PWDs, both ticket types",
+        "note": "Use the discounted matrix directly. Stored value discounted = regular / 2 exactly; single journey discounted = regular / 2 rounded up to a whole peso."
+      },
+      "source": "LRTA LRT-2 fare matrices (regular, effective 2023-08-02) and 50% discounted fare matrices (2026), supplied as images. Regular fares match the LRTA announcement of the 2023-08-02 adjustment (P13.29 boarding fee + P1.21/km; stored value max P33, single journey P15-P35).",
+      "note": "Matrices are 13x13, rows = origin, columns = destination. The single journey diagonal is null. The stored value diagonal (P13) is the boarding fee for the same station. Only Recto, Legarda, Pureza and V. Mapa are in the Manila feed; the other 9 stations are kept so the table matches the official matrix."
     },
     "mrt3": {
-      "verified": false,
-      "type": "stored_value_by_distance",
-      "table": null
-    },
-    "pnr": {
-      "verified": false,
-      "type": "stored_value_by_distance",
-      "table": null
+      "verified": true,
+      "type": "station_matrix",
+      "in_manila_feed": false,
+      "stations": ["North Ave.", "Quezon Ave.", "GMA Kamuning", "Araneta-Cubao", "Santolan Annapolis", "Ortigas", "Shaw Blvd.", "Boni", "Guadalupe", "Buendia", "Ayala", "Magallanes", "Taft Ave."],
+      "feed_stop_names": {},
+      "ticket_types": {
+        "all": {
+          "label": "Single journey and Beep card (same fare)",
+          "regular": [
+            [null, 13, 13, 16, 16, 20, 20, 20, 24, 24, 24, 28, 28],
+            [13, null, 13, 13, 16, 16, 20, 20, 20, 24, 24, 24, 28],
+            [13, 13, null, 13, 13, 16, 16, 20, 20, 20, 24, 24, 24],
+            [16, 13, 13, null, 13, 13, 16, 16, 20, 20, 20, 24, 24],
+            [16, 16, 13, 13, null, 13, 13, 16, 16, 20, 20, 20, 24],
+            [20, 16, 16, 13, 13, null, 13, 13, 16, 16, 20, 20, 20],
+            [20, 20, 16, 16, 13, 13, null, 13, 13, 16, 16, 20, 20],
+            [20, 20, 20, 16, 16, 13, 13, null, 13, 13, 16, 16, 20],
+            [24, 20, 20, 20, 16, 16, 13, 13, null, 13, 13, 16, 16],
+            [24, 24, 20, 20, 20, 16, 16, 13, 13, null, 13, 13, 16],
+            [24, 24, 24, 20, 20, 20, 16, 16, 13, 13, null, 13, 13],
+            [28, 24, 24, 24, 20, 20, 20, 16, 16, 13, 13, null, 13],
+            [28, 28, 24, 24, 24, 20, 20, 20, 16, 16, 13, 13, null]
+          ],
+          "discounted": [
+            [null, 6, 6, 8, 8, 10, 10, 10, 12, 12, 12, 14, 14],
+            [6, null, 6, 6, 8, 8, 10, 10, 10, 12, 12, 12, 14],
+            [6, 6, null, 6, 6, 8, 8, 10, 10, 10, 12, 12, 12],
+            [8, 6, 6, null, 6, 6, 8, 8, 10, 10, 10, 12, 12],
+            [8, 8, 6, 6, null, 6, 6, 8, 8, 10, 10, 10, 12],
+            [10, 8, 8, 6, 6, null, 6, 6, 8, 8, 10, 10, 10],
+            [10, 10, 8, 8, 6, 6, null, 6, 6, 8, 8, 10, 10],
+            [10, 10, 10, 8, 8, 6, 6, null, 6, 6, 8, 8, 10],
+            [12, 10, 10, 10, 8, 8, 6, 6, null, 6, 6, 8, 8],
+            [12, 12, 10, 10, 10, 8, 8, 6, 6, null, 6, 6, 8],
+            [12, 12, 12, 10, 10, 10, 8, 8, 6, 6, null, 6, 6],
+            [14, 12, 12, 12, 10, 10, 10, 8, 8, 6, 6, null, 6],
+            [14, 14, 12, 12, 12, 10, 10, 10, 8, 8, 6, 6, null]
+          ]
+        }
+      },
+      "discount": {
+        "rate": 0.5,
+        "applies_to": "students, senior citizens and PWDs",
+        "valid_until": "2028",
+        "note": "Use the discounted matrix directly. Discounted = regular / 2 rounded down (P13 -> P6)."
+      },
+      "source": "DOTr MRT-3 fare matrices (Regular; Students, SC, PWD), supplied as images with no printed effective date. Fare range P13-P28 regular and P6-P14 discounted is confirmed by news reports of the 2025 50% discount (PhilSTAR 2025-08-13, Top Gear 2025-07).",
+      "note": "MRT-3 does not enter the City of Manila, so no MRT-3 stops are in the Manila feed and this table is not used by the planner. Stored so it is ready if the service area grows. One matrix applies to every ticket type, so the planner should fall back to ticket_types['all'] when the chosen ticket type is missing."
     },
     "fort_bus": {
       "verified": false,
       "base_fare": null,
       "base_km": null,
       "per_km": null
+    },
+    "modern_jeepney": {
+      "verified": true,
+      "vehicle": "aircon modern and electric PUJ",
+      "base_fare": 17.0,
+      "base_km": 4,
+      "per_km": 2.4,
+      "round_to": 0.25,
+      "effective": "2026-09-28",
+      "source": "LTFRB Aircon Modern and Electric PUJ General Fare Guide, new fare rate, effective 2026-09-28. Rates (P17 first 4 km, +P2.40/km) confirmed by DOTr approval of 2026-09-25 (reported by GMA News, The Manila Times, PhilSTAR).",
+      "discount_note": "20% discount. Student/elderly/PWD fare = discounted_base_fare + discounted_per_km x (km - base_km) beyond base_km, rounded to the nearest P0.25. This is the sheet's own add-on method; do not derive it as 0.8 x the regular fare (the shortcut is wrong on some rows for modern jeepney and city bus).",
+      "note": "Not used by the planner yet: route_modes.csv only has 'jeepney', and the GTFS feed cannot tell a modern jeepney from a traditional one.",
+      "discounted_base_fare": 13.6,
+      "discounted_per_km": 1.92
+    },
+    "aircon_bus": {
+      "verified": true,
+      "vehicle": "air-conditioned bus (Metro Manila)",
+      "base_fare": 18.0,
+      "base_km": 5,
+      "per_km": 2.98,
+      "discounted_base_fare": 14.4,
+      "discounted_per_km": 2.38,
+      "round_to": 0.25,
+      "effective": "2026-09-28",
+      "source": "LTFRB PUB (Aircon) General Fare Guide, Metro Manila, new fare rate, effective 2026-09-28 (table runs to 60 km). Rates (P18 first 5 km, +P2.98/km) match the LTFRB March 2026 order (SunStar) and the DOTr Sept 2026 announcement (PhilSTAR).",
+      "discount_note": "20% discount. Student/elderly/PWD fare = discounted_base_fare + discounted_per_km x (km - base_km) beyond base_km, rounded to the nearest P0.25. This is the sheet's own add-on method; do not derive it as 0.8 x the regular fare (the shortcut is wrong on some rows for modern jeepney and city bus).",
+      "note": "Not used by the planner yet: route_modes.csv only has 'bus', and the GTFS feed cannot tell an ordinary bus from an aircon bus."
+    },
+    "modern_uv_express": {
+      "verified": "provisional",
+      "vehicle": "modern UV Express",
+      "base_fare": 0.0,
+      "base_km": 0,
+      "per_km": 3.0,
+      "discounted_base_fare": 0.0,
+      "discounted_per_km": 2.4,
+      "round_to": null,
+      "effective": "2026-09-28",
+      "valid_until": "2026-12-31",
+      "source": "LTFRB provisional UV Express rates effective 2026-09-28, supplied by the project owner and reported by PhilSTAR (2026-09-29), SunStar (2026-09-29), PTV News and Rappler. Previous rates were P2.40/km (traditional) and P2.50/km (modern).",
+      "discount_note": "20% discount for students, elderly and PWDs (P3.00 x 0.8 = P2.40/km).",
+      "note": "PROVISIONAL: LTFRB says these may change after its final evaluation. The temporary fare guide is valid only until 2026-12-31; official matrices are due from January 2027. Per-kilometer rate only: no base fare, minimum fare or rounding rule was found in the sources, so base_fare/base_km are 0 and round_to is unknown. UV Express has no routes in the Manila feed, so the planner does not use this."
     }
   }
 }

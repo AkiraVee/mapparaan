@@ -15,5 +15,6 @@ Subset of the Sakay.ph / DOTC Philippine GTFS feed, clipped to the **City of Man
 
 Some trips therefore contain only the Manila portion of their original itinerary.
 
-Original data: Metro Manila jeepney, bus, LRT and PNR services (MRT-3 does not enter the
-City of Manila). See `LICENSE.md` for the DOTC license terms.
+Original data: Metro Manila jeepney, bus and LRT services. PNR Metro Commuter (ROUTE_880872) was removed
+after clipping, and MRT-3 does not enter the
+City of Manila. See `LICENSE.md` for the DOTC license terms.

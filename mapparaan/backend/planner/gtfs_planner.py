@@ -15,6 +15,7 @@ Preferences
 Usage (CLI)
   python3 gtfs_planner.py <data_dir> "14.5918,120.9786" "14.6567,121.0287"
   python3 gtfs_planner.py <data_dir> ORIGIN DEST --passenger student
+  python3 gtfs_planner.py <data_dir> ORIGIN DEST --avoid jeepney,bus
 """
 import csv
 import datetime
@@ -37,16 +38,23 @@ MIN_WAIT_RAIL_S = 120
 SEC_PER_PESO = 300            # "cheapest" trades 1 peso for 5 minutes
 WALK_WEIGHT = 1.5             # walking feels longer than riding the same time
 
-# Rail fares are not in the config yet (table: null) -> rough placeholder.
-RAIL_FALLBACK = {"base_fare": 15.0, "base_km": 0, "per_km": 1.5}
-FARE_SOURCE_LABEL = "Mapparaan fare configuration; verify current fare"
+# Fares (fare_config.json, LTFRB fare guides effective 2026-09-28)
+FARE_QUANTUM = 0.25           # road fares round to the nearest P0.25
+# The feed only says "jeepney" or "bus", not traditional vs modern/aircon, so every
+# road ride gets a range: (lower-fare config key, higher-fare config key).
+ROAD_FARE_MODES = {
+    "jeepney": ("jeepney", "modern_jeepney"),
+    "bus": ("bus", "aircon_bus"),
+}
+FARE_SOURCE_LABEL = "Estimated from LTFRB, LRTA and LRMC fare tables; verify before travel."
+RAIL_FARE_NOTE = " Rail fares assume a Beep (stored value) card."
 
 MODE_LABEL = {
     "jeepney": "Jeepney", "bus": "Bus", "uv_express": "UV Express",
-    "lrt1": "LRT-1", "lrt2": "LRT-2", "mrt3": "MRT-3", "pnr": "PNR",
+    "lrt1": "LRT-1", "lrt2": "LRT-2", "mrt3": "MRT-3",
     "fort_bus": "Fort Bus",
 }
-RAIL_MODES = {"lrt1", "lrt2", "mrt3", "pnr"}
+RAIL_MODES = {"lrt1", "lrt2", "mrt3"}
 
 PREFS = {
     # transfer_penalty_s, peso_weight_s
@@ -73,6 +81,17 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
+def round_fare(value, step=FARE_QUANTUM):
+    """Round half up to a multiple of `step` (Python's round() would round half to even)."""
+    if not step:
+        return round(value, 2)
+    return math.floor(value / step + 0.5 + 1e-9) * step
+
+
+def norm_name(name):
+    return " ".join(str(name).lower().split())
+
+
 class Planner:
     def __init__(self, data_dir):
         gtfs = os.path.join(data_dir, "gtfs")
@@ -93,6 +112,8 @@ class Planner:
         self.stop_lat = [float(s["stop_lat"]) for s in stops]
         self.stop_lon = [float(s["stop_lon"]) for s in stops]
         self.n_stops = len(stops)
+        self.warnings = []
+        self._init_fares()
 
         self.calendar = {c["service_id"]: c for c in read_csv(os.path.join(gtfs, "calendar.txt"))}
         trips = read_csv(os.path.join(gtfs, "trips.txt"))
@@ -143,6 +164,12 @@ class Planner:
             self.grid[self._cell(self.stop_lat[i], self.stop_lon[i])].append(i)
         self._walk_adj = {}
 
+        for mode in sorted({t["mode"] for t in self.trips}):
+            if mode in RAIL_MODES and mode not in self.rail:
+                self.warnings.append(f"No usable rail fare table for '{mode}'; its fares are estimates.")
+            elif mode not in RAIL_MODES and mode not in self.road:
+                self.warnings.append(f"No fare rules for '{mode}'; priced like a bus.")
+
     # ── geometry helpers ─────────────────────────────────────────────────────
     def _cell(self, lat, lon):
         return (int(lat / self.cell), int(lon / self.cell))
@@ -173,15 +200,112 @@ class Planner:
         return straight_m * WALK_DETOUR / WALK_SPEED_MPS
 
     # ── fares ────────────────────────────────────────────────────────────────
-    def fare_cfg(self, mode):
-        cfg = self.fares["modes"].get(mode, {})
-        if cfg.get("base_fare") is None:
-            return RAIL_FALLBACK if mode in RAIL_MODES or not cfg else RAIL_FALLBACK
-        return cfg
+    _ROAD_KEYS = ("base_fare", "base_km", "per_km", "discounted_base_fare", "discounted_per_km")
 
-    def ride_fare(self, mode, km):
-        c = self.fare_cfg(mode)
-        return round(c["base_fare"] + c["per_km"] * max(0.0, km - c["base_km"]))
+    def _road_cfg(self, key):
+        """A road fare rule, only if it is verified and complete; otherwise None."""
+        cfg = self.fares["modes"].get(key)
+        if (cfg and cfg.get("verified") is True
+                and all(cfg.get(k) is not None for k in self._ROAD_KEYS)):
+            return cfg
+        return None
+
+    def _init_fares(self):
+        modes = self.fares["modes"]
+
+        # Road modes: (lower fare rule, higher fare rule)
+        self.road = {}
+        for mode, (low_key, high_key) in ROAD_FARE_MODES.items():
+            low = self._road_cfg(low_key)
+            if low is None:
+                continue
+            self.road[mode] = (low, self._road_cfg(high_key) or low)
+        for required in ("jeepney", "bus"):
+            if required not in self.road:
+                raise ValueError(f"fare_config.json has no verified, complete fare for '{required}'")
+
+        # Rail modes: station-to-station tables
+        feed_names = {norm_name(n) for n in self.stop_name}
+        self.rail = {}
+        for mode in sorted(RAIL_MODES):
+            cfg = modes.get(mode)
+            if not cfg or cfg.get("type") != "station_matrix":
+                continue
+            tickets = cfg["ticket_types"]
+            table = tickets.get(cfg.get("default_ticket")) or tickets.get("all")
+            if not table:
+                continue
+            station_idx = {name: i for i, name in enumerate(cfg["stations"])}
+            lookup = {norm_name(feed_name): station_idx[station]
+                      for feed_name, station in cfg.get("feed_stop_names", {}).items()
+                      if station in station_idx}
+            missing = [n for n in cfg.get("feed_stop_names", {}) if norm_name(n) not in feed_names]
+            if missing:
+                self.warnings.append(
+                    f"{mode}: {len(missing)} fare-table stop name(s) not found in stops.txt: "
+                    + ", ".join(missing))
+            reg, dis = table["regular"], table["discounted"]
+            n = len(reg)
+            off_r = [reg[i][j] for i in range(n) for j in range(n) if i != j and reg[i][j] is not None]
+            off_d = [dis[i][j] for i in range(n) for j in range(n) if i != j and dis[i][j] is not None]
+            diag = [reg[i][i] for i in range(n) if reg[i][i] is not None]
+            board = min(diag) if diag else min(off_r)
+            self.rail[mode] = {
+                "lookup": lookup, "regular": reg, "discounted": dis,
+                "mean_regular": sum(off_r) / len(off_r), "mean_discounted": sum(off_d) / len(off_d),
+                # search heuristic only (the real fare comes from the table afterwards)
+                "board": board, "per_stop": (max(off_r) - board) / max(1, n - 1),
+            }
+
+    def _search_cost(self, mode):
+        """(boarding fee, per-km, per-stop) used only to rank routes for 'cheapest'."""
+        r = self.rail.get(mode)
+        if r:
+            return (r["board"], 0.0, r["per_stop"])
+        low = (self.road.get(mode) or self.road["bus"])[0]
+        return (max(0.0, low["base_fare"] - low["per_km"] * low["base_km"]), low["per_km"], None)
+
+    @staticmethod
+    def _distance_fare(cfg, km, discounted):
+        base = cfg["discounted_base_fare"] if discounted else cfg["base_fare"]
+        per_km = cfg["discounted_per_km"] if discounted else cfg["per_km"]
+        return round_fare(base + per_km * max(0.0, km - cfg["base_km"]),
+                          cfg.get("round_to") or FARE_QUANTUM)
+
+    def rail_fare(self, mode, from_name, to_name):
+        """(regular, discounted, exact) from the station table, or None if the mode has none.
+        `exact` is False when a stop name is not in the table and the fare is an average."""
+        r = self.rail.get(mode)
+        if not r:
+            return None
+        i = r["lookup"].get(norm_name(from_name))
+        j = r["lookup"].get(norm_name(to_name))
+        if i is not None and j is not None:
+            reg, dis = r["regular"][i][j], r["discounted"][i][j]
+            if reg is not None and dis is not None:
+                return float(reg), float(dis), True
+        return (round_fare(r["mean_regular"]), round_fare(r["mean_discounted"]), False)
+
+    def leg_fares(self, mode, km, from_name="", to_name=""):
+        """Fares for one ride leg. Road legs get a range (traditional/ordinary up to
+        modern/aircon); rail legs get one exact table fare. Student, senior and PWD
+        fares use each mode's own discount (20% road, 50% rail)."""
+        if mode in RAIL_MODES:
+            got = self.rail_fare(mode, from_name, to_name)
+            if got:
+                reg, dis, exact = got
+                return {"fare": reg, "fare_max": reg, "fare_discounted": dis,
+                        "fare_discounted_max": dis, "estimated": not exact}
+        low, high = self.road.get(mode) or self.road["bus"]
+        fare = self._distance_fare(low, km, False)
+        disc = self._distance_fare(low, km, True)
+        return {
+            "fare": fare,
+            "fare_max": max(fare, self._distance_fare(high, km, False)),
+            "fare_discounted": disc,
+            "fare_discounted_max": max(disc, self._distance_fare(high, km, True)),
+            "estimated": True,
+        }
 
     # ── service filtering ────────────────────────────────────────────────────
     def trip_wait_s(self, trip, when):
@@ -260,9 +384,7 @@ class Planner:
 
         def board_from(stop, cost, frm):
             for ti, pos in boardings.get(stop, ()):
-                t = self.trips[ti]
-                c = self.fare_cfg(t["mode"])
-                board_fare = max(0.0, c["base_fare"] - c["per_km"] * c["base_km"])
+                board_fare = self._search_cost(self.trips[ti]["mode"])[0]
                 relax(ns + offset[ti] + pos,
                       cost + waits[ti] + transfer_pen + peso_w * board_fare, frm)
 
@@ -290,8 +412,9 @@ class Planner:
                     relax(t["stops"][pos], cost, node)  # alight
                 if pos + 1 < len(t["stops"]):
                     km = (t["cum_m"][pos + 1] - t["cum_m"][pos]) * ROAD_DETOUR / 1000
-                    per_km = self.fare_cfg(t["mode"])["per_km"]
-                    relax(node + 1, cost + t["hops"][pos] + peso_w * per_km * km, node)
+                    _, per_km, per_stop = self._search_cost(t["mode"])
+                    hop_fare = per_stop if per_stop is not None else per_km * km
+                    relax(node + 1, cost + t["hops"][pos] + peso_w * hop_fare, node)
 
         if END not in best:
             return None
@@ -353,6 +476,7 @@ class Planner:
         km = (t["cum_m"][a] - t["cum_m"][b]) * ROAD_DETOUR / 1000
         ride_s = sum(t["hops"][b:a])
         sids = t["stops"][b:a + 1]
+        fares = self.leg_fares(t["mode"], km, self.stop_name[sids[0]], self.stop_name[sids[-1]])
         return {
             "type": "ride", "mode": t["mode"], "mode_label": MODE_LABEL.get(t["mode"], t["mode"]),
             "route_id": t["route_id"], "route_code": t["short_name"] or t["route_id"],
@@ -362,26 +486,34 @@ class Planner:
             "wait_minutes": round(waits[cur["ti"]] / 60),
             "minutes": round(ride_s / 60),
             "km": round(km, 1),
-            "fare": self.ride_fare(t["mode"], km),
+            "fare": fares["fare"],
+            "fare_max": fares["fare_max"],
+            "fare_discounted": fares["fare_discounted"],
+            "fare_discounted_max": fares["fare_discounted_max"],
+            "fare_estimated": fares["estimated"],
             "path": [[self.stop_lat[s], self.stop_lon[s]] for s in sids],
         }
 
     # ── public API ───────────────────────────────────────────────────────────
-    def plan(self, origin, dest, passenger="general", when=None):
+    def plan(self, origin, dest, passenger="general", when=None, avoid_modes=None):
         """origin/dest = (lat, lon). Returns a list of route options.
 
         `passenger` is accepted for API symmetry; fares come back both regular
-        and discounted, so it does not change the result."""
+        and discounted, so it does not change the result. `avoid_modes` is a set
+        of mode names (e.g. {"jeepney"}) whose routes are left out of the search."""
         when = when or datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        avoid_modes = {str(m).strip().lower() for m in (avoid_modes or ()) if str(m).strip()}
         # Both the regular and the discounted fare are always returned; the
         # client picks which one to show based on the passenger type.
-        discount = self.fares["discount"]["multiplier"]
         options, seen = [], set()
 
         direct_m = hav_m(origin[0], origin[1], dest[0], dest[1])
+        walk_eta = None
         if direct_m <= WALK_ONLY_MAX_M:
             leg = self._walk_leg(list(origin), list(dest), "Your location", "Destination", direct_m)
-            options.append(self._summarise("walk", [leg], discount))
+            walk_opt = self._summarise("walk", [leg])
+            walk_eta = walk_opt["eta_minutes"]
+            options.append(walk_opt)
 
         titles = {"fastest": "Fastest route", "cheapest": "Cheapest route",
                   "fewest_transfers": "Fewest transfers"}
@@ -396,15 +528,26 @@ class Planner:
             if key in seen:
                 continue
             seen.add(key)
-            opt = self._summarise(pref, legs, discount)
+            opt = self._summarise(pref, legs)
+            # A paid ride that is not faster than the free walk is never worth offering.
+            if walk_eta is not None and opt["eta_minutes"] >= walk_eta:
+                continue
             opt["title"] = titles[pref]
             options.append(opt)
         return options
 
-    def _summarise(self, pref, legs, discount):
+    def _summarise(self, pref, legs):
         rides = [l for l in legs if l["type"] == "ride"]
         minutes = sum(l["minutes"] + l.get("wait_minutes", 0) for l in legs)
-        fare = sum(l["fare"] for l in rides)
+
+        def total(key):
+            return round(sum(l[key] for l in rides), 2)
+
+        has_rail = any(l["mode"] in RAIL_MODES for l in rides)
+        if not rides:
+            source = "Walking: no fare."
+        else:
+            source = FARE_SOURCE_LABEL + (RAIL_FARE_NOTE if has_rail else "")
         parts = []
         for l in legs:
             if l["type"] == "walk":
@@ -416,9 +559,14 @@ class Planner:
             "title": "Walk" if pref == "walk" else pref,
             "summary": " → ".join(parts),
             "eta_minutes": minutes,
-            "fare": fare,
-            "fare_discounted": round(fare * discount),
-            "fare_source": FARE_SOURCE_LABEL,
+            # Regular and student/senior/PWD fares, each as the lowest fare and the
+            # highest fare (modern jeepney / aircon bus). Rail legs have one fare.
+            "fare": total("fare"),
+            "fare_max": total("fare_max"),
+            "fare_discounted": total("fare_discounted"),
+            "fare_discounted_max": total("fare_discounted_max"),
+            "fare_estimated": any(l["fare_estimated"] for l in rides),
+            "fare_source": source,
             "transfers": max(0, len(rides) - 1),
             "modes": sorted({l["mode"] for l in rides}),
             "legs": legs,
@@ -436,10 +584,16 @@ def main():
     passenger = "general"
     if "--passenger" in args:
         passenger = args[args.index("--passenger") + 1]
+    avoid = set()
+    if "--avoid" in args:
+        avoid = {m for m in args[args.index("--avoid") + 1].split(",") if m}
     planner = Planner(data_dir)
-    for opt in planner.plan(o, d, passenger=passenger):
+    for warning in planner.warnings:
+        print(f"[warning] {warning}")
+    for opt in planner.plan(o, d, passenger=passenger, avoid_modes=avoid):
         print(f"\n== {opt['title']}: {opt['eta_minutes']} min, "
-              f"P{opt['fare']} (discounted P{opt['fare_discounted']}), "
+              f"P{opt['fare']:g} up to P{opt['fare_max']:g} "
+              f"(discounted P{opt['fare_discounted']:g} up to P{opt['fare_discounted_max']:g}), "
               f"{opt['transfers']} transfer(s)")
         for l in opt["legs"]:
             if l["type"] == "walk":
@@ -447,7 +601,7 @@ def main():
             else:
                 print(f"   {l['mode_label']} {l['route_code']} {l['route_name']}: "
                       f"{l['from']} -> {l['to']} | wait {l['wait_minutes']} + ride "
-                      f"{l['minutes']} min, {l['stops']} stops, {l['km']} km, P{l['fare']}")
+                      f"{l['minutes']} min, {l['stops']} stops, {l['km']} km, P{l['fare']:g}")
 
 
 if __name__ == "__main__":

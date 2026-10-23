@@ -61,6 +61,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   bool _tripLogged = false;
   bool _isOfflineFallback = false;
 
+  /// Set when the server says the trip is outside the City of Manila.
+  String? _serviceAreaMessage;
+
+  /// Set when the server answered but found no transit route.
+  bool _noRouteFound = false;
+
   late RoutePreference _selectedPreference;
   late PassengerType _passengerType;
   DateTime? _departureTime;
@@ -141,9 +147,13 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       return;
     }
 
-    setState(() => _isLoadingRoute = true);
+    setState(() {
+      _isLoadingRoute = true;
+      _serviceAreaMessage = null;
+      _noRouteFound = false;
+    });
 
-    final realPlans = await TransitPlannerService.planTransit(
+    final result = await TransitPlannerService.planTransitResult(
       origin: origin,
       destination: destination,
       passengerType: _passengerType,
@@ -153,6 +163,27 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
     if (!mounted) return;
 
+    // The server answered, but with no routes: say why instead of showing
+    // sample routes. (Sample routes are only for when the server is offline.)
+    if (result != null && result.options.isEmpty) {
+      setState(() {
+        _isOfflineFallback = false;
+        if (result.isOutsideServiceArea) {
+          _serviceAreaMessage =
+              result.message ??
+              'Mapparaan currently covers the City of Manila only.';
+        } else {
+          _noRouteFound = true;
+        }
+        _routeOptions = const [];
+        _selectedOption = null;
+        _routePoints = [];
+        _isLoadingRoute = false;
+      });
+      return;
+    }
+
+    final realPlans = result?.options;
     if (realPlans != null && realPlans.isNotEmpty) {
       final matching = realPlans.where(
         (o) => o.routePreference == _selectedPreference,
@@ -276,10 +307,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           destination: widget.resolvedPlaceName,
           preference: _selectedPreference.name,
           durationMinutes: topOption.etaMinutes,
-          fareEstimate: topOption.effectiveFare(_passengerType).toDouble(),
+          fareEstimate: topOption.effectiveFare(_passengerType),
           routeSummary: topOption.summary.isNotEmpty
               ? topOption.summary
-              : '${topOption.title} (₱${topOption.effectiveFare(_passengerType)})',
+              : '${topOption.title} (${formatPeso(topOption.effectiveFare(_passengerType))})',
         ),
       );
     }
@@ -644,6 +675,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 coordinates: widget.resolvedDestination,
                 isSaved: _isSaved,
                 isOfflineFallback: _isOfflineFallback,
+                serviceAreaMessage: _serviceAreaMessage,
+                noRouteFound: _noRouteFound,
                 selectedPreference: _selectedPreference,
                 passengerType: _passengerType,
                 departureTime: _departureTime,
@@ -676,6 +709,8 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final LatLng coordinates;
   final bool isSaved;
   final bool isOfflineFallback;
+  final String? serviceAreaMessage;
+  final bool noRouteFound;
   final RoutePreference selectedPreference;
   final PassengerType passengerType;
   final DateTime? departureTime;
@@ -698,6 +733,8 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.coordinates,
     required this.isSaved,
     required this.isOfflineFallback,
+    required this.serviceAreaMessage,
+    required this.noRouteFound,
     required this.selectedPreference,
     required this.passengerType,
     required this.departureTime,
@@ -823,7 +860,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
       return;
     }
     final fareController = TextEditingController(
-      text: '${route.effectiveFare(widget.passengerType)}',
+      text: formatPesoPlain(route.effectiveFare(widget.passengerType)),
     );
     final tripsController = TextEditingController(text: '2');
     final daysController = TextEditingController(text: '22');
@@ -925,12 +962,15 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
               if (charged == null) return;
               final expected = route.effectiveFare(widget.passengerType);
               Navigator.pop(dialogContext);
-              final difference = charged - expected;
-              final result = difference.abs() < 0.01
-                  ? 'This matches the current estimate of ₱$expected.'
-                  : difference > 0
-                  ? 'This is ₱${difference.toStringAsFixed(2)} above the estimate of ₱$expected.'
-                  : 'This is ₱${difference.abs().toStringAsFixed(2)} below the estimate of ₱$expected.';
+              final upTo = route.effectiveFareUpTo(widget.passengerType);
+              final estimate = route.hasFareRange(widget.passengerType)
+                  ? '${formatPeso(expected)} to ${formatPeso(upTo)}'
+                  : formatPeso(expected);
+              final result = charged >= expected - 0.01 && charged <= upTo + 0.01
+                  ? 'This is within the current estimate of $estimate.'
+                  : charged > upTo
+                  ? 'This is ${formatPeso(charged - upTo)} above the estimate of $estimate.'
+                  : 'This is ${formatPeso(expected - charged)} below the estimate of $estimate.';
               ScaffoldMessenger.of(context)
                   .showSnackBar(SnackBar(content: Text(result)));
             },
@@ -995,8 +1035,6 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
       'bus': 'Bus',
       'lrt1': 'LRT-1',
       'lrt2': 'LRT-2',
-      'mrt3': 'MRT-3',
-      'pnr': 'PNR',
     };
 
     return Positioned(
@@ -1248,7 +1286,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'API offline: showing mock estimates. Start backend/planner/api.py for real routes.',
+                              'Server offline: these are rough distance-based samples, not real routes. Start backend/planner/api.py for real routes.',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Color(0xFFBF360C),
@@ -1257,6 +1295,19 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           ),
                         ],
                       ),
+                    ),
+
+                  if (widget.serviceAreaMessage != null)
+                    _NoticeBanner(
+                      icon: Icons.location_off_outlined,
+                      text:
+                          '${widget.serviceAreaMessage} Choose a start and destination inside the City of Manila.',
+                    ),
+                  if (widget.noRouteFound)
+                    const _NoticeBanner(
+                      icon: Icons.alt_route,
+                      text:
+                          'No transit route found for this trip. Try another departure time, or allow more modes.',
                     ),
 
                   Align(
@@ -1290,6 +1341,41 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Notice banner ────────────────────────────────────────────────────────────
+
+class _NoticeBanner extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _NoticeBanner({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFE0B2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFFE65100)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFBF360C)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1354,7 +1440,7 @@ class _PassengerTypeSelector extends StatelessWidget {
                     ),
                     if (type.isDiscounted)
                       Text(
-                        '20% off',
+                        'Discounted',
                         style: TextStyle(
                           fontSize: 8.5,
                           fontWeight: FontWeight.w600,
@@ -1437,7 +1523,7 @@ class _RouteResultCard extends StatelessWidget {
       if (route.modes.contains('jeepney')) return Icons.airport_shuttle;
       if (route.modes.contains('bus')) return Icons.directions_bus;
       if (route.modes.any(
-        (m) => m.startsWith('lrt') || m.startsWith('mrt') || m == 'pnr',
+        (m) => m.startsWith('lrt') || m.startsWith('mrt'),
       )) {
         return Icons.train;
       }
@@ -1450,6 +1536,11 @@ class _RouteResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDiscounted = passengerType.isDiscounted;
     final effectiveFare = route.effectiveFare(passengerType);
+    final fareUpTo = route.effectiveFareUpTo(passengerType);
+    final hasFareRange = route.hasFareRange(passengerType);
+    // Walking-only routes have no fare, so there is no discount to show.
+    final showDiscount =
+        isDiscounted && route.fare > route.fareDiscounted + 0.001;
     final colorScheme = Theme.of(context).colorScheme;
     final primary = colorScheme.primary;
     final container = colorScheme.primaryContainer;
@@ -1458,7 +1549,8 @@ class _RouteResultCard extends StatelessWidget {
       button: true,
       label:
           '${route.title}, estimated ${route.etaMinutes} minutes, '
-          'estimated fare $effectiveFare pesos',
+          '${route.fareEstimated ? 'estimated ' : ''}fare ${formatPesoPlain(effectiveFare)} pesos'
+          '${hasFareRange ? ', up to ${formatPesoPlain(fareUpTo)} pesos on a modern or air-conditioned vehicle' : ''}',
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
@@ -1659,30 +1751,40 @@ class _RouteResultCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '₱$effectiveFare',
+                      formatPeso(effectiveFare),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: primary,
                       ),
                     ),
-                    Text(
-                      'Estimated',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Text(
-                      'Round trip ₱${effectiveFare * 2}',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (isDiscounted) ...[
+                    if (hasFareRange)
                       Text(
-                        '₱${route.fare}',
+                        'up to ${formatPeso(fareUpTo)} if modern/aircon',
+                        textAlign: TextAlign.end,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    Text(
+                      route.fareEstimated ? 'Estimated' : 'Per fare table',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Round trip ${formatPeso(effectiveFare * 2)}',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (showDiscount) ...[
+                      Text(
+                        formatPeso(route.fare),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
@@ -1701,7 +1803,7 @@ class _RouteResultCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '-20%',
+                          '-${route.discountPercent}%',
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
@@ -1710,7 +1812,7 @@ class _RouteResultCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (isDiscounted)
+                    if (showDiscount)
                       Text(
                         'Bring a valid ID',
                         style: TextStyle(

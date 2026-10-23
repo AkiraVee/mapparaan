@@ -10,6 +10,23 @@ import 'ai_assistant_service.dart';
 import 'commuter_preference_service.dart';
 import 'route_planner_service.dart';
 
+/// Reason the planner API sends when a trip is outside the City of Manila.
+const String outsideServiceAreaReason = 'outside_service_area';
+
+/// Formats a peso amount without the currency sign: whole pesos as "18",
+/// otherwise two decimals ("21.75", "14.50").
+String formatPesoPlain(num amount) {
+  final rounded = (amount * 100).round() / 100;
+  return rounded == rounded.roundToDouble()
+      ? rounded.toStringAsFixed(0)
+      : rounded.toStringAsFixed(2);
+}
+
+/// Formats a peso amount with the currency sign ("₱18", "₱21.75").
+String formatPeso(num amount) => '₱${formatPesoPlain(amount)}';
+
+double? _doubleOrNull(Object? value) => value is num ? value.toDouble() : null;
+
 extension PassengerTypeExt on PassengerType {
   String get apiValue {
     switch (this) {
@@ -55,7 +72,15 @@ class TransitLeg {
   final int? stops;
   final int? waitMinutes;
   final double? km;
-  final int? fare;
+
+  /// Regular fare for this leg (lowest: traditional jeepney / ordinary bus).
+  final double? fare;
+
+  /// Highest regular fare (modern jeepney / aircon bus). Same as [fare] on rail.
+  final double? fareMax;
+  final double? fareDiscounted;
+  final double? fareDiscountedMax;
+  final bool fareEstimated;
   final List<LatLng> path;
 
   const TransitLeg({
@@ -73,6 +98,10 @@ class TransitLeg {
     this.waitMinutes,
     this.km,
     this.fare,
+    this.fareMax,
+    this.fareDiscounted,
+    this.fareDiscountedMax,
+    this.fareEstimated = true,
     this.path = const [],
   });
 
@@ -123,7 +152,11 @@ class TransitLeg {
       stops: (json['stops'] as num?)?.toInt(),
       waitMinutes: (json['wait_minutes'] as num?)?.toInt(),
       km: (json['km'] as num?)?.toDouble(),
-      fare: (json['fare'] as num?)?.toInt(),
+      fare: _doubleOrNull(json['fare']),
+      fareMax: _doubleOrNull(json['fare_max']),
+      fareDiscounted: _doubleOrNull(json['fare_discounted']),
+      fareDiscountedMax: _doubleOrNull(json['fare_discounted_max']),
+      fareEstimated: json['fare_estimated'] as bool? ?? true,
       path: points,
     );
   }
@@ -143,6 +176,10 @@ class TransitLeg {
     'wait_minutes': waitMinutes,
     'km': km,
     'fare': fare,
+    'fare_max': fareMax,
+    'fare_discounted': fareDiscounted,
+    'fare_discounted_max': fareDiscountedMax,
+    'fare_estimated': fareEstimated,
     'path': path.map((point) => [point.latitude, point.longitude]).toList(),
   };
 }
@@ -153,8 +190,19 @@ class TransitPlanOption {
   final String title;
   final String summary;
   final int etaMinutes;
-  final int fare;
-  final int fareDiscounted;
+
+  /// Lowest regular fare (traditional jeepney / ordinary bus; exact on rail).
+  final double fare;
+
+  /// Highest regular fare (modern jeepney / aircon bus). Null means no range.
+  final double? fareMax;
+
+  /// Student / senior / PWD fare, lowest and highest.
+  final double fareDiscounted;
+  final double? fareDiscountedMax;
+
+  /// True when any part of the fare is a distance estimate rather than a table value.
+  final bool fareEstimated;
   final String fareSource;
   final int transfers;
   final List<String> modes;
@@ -167,18 +215,37 @@ class TransitPlanOption {
     required this.summary,
     required this.etaMinutes,
     required this.fare,
+    this.fareMax,
     required this.fareDiscounted,
-    this.fareSource = 'Static fare estimate; verify before travel',
+    this.fareDiscountedMax,
+    this.fareEstimated = true,
+    this.fareSource = 'Estimated fare; verify before travel',
     required this.transfers,
     this.modes = const [],
     this.legs = const [],
     this.isMock = false,
   });
 
-  /// Returns the applicable fare based on passenger category
-  int effectiveFare(PassengerType passengerType) {
+  /// Returns the applicable (lowest) fare based on passenger category
+  double effectiveFare(PassengerType passengerType) {
     return passengerType.isDiscounted ? fareDiscounted : fare;
   }
+
+  /// Highest applicable fare (modern jeepney / aircon bus).
+  double effectiveFareUpTo(PassengerType passengerType) {
+    final upTo = passengerType.isDiscounted ? fareDiscountedMax : fareMax;
+    final base = effectiveFare(passengerType);
+    return upTo != null && upTo > base ? upTo : base;
+  }
+
+  /// True when the fare could be higher on a modern jeepney or aircon bus.
+  bool hasFareRange(PassengerType passengerType) =>
+      effectiveFareUpTo(passengerType) > effectiveFare(passengerType) + 0.001;
+
+  /// Percent saved by the discounted fare (0 when there is no discount).
+  int get discountPercent => fare > 0
+      ? (((fare - fareDiscounted) / fare) * 100).round().clamp(0, 100).toInt()
+      : 0;
 
   /// Maps string preference to RoutePreference enum
   RoutePreference get routePreference {
@@ -217,13 +284,16 @@ class TransitPlanOption {
       title: json['title'] as String? ?? 'Route option',
       summary: json['summary'] as String? ?? '',
       etaMinutes: (json['eta_minutes'] as num?)?.toInt() ?? 0,
-      fare: (json['fare'] as num?)?.toInt() ?? 0,
+      fare: _doubleOrNull(json['fare']) ?? 0,
+      fareMax: _doubleOrNull(json['fare_max']),
       fareDiscounted:
-          (json['fare_discounted'] as num?)?.toInt() ??
-          ((json['fare'] as num?)?.toInt() ?? 0),
+          _doubleOrNull(json['fare_discounted']) ??
+          (_doubleOrNull(json['fare']) ?? 0),
+      fareDiscountedMax: _doubleOrNull(json['fare_discounted_max']),
+      fareEstimated: json['fare_estimated'] as bool? ?? true,
       fareSource:
           json['fare_source'] as String? ??
-          'Static fare estimate; verify before travel',
+          'Estimated fare; verify before travel',
       transfers: (json['transfers'] as num?)?.toInt() ?? 0,
       modes: parsedModes,
       legs: parsedLegs,
@@ -237,7 +307,10 @@ class TransitPlanOption {
     'summary': summary,
     'eta_minutes': etaMinutes,
     'fare': fare,
+    'fare_max': fareMax,
     'fare_discounted': fareDiscounted,
+    'fare_discounted_max': fareDiscountedMax,
+    'fare_estimated': fareEstimated,
     'fare_source': fareSource,
     'transfers': transfers,
     'modes': modes,
@@ -252,7 +325,6 @@ class TransitPlanOption {
     PassengerType passengerType = PassengerType.general,
     List<LatLng>? fallbackPath,
   }) {
-    final discounted = (mock.fare * 0.8).round();
     final prefString = mock.preference == RoutePreference.cheapest
         ? 'cheapest'
         : mock.preference == RoutePreference.fewestTransfers
@@ -265,7 +337,11 @@ class TransitPlanOption {
       summary: mock.summary,
       etaMinutes: mock.etaMinutes,
       fare: mock.fare,
-      fareDiscounted: discounted,
+      fareMax: mock.fareMax,
+      fareDiscounted: mock.fareDiscounted,
+      fareDiscountedMax: mock.fareDiscountedMax,
+      fareEstimated: true,
+      fareSource: 'Rough distance-based estimate (offline); verify before travel.',
       transfers: mock.transfers,
       modes: [mock.modeLabel],
       legs: [
@@ -276,12 +352,27 @@ class TransitPlanOption {
           minutes: mock.etaMinutes,
           modeLabel: mock.modeLabel,
           fare: mock.fare,
+          fareMax: mock.fareMax,
+          fareDiscounted: mock.fareDiscounted,
+          fareDiscountedMax: mock.fareDiscountedMax,
           path: fallbackPath ?? [origin, destination],
         ),
       ],
       isMock: true,
     );
   }
+}
+
+/// What the planner API answered: routes, or an empty list with a [reason]
+/// such as [outsideServiceAreaReason] (the data covers the City of Manila only).
+class TransitPlanResult {
+  final List<TransitPlanOption> options;
+  final String? reason;
+  final String? message;
+
+  const TransitPlanResult({this.options = const [], this.reason, this.message});
+
+  bool get isOutsideServiceArea => reason == outsideServiceAreaReason;
 }
 
 /// Service that coordinates with the backend transit planner API,
@@ -304,8 +395,31 @@ class TransitPlannerService {
   /// placed in request URLs or routine access logs.
   ///
   /// Returns a list of real options on success, or `null` if the API is offline
-  /// or unreachable.
+  /// or unreachable. An empty list means the server answered with no routes
+  /// (including trips outside Manila); use [planTransitResult] to tell why.
   static Future<List<TransitPlanOption>?> planTransit({
+    required LatLng origin,
+    required LatLng destination,
+    PassengerType passengerType = PassengerType.general,
+    DateTime? departureTime,
+    Set<String> avoidModes = const {},
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final result = await planTransitResult(
+      origin: origin,
+      destination: destination,
+      passengerType: passengerType,
+      departureTime: departureTime,
+      avoidModes: avoidModes,
+      timeout: timeout,
+    );
+    return result?.options;
+  }
+
+  /// Like [planTransit], but also reports the server's reason when it returns
+  /// no options (for example [outsideServiceAreaReason]). Returns `null` only
+  /// when the API is offline or unreachable.
+  static Future<TransitPlanResult?> planTransitResult({
     required LatLng origin,
     required LatLng destination,
     PassengerType passengerType = PassengerType.general,
@@ -338,21 +452,30 @@ class TransitPlannerService {
 
       final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));
       final List rawOptions;
+      String? reason;
+      String? message;
       if (decoded is List) {
         rawOptions = decoded;
       } else if (decoded is Map<String, dynamic> &&
           decoded['options'] is List) {
         rawOptions = decoded['options'] as List;
+        reason = decoded['reason'] as String?;
+        message = decoded['message'] as String?;
       } else {
         debugPrint('Transit planner API returned an invalid response shape');
         return null;
       }
 
-      return rawOptions
-          .map(
-            (item) => TransitPlanOption.fromJson(item as Map<String, dynamic>),
-          )
-          .toList();
+      return TransitPlanResult(
+        options: rawOptions
+            .map(
+              (item) =>
+                  TransitPlanOption.fromJson(item as Map<String, dynamic>),
+            )
+            .toList(),
+        reason: reason,
+        message: message,
+      );
     } catch (error) {
       debugPrint(
         'Transit planner API unavailable (${error.runtimeType}); using fallback routes.',
