@@ -92,6 +92,20 @@ def norm_name(name):
     return " ".join(str(name).lower().split())
 
 
+MANILA_TZ = datetime.timezone(datetime.timedelta(hours=8))
+
+
+def to_manila(when=None):
+    """Return `when` as a Manila wall-clock time. Timetables and calendars are Manila
+    local time, so an aware time (e.g. UTC from a phone) is converted; a naive time is
+    taken to already be Manila time; None means now."""
+    if when is None:
+        return datetime.datetime.now(MANILA_TZ)
+    if when.tzinfo is not None:
+        return when.astimezone(MANILA_TZ)
+    return when
+
+
 class Planner:
     def __init__(self, data_dir):
         gtfs = os.path.join(data_dir, "gtfs")
@@ -129,9 +143,11 @@ class Planner:
 
         # per-trip arrays
         self.trips = []
+        skipped = []
         for t in trips:
             rows = by_trip.get(t["trip_id"])
             if not rows or len(rows) < 2:
+                skipped.append(t["trip_id"])
                 continue
             rows.sort(key=lambda r: int(r["stop_sequence"]))
             sidx = [self.stop_idx[r["stop_id"]] for r in rows if r["stop_id"] in self.stop_idx]
@@ -156,6 +172,17 @@ class Planner:
                 "cum_m": cum,
                 "freq": freq.get(t["trip_id"], []),
             })
+
+        if skipped:
+            self.warnings.append(
+                f"{len(skipped)} trip(s) in trips.txt have fewer than 2 stop_times and are "
+                f"ignored: {', '.join(skipped[:5])}{' ...' if len(skipped) > 5 else ''}")
+        known = {t["trip_id"] for t in trips}
+        orphans = sorted(set(by_trip) - known)
+        if orphans:
+            self.warnings.append(
+                f"stop_times.txt has rows for {len(orphans)} trip id(s) that are not in "
+                f"trips.txt and are ignored: {', '.join(orphans[:5])}{' ...' if len(orphans) > 5 else ''}")
 
         # grid index for neighbour search (~330 m cells)
         self.cell = 0.003
@@ -501,7 +528,7 @@ class Planner:
         `passenger` is accepted for API symmetry; fares come back both regular
         and discounted, so it does not change the result. `avoid_modes` is a set
         of mode names (e.g. {"jeepney"}) whose routes are left out of the search."""
-        when = when or datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        when = to_manila(when)
         avoid_modes = {str(m).strip().lower() for m in (avoid_modes or ()) if str(m).strip()}
         # Both the regular and the discounted fare are always returned; the
         # client picks which one to show based on the passenger type.

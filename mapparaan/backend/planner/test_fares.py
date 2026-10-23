@@ -17,7 +17,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gtfs_planner import Planner, round_fare  # noqa: E402
+from gtfs_planner import Planner, round_fare, to_manila  # noqa: E402
 
 DATA_DIR = os.environ.get(
     "MAPPARAAN_DATA_DIR",
@@ -60,28 +60,29 @@ def build_feed(root):
     lrt2 = ["Recto LRT", "Legarda LRT", "Pureza LRT", "V. Mapa LRT"]
     for i, name in enumerate(lrt2):
         stops.append((f"M{i}", name, 14.700, 121.000 + 0.01 * i))
-    # Short urban jeepney line: 4 stops about 111 m apart (walking is as fast as riding)
-    for i in range(4):
-        stops.append((f"K{i}", f"Short Stop {i}", 14.800 + 0.001 * i, 120.980))
+    # A slow jeepney line (1 hour headway) with stops about 550 m apart: on a short
+    # trip here walking beats waiting for the vehicle.
+    for i in range(3):
+        stops.append((f"K{i}", f"Slow Stop {i}", 14.800 + 0.005 * i, 120.980))
     # A rail stop that is not in the fare table
     stops.append(("X0", "Mystery LRT", 14.740, 121.000))
     stops.append(("X1", "Mystery 2 LRT", 14.740, 121.010))
 
-    def add_route(route_id, mode, stop_ids, hop_s):
+    def add_route(route_id, mode, stop_ids, hop_s, headway=600):
         routes.append((route_id, route_id, f"Route {route_id}"))
         modes.append((route_id, mode))
         trips.append((f"{route_id}_t", route_id, "S1"))
         for seq, sid in enumerate(stop_ids, 1):
             t = hms((seq - 1) * hop_s)
             times.append((f"{route_id}_t", t, t, sid, seq))
-        freqs.append((f"{route_id}_t", "00:00:00", "24:00:00", 600))
+        freqs.append((f"{route_id}_t", "00:00:00", "24:00:00", headway))
 
     add_route("PUJ1", "jeepney", [f"J{i}" for i in range(6)], 180)
-    add_route("PUJ2", "jeepney", [f"K{i}" for i in range(4)], 60)
     add_route("PUB1", "bus", [f"B{i}" for i in range(6)], 150)
     add_route("LRT1R", "lrt1", [f"L{i}" for i in range(4)], 120)
     add_route("LRT2R", "lrt2", [f"M{i}" for i in range(4)], 120)
     add_route("XRAIL", "lrt1", ["X0", "X1"], 120)
+    add_route("PUJSLOW", "jeepney", [f"K{i}" for i in range(3)], 120, headway=3600)
 
     write_csv(os.path.join(gtfs, "stops.txt"),
               ["stop_id", "stop_name", "stop_lat", "stop_lon"], stops)
@@ -224,19 +225,47 @@ class FareTests(unittest.TestCase):
         self.assertFalse(walk["fare_estimated"])
 
     def test_same_point_offers_only_a_walk(self):
-        # Standing at Short Stop 1: without the fix a P14 ride to the next stop is offered.
-        here = (14.801, 120.980)
-        options = self.p.plan(here, here, when=WHEN)
+        options = self.p.plan((14.600, 120.980), (14.600, 120.980), when=WHEN)
         self.assertEqual([o["preference"] for o in options], ["walk"])
         self.assertEqual(options[0]["fare"], 0)
 
     def test_ride_slower_than_walking_is_not_offered(self):
-        # About 330 m apart: walking beats waiting for the jeepney.
-        options = self.p.plan((14.800, 120.980), (14.803, 120.980), when=WHEN)
+        options = self.p.plan((14.600, 120.980), (14.604, 120.980), when=WHEN)
         walk = next(o for o in options if o["preference"] == "walk")
         for o in options:
             if o is not walk:
                 self.assertLess(o["eta_minutes"], walk["eta_minutes"])
+
+    def test_slow_ride_is_not_offered_when_walking_is_faster(self):
+        # Slow Stop 0 > Slow Stop 1: a 10 min walk, but the only vehicle comes hourly.
+        # Before the fix the planner still offered the ~30 min paid ride.
+        options = self.p.plan((14.800, 120.980), (14.805, 120.980), when=WHEN)
+        self.assertEqual([o["preference"] for o in options], ["walk"])
+        # A longer trip on the same line: walking is 20 min, still faster than the wait.
+        options = self.p.plan((14.800, 120.980), (14.810, 120.980), when=WHEN)
+        self.assertEqual([o["preference"] for o in options], ["walk"])
+
+    def test_same_point_on_a_slow_line_offers_only_a_walk(self):
+        options = self.p.plan((14.800, 120.980), (14.800, 120.980), when=WHEN)
+        self.assertEqual([o["preference"] for o in options], ["walk"])
+
+    def test_fast_line_still_offered_when_it_beats_walking(self):
+        # Guards against the fix being too aggressive: a long trip must keep its rides.
+        options = self.p.plan((14.600, 120.980), (14.650, 120.980), when=WHEN)
+        self.assertTrue(any(o["modes"] for o in options))
+
+    # ── time zone ───────────────────────────────────────────────────────────
+    def test_to_manila_converts_aware_times(self):
+        utc = datetime.timezone.utc
+        m = to_manila(datetime.datetime(2026, 10, 23, 1, 0, tzinfo=utc))
+        self.assertEqual((m.day, m.hour), (23, 9))
+        late = to_manila(datetime.datetime(2026, 10, 23, 20, 0, tzinfo=utc))
+        self.assertEqual((late.day, late.hour), (24, 4))  # next day in Manila
+
+    def test_to_manila_keeps_naive_times_and_defaults_to_now(self):
+        naive = datetime.datetime(2026, 10, 23, 9, 0)
+        self.assertEqual(to_manila(naive), naive)
+        self.assertEqual(to_manila(None).utcoffset(), datetime.timedelta(hours=8))
 
     def test_every_option_has_all_fare_keys(self):
         options = self.p.plan((14.600, 120.980), (14.650, 120.980), when=WHEN)
