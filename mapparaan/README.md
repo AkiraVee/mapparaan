@@ -61,11 +61,12 @@ The Flutter planner sends route requests as JSON `POST /plan` requests so
 coordinates are not placed in request URLs. Older `GET /plan` requests remain
 supported for compatibility, but should not be used in new clients.
 
-Account deletion is not implemented yet. The agreed design is immediate
-permanent deletion or a cancellable 30-day grace period. Implementing it
-requires a server-side privileged function and a scheduled worker to remove
-both database rows and Storage objects; never put a Supabase service-role key
-in the app.
+Memory photos are selected at up to 1600 pixels per side and recompressed to
+JPEG with `flutter_image_compress` (including orientation correction and EXIF
+removal). The app retries at lower quality and dimensions until the result is
+under its 8 MB client limit. The Supabase bucket should also enforce its
+server-side file-size and MIME-type limits; client compression is not a
+substitute for those controls.
 
 ## Getting Started
 

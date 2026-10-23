@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/memory_photo_compression_service.dart';
 import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
@@ -990,8 +991,6 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
 
   static const double _minFactor = 0.30;
   static const double _maxFactor = 0.90;
-  static const int _maxMemoryPhotoBytes = 10 * 1024 * 1024;
-
   Future<void> _addMemoryPhoto() async {
     if (_isUploadingMemory) return;
     setState(() => _isUploadingMemory = true);
@@ -1020,44 +1019,31 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
 
       final pickedFile = await ImagePicker().pickImage(
         source: source,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: MemoryPhotoCompressionService.maxDimension.toDouble(),
+        maxHeight: MemoryPhotoCompressionService.maxDimension.toDouble(),
+        imageQuality: 100,
       );
       if (pickedFile == null || !mounted) return;
 
-      final imageBytes = await pickedFile.readAsBytes();
-      if (imageBytes.lengthInBytes > _maxMemoryPhotoBytes) {
-        _showMemoryPhotoMessage('Choose an image smaller than 10 MB.');
-        return;
-      }
-
-      final extension = pickedFile.name.split('.').last.toLowerCase();
-      const contentTypes = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'webp': 'image/webp',
-      };
-      final contentType = contentTypes[extension];
-      if (contentType == null) {
-        _showMemoryPhotoMessage(
-          'This image format is not supported. Choose JPG, PNG, or WebP.',
-        );
-        return;
-      }
+      final originalBytes = await pickedFile.readAsBytes();
+      final imageBytes = await MemoryPhotoCompressionService.compress(
+        originalBytes,
+      );
 
       await MemoryPinService.addPin(
         placeName: widget.placeName,
         address: widget.address,
         coordinates: widget.coordinates,
-        fileName: 'memory-${const Uuid().v4()}.$extension',
-        contentType: contentType,
+        fileName: 'memory-${const Uuid().v4()}.jpg',
+        contentType: 'image/jpeg',
         imageBytes: imageBytes,
       );
 
       if (mounted) {
-        _showMemoryPhotoMessage('Memory photo uploaded.');
+        _showMemoryPhotoMessage('Memory photo compressed and uploaded.');
       }
+    } on FormatException catch (error) {
+      if (mounted) _showMemoryPhotoMessage(error.message);
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
