@@ -15,6 +15,7 @@ import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
+import '../widgets/memory_pin_marker.dart'; // <-- Added the new marker import here!
 import 'location_details_screen.dart';
 import 'location_disabled_screen.dart';
 import 'search_location_screen.dart';
@@ -888,72 +889,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
 
+                    // --- NEW MARKER INTEGRATION START ---
                     if (albums.isNotEmpty)
                       MarkerLayer(
-                        markers: albums.map((album) {
+                        markers: albums.map<Marker>((album) {
                           final latestPin = album.last;
                           return Marker(
                             point: latestPin.coordinates,
-                            width: 52,
-                            height: 60,
-                            alignment: Alignment.bottomCenter,
-                            child: GestureDetector(
+                            width: 50,
+                            height: 54,
+                            alignment: Alignment.topCenter,
+                            child: MemoryPinMarker(
+                              imageUrl: latestPin.imageUrl,
                               onTap: () => _showMemoryAlbumDialog(album),
-                              child: Stack(
-                                alignment: Alignment.topCenter,
-                                children: [
-                                  Icon(
-                                    Icons.location_on,
-                                    size: 52,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
-                                  ),
-                                  Positioned(
-                                    top: 5,
-                                    child: Container(
-                                      width: 25,
-                                      height: 25,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: latestPin.imageUrl.isEmpty
-                                          ? Icon(
-                                              Icons.photo,
-                                              size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
-                                            )
-                                          : Image.network(
-                                              latestPin.imageUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _, _) => Icon(
-                                                Icons.photo,
-                                                size: 16,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
                           );
                         }).toList(),
                       ),
+                    // --- NEW MARKER INTEGRATION END ---
                   ],
                 );
               },

@@ -1,12 +1,11 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class MemoryPhotoCompressionService {
   MemoryPhotoCompressionService._();
 
   static const int maxUploadBytes = 8 * 1024 * 1024;
-  static const int maxDimension = 1600;
+  static const int maxDimension = 1600; // Restored this line!
   static const List<int> _qualityLevels = [82, 72, 62, 52, 42];
   static const List<int> _dimensionLimits = [1600, 1200, 900, 700];
 
@@ -15,6 +14,11 @@ class MemoryPhotoCompressionService {
       throw const FormatException('The selected image is empty.');
     }
 
+    // Offload heavy compression to a background thread to prevent UI freezing
+    return await compute(_compressInBackground, input);
+  }
+
+  static Future<Uint8List> _compressInBackground(Uint8List input) async {
     for (final dimension in _dimensionLimits) {
       for (final quality in _qualityLevels) {
         final compressed = await FlutterImageCompress.compressWithList(
@@ -26,10 +30,9 @@ class MemoryPhotoCompressionService {
           autoCorrectionAngle: true,
           keepExif: false,
         );
-        if (compressed.isEmpty) {
-          throw const FormatException('Could not compress the selected image.');
+        if (compressed.isNotEmpty && compressed.length <= maxUploadBytes) {
+          return compressed;
         }
-        if (compressed.length <= maxUploadBytes) return compressed;
       }
     }
 
