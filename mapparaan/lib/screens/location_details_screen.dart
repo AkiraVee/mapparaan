@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/memory_photo_compression_service.dart';
 import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
@@ -16,6 +17,8 @@ import '../services/transit_planner_service.dart';
 import '../services/trip_history_service.dart';
 import '../services/last_route_service.dart';
 import '../services/commuter_preference_service.dart';
+import '../services/saved_commute_service.dart';
+import '../services/local_ui_preferences_service.dart';
 import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
@@ -30,6 +33,7 @@ class LocationDetailsScreen extends StatefulWidget {
   final String origin;
   final RoutePreference initialPreference;
   final PassengerType passengerType;
+  final LocalUiPreferences localPreferences;
 
   const LocationDetailsScreen({
     super.key,
@@ -40,6 +44,7 @@ class LocationDetailsScreen extends StatefulWidget {
     this.origin = 'Current location',
     this.initialPreference = RoutePreference.fastest,
     this.passengerType = PassengerType.general,
+    this.localPreferences = const LocalUiPreferences(),
   });
 
   String get resolvedPlaceName => place?.name ?? placeName;
@@ -78,6 +83,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   List<TransitPlanOption> _routeOptions = const [];
   TransitPlanOption? _selectedOption;
   List<LatLng> _routePoints = [];
+  LatLng? _routeOrigin;
+  int _routeRequestId = 0;
 
   @override
   void initState() {
@@ -119,6 +126,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   }
 
   Future<void> _refreshRoute() async {
+    final requestId = ++_routeRequestId;
     final destination = widget.resolvedDestination;
     LatLng? origin = widget.userLocation;
 
@@ -135,6 +143,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         }
       } catch (_) {}
     }
+
+    if (!mounted || requestId != _routeRequestId) return;
 
     if (origin == null) {
       setState(() => _isLoadingRoute = false);
@@ -156,6 +166,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _serverErrorMessage = null;
       _noRouteFound = false;
     });
+    _routeOrigin = origin;
 
     final result = await TransitPlannerService.planTransitResult(
       origin: origin,
@@ -165,18 +176,29 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       avoidModes: _avoidModes,
     );
 
-    if (!mounted) return;
+    if (!mounted || requestId != _routeRequestId) return;
 
     // The server answered, but with no routes: say why instead of showing
     // sample routes. (Sample routes are only for when the server is offline.)
-    if (result != null && result.options.isEmpty) {
+    // A planner/server error should not blank the screen. Continue through the
+    // existing cached/foot-route fallback so users still get directions while
+    // the backend is unavailable. Only genuine no-route/service-area answers
+    // should stop here with an empty result list.
+    if (result?.isServerError == true) {
+      _serverErrorMessage = result?.message ?? 'The route planner is temporarily unavailable. Showing an estimated route.';
+    }
+
+    // Some API versions return an empty options list without a reason. Treat
+    // that as an unavailable/insufficient planner response and use the same
+    // fallback route as an API error. Only an explicit service-area response
+    // should intentionally leave the result list empty.
+    if (result != null &&
+        result.options.isEmpty &&
+        !result.isServerError &&
+        result.isOutsideServiceArea) {
       setState(() {
         _isOfflineFallback = false;
-        if (result.isServerError) {
-          _serverErrorMessage =
-              result.message ??
-              'The route planner ran into a problem. Please try again.';
-        } else if (result.isOutsideServiceArea) {
+        if (result.isOutsideServiceArea) {
           _serviceAreaMessage =
               result.message ??
               'Mapparaan currently covers the City of Manila only.';
@@ -191,18 +213,31 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       return;
     }
 
+    if (result != null &&
+        result.options.isEmpty &&
+        !result.isServerError &&
+        !result.isOutsideServiceArea) {
+      _serverErrorMessage = 'The transit planner returned no route data. Showing an estimated route.';
+    }
+
     final realPlans = result?.options;
     if (realPlans != null && realPlans.isNotEmpty) {
+      final filteredPlans = _applyLocalRoutePreferences(realPlans);
       // Never pick the walk-only option as "Fastest" (or any tab). Walk-only
       // trips have no transit option, so fall back to the first option.
       final selected =
-          TransitPlanOption.pickForPreference(realPlans, _selectedPreference) ??
-          realPlans.first;
-      final points = selected.allPoints;
+          TransitPlanOption.pickForPreference(
+            filteredPlans,
+            _selectedPreference,
+          ) ??
+          filteredPlans.first;
+      final points = selected.allPoints.isNotEmpty
+          ? selected.allPoints
+          : [origin, destination];
 
       setState(() {
         _isOfflineFallback = false;
-        _routeOptions = realPlans;
+        _routeOptions = filteredPlans;
         _selectedOption = selected;
         _routePoints = points;
         _isLoadingRoute = false;
@@ -214,9 +249,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         option: selected,
       );
 
+      if (!mounted || requestId != _routeRequestId) return;
+
       _fitCameraToBounds(points);
     } else {
       final cached = await LastRouteService.load();
+      if (!mounted || requestId != _routeRequestId) return;
       final cacheMatches =
           cached != null &&
           const Distance().as(
@@ -242,18 +280,19 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         final offlineOptions = cachedFallbackOptions.isNotEmpty
             ? cachedFallbackOptions
             : [cachedOption];
+        final filteredOptions = _applyLocalRoutePreferences(offlineOptions);
         final selected =
             TransitPlanOption.pickForPreference(
-              offlineOptions,
+              filteredOptions,
               _selectedPreference,
             ) ??
-            offlineOptions.first;
+            filteredOptions.first;
         final selectedPoints = selected.allPoints.isNotEmpty
             ? selected.allPoints
             : cachedPoints;
         setState(() {
           _isOfflineFallback = true;
-          _routeOptions = offlineOptions;
+          _routeOptions = filteredOptions;
           _selectedOption = selected;
           _routePoints = selectedPoints;
           _isLoadingRoute = false;
@@ -266,7 +305,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           profile: 'foot',
         );
 
-        if (!mounted) return;
+        if (!mounted || requestId != _routeRequestId) return;
 
         final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
             ? geometry.points
@@ -281,13 +320,18 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           fallbackPath: fallbackPoints,
         );
 
-        final selected = fallbackOptions.isNotEmpty
-            ? fallbackOptions.first
+        final filteredOptions = _applyLocalRoutePreferences(fallbackOptions);
+        final selected = filteredOptions.isNotEmpty
+            ? TransitPlanOption.pickForPreference(
+                    filteredOptions,
+                    _selectedPreference,
+                  ) ??
+                  filteredOptions.first
             : null;
 
         setState(() {
           _isOfflineFallback = true;
-          _routeOptions = fallbackOptions;
+          _routeOptions = filteredOptions;
           _selectedOption = selected;
           _routePoints = fallbackPoints;
           _isLoadingRoute = false;
@@ -299,6 +343,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             destination: destination,
             option: selected,
           );
+          if (!mounted || requestId != _routeRequestId) return;
         }
 
         _fitCameraToBounds(fallbackPoints);
@@ -408,6 +453,32 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     }
   }
 
+  List<TransitPlanOption> _applyLocalRoutePreferences(
+    List<TransitPlanOption> options,
+  ) {
+    final limit = widget.localPreferences.walkingLimitKm;
+    if (limit == null) return options;
+
+    final filtered = options.where((option) {
+      final walkingKm = option.legs.where((leg) => leg.isWalk).fold<double>(0, (
+        total,
+        leg,
+      ) {
+        final legKm = leg.km ?? (leg.meters == null ? 0 : leg.meters! / 1000.0);
+        return total + legKm;
+      });
+      // Keep routes without walking metadata so an incomplete server response
+      // does not make the result screen empty.
+      final hasWalkingMetadata = option.legs.any(
+        (leg) => leg.isWalk && (leg.km != null || leg.meters != null),
+      );
+      return !hasWalkingMetadata || walkingKm <= limit;
+    }).toList();
+
+    // Never hide every result just because a server omitted some leg data.
+    return filtered.isEmpty ? options : filtered;
+  }
+
   Future<void> _handleSaveToggle() async {
     if (!AuthService.isLoggedIn.value) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -468,6 +539,140 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     }
   }
 
+  Future<void> _handleInviteCommuter() async {
+    final option = _selectedOption;
+    if (option == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose a route before inviting someone.'),
+        ),
+      );
+      return;
+    }
+
+    final inviteeController = TextEditingController();
+    final invitee = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Invite a commuter'),
+        content: TextField(
+          controller: inviteeController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Who would you like to invite?',
+            hintText: 'Optional name',
+            prefixIcon: Icon(Icons.person_add_alt_1_outlined),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () =>
+                Navigator.pop(dialogContext, inviteeController.text),
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Share invite'),
+          ),
+        ],
+      ),
+    );
+    inviteeController.dispose();
+    if (!mounted || invitee == null) return;
+
+    final recipient = invitee.trim().isEmpty ? 'A friend' : invitee.trim();
+    final fare = option.effectiveFare(_passengerType);
+    final preference =
+        _selectedPreference.name[0].toUpperCase() +
+        _selectedPreference.name.substring(1);
+    final message = StringBuffer()
+      ..writeln('Mapparaan commute invite')
+      ..writeln()
+      ..writeln('Hi $recipient, want to travel together?')
+      ..writeln('Destination: ${widget.resolvedPlaceName}')
+      ..writeln('Starting point: ${widget.origin}')
+      ..writeln('Route: ${option.title}')
+      ..writeln('Estimated travel time: ${option.etaMinutes} min')
+      ..writeln('Estimated fare: ${formatPeso(fare)}')
+      ..writeln('Preference: $preference')
+      ..writeln()
+      ..writeln(
+        'Open Mapparaan and search for this destination to choose your route.',
+      );
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: message.toString(),
+          subject: 'Mapparaan commute invite',
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share invite: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleSaveCommute() async {
+    final origin = _routeOrigin ?? widget.userLocation;
+    if (origin == null || _selectedOption == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a route before saving it.')),
+      );
+      return;
+    }
+
+    final labelController = TextEditingController(
+      text: '${widget.origin} → ${widget.resolvedPlaceName}',
+    );
+    final label = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Save commute'),
+        content: TextField(
+          controller: labelController,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Shortcut name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, labelController.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    labelController.dispose();
+    if (!mounted || label == null || label.trim().isEmpty) return;
+
+    await SavedCommuteService.save(
+      SavedCommute(
+        id: '${origin.latitude},${origin.longitude}|${widget.resolvedDestination.latitude},${widget.resolvedDestination.longitude}',
+        label: label.trim(),
+        originName: widget.origin,
+        origin: origin,
+        destinationName: widget.resolvedPlaceName,
+        destination: widget.resolvedDestination,
+        preference: _selectedPreference,
+        passengerType: _passengerType,
+      ),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Commute shortcut saved on this device.')),
+      );
+    }
+  }
+
   Future<void> _reportProblem() async {
     const categories = [
       'Wrong fare',
@@ -521,6 +726,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final destination = widget.resolvedDestination;
+    final hasRouteGeometry =
+        _selectedOption?.legs.any((leg) => leg.path.length >= 2) ?? false;
 
     return Scaffold(
       drawer: MapparaanDrawer(
@@ -553,8 +760,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 ),
                 children: [
                   const MapparaanTileLayer(),
-                  if (_selectedOption != null &&
-                      _selectedOption!.legs.isNotEmpty)
+                  if (hasRouteGeometry)
                     PolylineLayer(
                       polylines: [
                         for (final leg in _selectedOption!.legs)
@@ -699,7 +905,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 routeOptions: _routeOptions,
                 selectedOption: _selectedOption,
                 onSaveToggle: _handleSaveToggle,
+                onSaveCommute: _handleSaveCommute,
                 onShare: _handleShare,
+                onInviteCommuter: _handleInviteCommuter,
                 onClose: () => Navigator.of(context).pop(),
                 onPreferenceSelected: _selectPreference,
                 onPassengerTypeSelected: _selectPassengerType,
@@ -734,7 +942,9 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final List<TransitPlanOption> routeOptions;
   final TransitPlanOption? selectedOption;
   final VoidCallback onSaveToggle;
+  final VoidCallback onSaveCommute;
   final VoidCallback onShare;
+  final VoidCallback onInviteCommuter;
   final VoidCallback onClose;
   final ValueChanged<RoutePreference> onPreferenceSelected;
   final ValueChanged<PassengerType> onPassengerTypeSelected;
@@ -759,7 +969,9 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.routeOptions,
     required this.selectedOption,
     required this.onSaveToggle,
+    required this.onSaveCommute,
     required this.onShare,
+    required this.onInviteCommuter,
     required this.onClose,
     required this.onPreferenceSelected,
     required this.onPassengerTypeSelected,
@@ -779,8 +991,6 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
 
   static const double _minFactor = 0.30;
   static const double _maxFactor = 0.90;
-  static const int _maxMemoryPhotoBytes = 10 * 1024 * 1024;
-
   Future<void> _addMemoryPhoto() async {
     if (_isUploadingMemory) return;
     setState(() => _isUploadingMemory = true);
@@ -809,44 +1019,31 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
 
       final pickedFile = await ImagePicker().pickImage(
         source: source,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: MemoryPhotoCompressionService.maxDimension.toDouble(),
+        maxHeight: MemoryPhotoCompressionService.maxDimension.toDouble(),
+        imageQuality: 100,
       );
       if (pickedFile == null || !mounted) return;
 
-      final imageBytes = await pickedFile.readAsBytes();
-      if (imageBytes.lengthInBytes > _maxMemoryPhotoBytes) {
-        _showMemoryPhotoMessage('Choose an image smaller than 10 MB.');
-        return;
-      }
-
-      final extension = pickedFile.name.split('.').last.toLowerCase();
-      const contentTypes = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'webp': 'image/webp',
-      };
-      final contentType = contentTypes[extension];
-      if (contentType == null) {
-        _showMemoryPhotoMessage(
-          'This image format is not supported. Choose JPG, PNG, or WebP.',
-        );
-        return;
-      }
+      final originalBytes = await pickedFile.readAsBytes();
+      final imageBytes = await MemoryPhotoCompressionService.compress(
+        originalBytes,
+      );
 
       await MemoryPinService.addPin(
         placeName: widget.placeName,
         address: widget.address,
         coordinates: widget.coordinates,
-        fileName: 'memory-${const Uuid().v4()}.$extension',
-        contentType: contentType,
+        fileName: 'memory-${const Uuid().v4()}.jpg',
+        contentType: 'image/jpeg',
         imageBytes: imageBytes,
       );
 
       if (mounted) {
-        _showMemoryPhotoMessage('Memory photo uploaded.');
+        _showMemoryPhotoMessage('Memory photo compressed and uploaded.');
       }
+    } on FormatException catch (error) {
+      if (mounted) _showMemoryPhotoMessage(error.message);
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -983,7 +1180,8 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
               final estimate = route.hasFareRange(widget.passengerType)
                   ? '${formatPeso(expected)} to ${formatPeso(upTo)}'
                   : formatPeso(expected);
-              final result = charged >= expected - 0.01 && charged <= upTo + 0.01
+              final result =
+                  charged >= expected - 0.01 && charged <= upTo + 0.01
                   ? 'This is within the current estimate of $estimate.'
                   : charged > upTo
                   ? 'This is ${formatPeso(charged - upTo)} above the estimate of $estimate.'
@@ -1121,10 +1319,25 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           onPressed: widget.onSaveToggle,
                         ),
                         IconButton(
+                          tooltip: 'Save commute shortcut',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.route_outlined),
+                          onPressed: widget.onSaveCommute,
+                        ),
+                        IconButton(
                           tooltip: 'Share place',
                           visualDensity: VisualDensity.compact,
                           icon: Icon(Icons.share, color: colorScheme.onSurface),
                           onPressed: widget.onShare,
+                        ),
+                        IconButton(
+                          tooltip: 'Invite a commuter',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            Icons.group_add_outlined,
+                            color: colorScheme.onSurface,
+                          ),
+                          onPressed: widget.onInviteCommuter,
                         ),
                         IconButton(
                           tooltip: 'Close route details',
@@ -1328,8 +1541,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                   if (widget.noRouteFound)
                     const _NoticeBanner(
                       icon: Icons.alt_route,
-                      text:
-                          'No transit route found for this trip. Try another departure time, or allow more modes.',
+                      text: 'No transit route found for this trip. Try another departure time, or allow more modes.',
                     ),
 
                   Align(
@@ -1544,9 +1756,7 @@ class _RouteResultCard extends StatelessWidget {
     if (route.transfers == 0) {
       if (route.modes.contains('jeepney')) return Icons.airport_shuttle;
       if (route.modes.contains('bus')) return Icons.directions_bus;
-      if (route.modes.any(
-        (m) => m.startsWith('lrt') || m.startsWith('mrt'),
-      )) {
+      if (route.modes.any((m) => m.startsWith('lrt') || m.startsWith('mrt'))) {
         return Icons.train;
       }
       return Icons.directions_walk;

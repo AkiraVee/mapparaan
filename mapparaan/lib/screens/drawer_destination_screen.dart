@@ -536,7 +536,6 @@ class _ProfilePage extends StatelessWidget {
                   onPressed: () => AuthService.signOut(),
                 ),
               ),
-
               const SizedBox(height: 24),
             ],
           ),
@@ -617,7 +616,11 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 30,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -637,11 +640,11 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        
+
         return StatefulBuilder(
           builder: (context, setState) {
             final currentPin = widget.album[currentIndex];
-            
+
             return AlertDialog(
               contentPadding: EdgeInsets.zero,
               clipBehavior: Clip.antiAlias,
@@ -654,14 +657,20 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                   Expanded(
                     child: Text(
                       currentPin.placeName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (widget.album.length > 1)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
@@ -689,7 +698,8 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                         PageView.builder(
                           controller: pageController,
                           itemCount: widget.album.length,
-                          onPageChanged: (index) => setState(() => currentIndex = index),
+                          onPageChanged: (index) =>
+                              setState(() => currentIndex = index),
                           itemBuilder: (context, index) {
                             final pin = widget.album[index];
                             return GestureDetector(
@@ -711,10 +721,16 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                                     : Image.network(
                                         pin.imageUrl,
                                         fit: BoxFit.cover,
-                                        loadingBuilder: (context, child, progress) {
-                                          if (progress == null) return child;
-                                          return const Center(child: CircularProgressIndicator());
-                                        },
+                                        loadingBuilder:
+                                            (context, child, progress) {
+                                              if (progress == null) {
+                                                return child;
+                                              }
+                                              return const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              );
+                                            },
                                         errorBuilder: (_, _, _) => Center(
                                           child: Icon(
                                             Icons.broken_image_outlined,
@@ -727,7 +743,7 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                             );
                           },
                         ),
-                        
+
                         // Navigation Arrows
                         if (widget.album.length > 1) ...[
                           if (currentIndex > 0)
@@ -738,10 +754,15 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                                 child: CircleAvatar(
                                   backgroundColor: Colors.black45,
                                   child: IconButton(
-                                    icon: const Icon(Icons.chevron_left, color: Colors.white),
+                                    icon: const Icon(
+                                      Icons.chevron_left,
+                                      color: Colors.white,
+                                    ),
                                     onPressed: () {
                                       pageController.previousPage(
-                                        duration: const Duration(milliseconds: 300),
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
                                         curve: Curves.easeInOut,
                                       );
                                     },
@@ -757,10 +778,15 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                                 child: CircleAvatar(
                                   backgroundColor: Colors.black45,
                                   child: IconButton(
-                                    icon: const Icon(Icons.chevron_right, color: Colors.white),
+                                    icon: const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white,
+                                    ),
                                     onPressed: () {
                                       pageController.nextPage(
-                                        duration: const Duration(milliseconds: 300),
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
                                         curve: Curves.easeInOut,
                                       );
                                     },
@@ -777,12 +803,19 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.location_on_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             currentPin.address,
-                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -796,7 +829,10 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Close', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  child: Text(
+                    'Close',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.delete_outline, size: 18),
@@ -820,7 +856,9 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete memory photo?'),
-        content: Text('This will permanently remove this photo from your ${pin.placeName} album.'),
+        content: Text(
+          'This will permanently remove this photo from your ${pin.placeName} album.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -913,27 +951,34 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                                 ),
                               ),
                       ),
-                      
+
                       if (widget.album.length > 1)
                         Positioned(
                           top: 8,
                           left: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.photo_library, size: 11, color: Colors.white),
+                                const Icon(
+                                  Icons.photo_library,
+                                  size: 11,
+                                  color: Colors.white,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${widget.album.length}',
                                   style: const TextStyle(
-                                    color: Colors.white, 
-                                    fontSize: 11, 
-                                    fontWeight: FontWeight.bold
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -946,12 +991,16 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
                         right: 8,
                         child: IconButton.filledTonal(
                           tooltip: 'Delete this photo',
-                          onPressed: _isDeleting ? null : () => _deleteSpecificPhoto(latestPin),
+                          onPressed: _isDeleting
+                              ? null
+                              : () => _deleteSpecificPhoto(latestPin),
                           icon: _isDeleting
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.delete_outline),
                         ),
