@@ -15,13 +15,13 @@
   },
   "rows": {
     "agency.txt": 2,
-    "calendar.txt": 6,
-    "frequencies.txt": 661,
     "routes.txt": 599,
+    "trips.txt": 663,
+    "stop_times.txt": 11174,
+    "frequencies.txt": 663,
+    "stops.txt": 531,
+    "calendar.txt": 7,
     "shapes.txt": 125,
-    "stop_times.txt": 11162,
-    "stops.txt": 534,
-    "trips.txt": 661,
     "feed_info.txt": 1
   },
   "known_gaps": [
@@ -31,5 +31,8 @@
     "Feed cannot tell traditional from modern jeepney or ordinary from aircon bus, so road fares are shown as a range",
     "Schedules are headway-based and approximate"
   ],
-  "stop_edge_tolerance_m": 50
+  "stop_edge_tolerance_m": 50,
+  "excluded_modes": [
+    "pnr"
+  ]
 }

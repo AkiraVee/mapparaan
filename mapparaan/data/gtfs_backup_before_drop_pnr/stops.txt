@@ -1,0 +1,541 @@
+stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,wheelchair_boarding
+LTFRB_4948,,Vito Cruz LRT,,14.5636,120.995,,,0,,0
+LTFRB_4949,,Quirino Ave LRT,,14.5703,120.992,,,0,,0
+LTFRB_4950,,Pedro Gil LRT,,14.5763,120.988,,,0,,0
+LTFRB_4951,,UN Ave LRT,,14.5826,120.985,,,0,,0
+LTFRB_4952,,Central Terminal LRT,,14.5928,120.982,,,0,,0
+LTFRB_4953,,Carriedo LRT,,14.5991,120.981,,,0,,0
+LTFRB_4954,,Doroteo Jose LRT,,14.6053,120.982,,,0,,0
+LTFRB_4955,,Bambang LRT,,14.6109,120.982,,,0,,0
+LTFRB_4956,,Tayuman LRT,,14.6168,120.983,,,0,,0
+LTFRB_4957,,Blumentritt LRT,,14.6228,120.983,,,0,,0
+LTFRB_4958,,Abad Santos LRT,,14.6306,120.982,,,0,,0
+LTFRB_4959,,R. Papa LRT,,14.636,120.982,,,0,,0
+LTFRB_4977,,Recto LRT,,14.6035078518,120.9834301472,,,0,,0
+LTFRB_4978,,Legarda LRT,,14.600777309,120.9924852848,,,0,,0
+LTFRB_4979,,Pureza LRT,,14.6017324837,121.005038023,,,0,,0
+LTFRB_4980,,V. Mapa LRT,,14.6042,121.017,,,0,,0
+LTFRB_112,,"LRT Papa Station, Rizal  Avenue, Caloocan City",,14.6362,120.982,,,0,,0
+LTFRB_113,,"Rizal Avenue / Jose Abad Santos Avenue Interchange, Caloocan City",,14.632,120.981,,,0,,0
+LTFRB_1413,,"Andres Bonifacio / Iba Intersection, Quezon City",,14.6277,120.99,,,0,,0
+LTFRB_1418,,"Dimasalang / Aurora Boulevard Intersection, Quezon City",,14.6239,120.989,,,0,,0
+LTFRB_1419,,"Ferdinand Blumentritt / Aurora Boulevard Intersection, Quezon City",,14.6253,120.987,,,0,,0
+LTFRB_1424,,"Maria Clara / Ibarra Intersection, Quezon City",,14.6208,120.994,,,0,,0
+LTFRB_1425,,"Ibarra, Quezon City",,14.6224,120.992,,,0,,0
+LTFRB_1426,,"Metrica, Quezon City",,14.6229,120.99,,,0,,0
+LTFRB_1427,,"Cavitie / Leonor Rivera Intersection, Quezon City",,14.6242,120.987,,,0,,0
+LTFRB_1428,,"Cavite / Manuel Hizon Intersection, Quezon City",,14.6242,120.985,,,0,,0
+LTFRB_1429,,"Cavite, Quezon City",,14.6242,120.983,,,0,,0
+LTFRB_1430,,"Light Rail Transit Line / Bulacan Intersection, Quezon City",,14.6268,120.983,,,0,,0
+LTFRB_1431,,"Pampanga / Light Rail Transit Line, Quezon City",,14.628,120.984,,,0,,0
+LTFRB_1432,,"Pampanga / Pedro Guevarra Intersection, Quezon City",,14.6279,120.986,,,0,,0
+LTFRB_1433,,"Felix Huetas / Bulacan Intersection, Quezon City",,14.6267,120.985,,,0,,0
+LTFRB_1434,,"Pedro Guevarra, Quezon City",,14.6259,120.986,,,0,,0
+LTFRB_1435,,"New Antipolo / Leonor Rivera Intersection, Quezon City",,14.6226,120.987,,,0,,0
+LTFRB_1436,,"Tiago, Quezon City",,14.6227,120.988,,,0,,0
+LTFRB_1437,,"Dimasalang Birdge / New Antipolo Intersection, Quezon City",,14.6207,120.989,,,0,,0
+LTFRB_1438,,"New Antipolo / Oroquieta Intersection, Quezon City",,14.6227,120.984,,,0,,0
+LTFRB_1439,,"Old Antipolo / Felix Huetas Intersection, Quezon City",,14.6223,120.985,,,0,,0
+LTFRB_1440,,"Light Rail Transportation / New Antipolo, Quezon City",,14.6226,120.983,,,0,,0
+LTFRB_1441,,"Ferdinand Blumentritt / Felix Huertas Intersection, Quezon City",,14.6237,120.985,,,0,,0
+LTFRB_1442,,"Rizal Avenue near Aurora Blvd Interstion, Quezon City",,14.6286,120.983,,,0,,0
+LTFRB_1443,,"Rizal Avenue, Quezon City",,14.6299,120.982,,,0,,0
+LTFRB_1444,,"Rizal Avenue / Mt Samat Intersection, Quezon City",,14.6311,120.981,,,0,,0
+LTFRB_1445,,"Jose Abad Santos Avenue / Morong Intersection, Quezon City",,14.6304,120.98,,,0,,0
+LTFRB_1446,,"Jose Abad Santos Avenue / Corregidor Intersection, Quezon City",,14.629,120.979,,,0,,0
+LTFRB_1447,,"Jose Abad Santos Avenue, Quezon City",,14.6275,120.979,,,0,,0
+LTFRB_1448,,"Jose Abad Santos Avenue / T Bugallon Street Intersection, Quezon City",,14.6257,120.979,,,0,,0
+LTFRB_1449,,"T Bugallon Street, Quezon City",,14.6256,120.98,,,0,,0
+LTFRB_1450,,"T Bugallon Street / Cavite Intersection, Quezon City",,14.6243,120.981,,,0,,0
+LTFRB_1451,,"T. Mapua / New Antipolo Intersection, Quezon City",,14.623,120.982,,,0,,0
+LTFRB_1452,,"T. Mapua / Laguna Intersection, Quezon City",,14.6219,120.982,,,0,,0
+LTFRB_1453,,"Ipil  / Laguna Intersection, Quezon City",,14.6219,120.98,,,0,,0
+LTFRB_1454,,"Jose Abad Santos Avenue, Quezon City",,14.6246,120.978,,,0,,0
+LTFRB_1455,,"Jose Abad Santos Avenue, Quezon City",,14.6233,120.978,,,0,,0
+LTFRB_1456,,"Jose Abad Santos Avenue, Quezon City",,14.6219,120.978,,,0,,0
+LTFRB_1457,,"Jose Abad Santos Avenue, Quezon City",,14.6205,120.978,,,0,,0
+LTFRB_1458,,"Jose Abad Santos Avenue, Quezon City",,14.6187,120.978,,,0,,0
+LTFRB_1459,,"Jose Abad Santos Avenue / Tayuman Road, Quezon City",,14.6168,120.977,,,0,,0
+LTFRB_1460,,"Tayuman Road, Manila",,14.6165,120.979,,,0,,0
+LTFRB_1461,,"Tayuman Road / Serverino Reyes, Manila",,14.6167,120.981,,,0,,0
+LTFRB_1462,,"Tomas Mapua / Camarines Intersection, Manila",,14.6182,120.982,,,0,,0
+LTFRB_1463,,"Tomas Mapua / Batangas Intersection, Manila",,14.6206,120.982,,,0,,0
+LTFRB_1466,,"Ipil, Manila",,14.62,120.98,,,0,,0
+LTFRB_1467,,"Ipil / Camarines Intersection, Manila",,14.6182,120.98,,,0,,0
+LTFRB_1468,,"Camarines, Manila",,14.6181,120.984,,,0,,0
+LTFRB_1469,,"Oroquieta / Batangas Intersection, Manila",,14.6206,120.984,,,0,,0
+LTFRB_1470,,"Light Rail Transportation 1, Manila",,14.6211,120.983,,,0,,0
+LTFRB_1471,,"Light Rail Transportation 1, Manila",,14.6185,120.983,,,0,,0
+LTFRB_1472,,"Department of Health, Razal Avenue, Manila",,14.6156,120.983,,,0,,0
+LTFRB_1473,,"Felix Heuertas, Manila",,14.62,120.985,,,0,,0
+LTFRB_1474,,"Lacson Avenue, Manila",,14.6176,120.985,,,0,,0
+LTFRB_1475,,"Antipolo, Manila",,14.6219,120.988,,,0,,0
+LTFRB_1476,,"Dimaslang / Ruperto S Cristobal Street Intersection, Manila",,14.6191,120.989,,,0,,0
+LTFRB_1477,,"Dimaslang, Manila",,14.6176,120.989,,,0,,0
+LTFRB_1478,,"Dimaslang, Manila",,14.6162,120.989,,,0,,0
+LTFRB_1479,,"Aragon / Alfonso Mendoza Intersection, Manila",,14.6167,120.987,,,0,,0
+LTFRB_1480,,"Lacson Avenue / Alfonso Mendoza Intersection, Manila",,14.6161,120.987,,,0,,0
+LTFRB_1481,,"Oroquieta, Manila",,14.6163,120.984,,,0,,0
+LTFRB_1483,,"Nicanor Roxas / Blumentritt  Intersection, Manila",,14.6208,120.996,,,0,,0
+LTFRB_1484,,"Instruccion / Nicanor Roxas Intersection, Manila",,14.6193,120.994,,,0,,0
+LTFRB_1485,,"San Diego / Nicanor Roxas Intersection, Manila",,14.6175,120.993,,,0,,0
+LTFRB_1486,,"Vicente G Cruz / Nicanor Roxas Intersection, Manila",,14.616,120.991,,,0,,0
+LTFRB_1487,,"Vicente G Cruz / Maria Clara Street Intersection, Manila",,14.6172,120.99,,,0,,0
+LTFRB_1488,,"Laong Laan, Manila",,14.6146,120.989,,,0,,0
+LTFRB_1490,,"Musa / Dapitan Intersrction, Manila",,14.6194,120.997,,,0,,0
+LTFRB_1491,,"Dapitan / Antonio Maceda Intersrction, Manila",,14.6177,120.995,,,0,,0
+LTFRB_1492,,"Dapitan / Algeciras Intersrction, Manila",,14.616,120.993,,,0,,0
+LTFRB_1493,,"Dapitan / Maria Cristina ntersrction, Manila",,14.6142,120.991,,,0,,0
+LTFRB_1494,,"Blumentritt / Pity Margal Intersection, Manila",,14.6188,120.998,,,0,,0
+LTFRB_1495,,"Blumentritt, Manila",,14.6163,120.999,,,0,,0
+LTFRB_1496,,"Halcon / Espana Boulevard Intersection, Manila",,14.6169,121.001,,,0,,0
+LTFRB_1499,,"Instruccion / Espana Boulevard Intersection, Manila",,14.615,120.999,,,0,,0
+LTFRB_1500,,"Espana Boulevard / Gen. E. Quintos Street Intersection, Manila",,14.6136,120.997,,,0,,0
+LTFRB_1501,,"Espana Boulevard / Ruperto. S. Crsitobal Streett Intersection, Manila",,14.6123,120.996,,,0,,0
+LTFRB_1502,,"Ramon Magsaysay High School, Espana Boulevard, Manila",,14.6108,120.994,,,0,,0
+LTFRB_1503,,"Vicente G Cruz / Florentino Intersection, Manila",,14.6129,120.994,,,0,,0
+LTFRB_1504,,"Vicente G Cruz / Piy Margal Intersection, Manila",,14.6139,120.993,,,0,,0
+LTFRB_1505,,"M. dela Fuente, Manila",,14.612,120.994,,,0,,0
+LTFRB_1506,,"Piy Margal / Dos Castillas Intersection, Manila",,14.6124,120.991,,,0,,0
+LTFRB_1507,,"Daptian / Arsenio H. Lacson Ave Intersection, Manila",,14.613,120.99,,,0,,0
+LTFRB_1508,,"San Lazaro / Alfonso Mendoza Intersection, Manila",,14.6141,120.986,,,0,,0
+LTFRB_1509,,"Alfonso Mendoza, Manila",,14.6119,120.986,,,0,,0
+LTFRB_1510,,"Alfonso Mendoza, Manila",,14.6097,120.986,,,0,,0
+LTFRB_1511,,"Quezon Blvd / P.Paredes Intersection, Manila",,14.6073,120.986,,,0,,0
+LTFRB_1512,,"Gen. Concepcion / Laong Laan Intersection, Manila",,14.613,120.988,,,0,,0
+LTFRB_1514,,"Juaning / Dapitan Intersection, Manila",,14.6107,120.987,,,0,,0
+LTFRB_1515,,"J. Barlin / P. Noval Intersection, Manila",,14.6088,120.987,,,0,,0
+LTFRB_1516,,"P. Noval / Delos Reyes Intersection, Manila",,14.6078,120.988,,,0,,0
+LTFRB_1517,,"P. Noval / España Blvd Intersection, Manila",,14.6067,120.989,,,0,,0
+LTFRB_1518,,"España Blvd / Osmeña Drive Intersection, Manila",,14.6082,120.991,,,0,,0
+LTFRB_1519,,"España Blvd / Arsenio H. Lacson Ave  Intersection, Manila",,14.6097,120.993,,,0,,0
+LTFRB_1520,,"P.Paredes / España Blvd Intersection, Manila",,14.6063,120.987,,,0,,0
+LTFRB_1521,,"España Blvd / Quezon Blvd  Intersection, Manila",,14.6048,120.985,,,0,,0
+LTFRB_1522,,"España Blvd / Nicanor Reyes St Intersection, Manila",,14.6056,120.988,,,0,,0
+LTFRB_1523,,"Nicanor Reyes Street, Manila",,14.6036,120.988,,,0,,0
+LTFRB_1524,,"Claro M. Recto Ave / Nicanor Reyes Street Intersection, Manila",,14.6022,120.987,,,0,,0
+LTFRB_1525,,"Claro M. Recto Ave / Quezon Blvd Intersection, Manila",,14.6031,120.985,,,0,,0
+LTFRB_1526,,"LRT Doroteo Jose-Recto Station Walkway / Rizal Avenue Intersection, Manila",,14.6037,120.983,,,0,,0
+LTFRB_1527,,"Lope De Vega / Oroquieta Intersection, Manila",,14.6067,120.983,,,0,,0
+LTFRB_1528,,"Oroquieta, Manila",,14.6051,120.983,,,0,,0
+LTFRB_1529,,"Oroquieta / Mayhaligue Intersection, Manila",,14.6087,120.983,,,0,,0
+LTFRB_1530,,"Oroquieta / Bambang Intersection, Manila",,14.6109,120.983,,,0,,0
+LTFRB_1531,,"Sulu, Manila",,14.6076,120.984,,,0,,0
+LTFRB_1532,,"Felix Huertas, Manila",,14.6092,120.984,,,0,,0
+LTFRB_1533,,"Felix Huertas, Manila",,14.6115,120.984,,,0,,0
+LTFRB_1534,,"Quiricada / Felix Huertas Intersection, Manila",,14.613,120.984,,,0,,0
+LTFRB_1535,,"Felix Huertas, Manila",,14.6147,120.985,,,0,,0
+LTFRB_1536,,"San Lazaro / Oroquieta Intersection, Manila",,14.6143,120.984,,,0,,0
+LTFRB_1537,,"Oroquieta / Alvarez Intersection, Manila",,14.6121,120.983,,,0,,0
+LTFRB_1538,,"Jose R. Reyes Memorial Medical Center, Rizal Avenue, Manila",,14.6137,120.983,,,0,,0
+LTFRB_1539,,"Rizal Avenue, Manila",,14.6117,120.983,,,0,,0
+LTFRB_1540,,"Rizal Avenue, Manila",,14.6101,120.982,,,0,,0
+LTFRB_1541,,"Jose R. Reyes Memorial Medical Center, Quiricada, Manila",,14.6132,120.982,,,0,,0
+LTFRB_1542,,"Quiricada / Ipil Intersection, Manila",,14.6132,120.98,,,0,,0
+LTFRB_1543,,"Quiricada / Yakal Intersection, Manila",,14.6133,120.979,,,0,,0
+LTFRB_1544,,"Bambang Public Market, Ipil, Manila",,14.6118,120.98,,,0,,0
+LTFRB_1545,,"Bambang / S.Reyes Intersection, Manila",,14.611,120.981,,,0,,0
+LTFRB_1546,,"Mayhaligue / S.Reyes Intersection, Manila",,14.6089,120.981,,,0,,0
+LTFRB_1547,,"Valariano Fugoso / Teodora Alonzo Intersection, Manila",,14.608,120.98,,,0,,0
+LTFRB_1548,,"Teodora Alonzo, Manila",,14.606,120.98,,,0,,0
+LTFRB_1549,,"Teodora Alonzo / Claro M. Recto Ave Intersection, Manila",,14.6044,120.979,,,0,,0
+LTFRB_1550,,"Claro M. Recto Ave / Guillermo Masangkay Intersection, Manila",,14.6053,120.977,,,0,,0
+LTFRB_1551,,"Claro M. Recto Ave / Jose Abad Santos Ave. Intersection, Manila",,14.6061,120.975,,,0,,0
+LTFRB_1552,,"Philipine Cultural College, Jose Abad Santos Ave., Intersection, Manila",,14.6075,120.975,,,0,,0
+LTFRB_1553,,"Destiny Cable, Jose Abad Santos Ave., Manila",,14.6089,120.976,,,0,,0
+LTFRB_1554,,"Jose Abad Santos Ave., Manila",,14.6106,120.976,,,0,,0
+LTFRB_1555,,"Jose Abad Santos Ave / Bambang Intersection., Manila",,14.6125,120.976,,,0,,0
+LTFRB_1556,,"Antonio Rivera / Bambang Intersection., Manila",,14.6128,120.976,,,0,,0
+LTFRB_1557,,"Antonio Rivera / Mayhaligue Intersection., Manila",,14.6103,120.975,,,0,,0
+LTFRB_1558,,"Narra / Padre Algue Street Intersection, Manila",,14.6083,120.975,,,0,,0
+LTFRB_1559,,"C. La Torre / Antonio Rivera Intersection., Manila",,14.6094,120.974,,,0,,0
+LTFRB_1560,,"Antonio Rivera, Manila",,14.6074,120.974,,,0,,0
+LTFRB_1561,,"Bambang / Yakal Intersection, Manila",,14.6119,120.978,,,0,,0
+LTFRB_1562,,"Jose Abad Santos Ave./ Villaruel Street Villaruel Intersection, Manila",,14.6153,120.977,,,0,,0
+LTFRB_1563,,"Antonio Rivera, Manila",,14.6161,120.976,,,0,,0
+LTFRB_1564,,"Antonio Rivera, Manila",,14.6147,120.975,,,0,,0
+LTFRB_1565,,"Quiricada / Antonio Rivera Intersection, Manila",,14.6139,120.977,,,0,,0
+LTFRB_1566,,"Narra, Manila",,14.6067,120.974,,,0,,0
+LTFRB_1567,,"T. Mapua, Manila",,14.6102,120.981,,,0,,0
+LTFRB_1568,,"T. Mapua, Manila",,14.6084,120.981,,,0,,0
+LTFRB_1569,,"T. Mapua, Manila",,14.607,120.981,,,0,,0
+LTFRB_1570,,"T. Mapua, Manila",,14.6056,120.981,,,0,,0
+LTFRB_1571,,"T. Mapua, Manila",,14.6044,120.981,,,0,,0
+LTFRB_1572,,"Valariano Fugoso, Manila",,14.6077,120.982,,,0,,0
+LTFRB_1573,,"Valariano Fugoso, Manila",,14.606,120.982,,,0,,0
+LTFRB_1574,,"Valariano Fugoso, Manila",,14.6039,120.982,,,0,,0
+LTFRB_1575,,"Dr. Jose Fabella Memorial Hospital, Felix Huertas, Manila",,14.6069,120.984,,,0,,0
+LTFRB_1576,,"Francis P. Yuseco, Manila",,14.62,120.974,,,0,,0
+LTFRB_1577,,"Dagupan, Manila",,14.6187,120.974,,,0,,0
+LTFRB_1578,,"Dagupan / Arqueros Intersection, Manila",,14.6165,120.974,,,0,,0
+LTFRB_1579,,"Dagupan / Gabriella  Intersection, Manila",,14.6145,120.973,,,0,,0
+LTFRB_1580,,"Dagupan / Linampas Intersection, Manila",,14.6129,120.973,,,0,,0
+LTFRB_1581,,"PNR Tutuban Station, Dagupan, Manila",,14.6115,120.973,,,0,,0
+LTFRB_1582,,"Dagupan, Manila",,14.6099,120.972,,,0,,0
+LTFRB_1583,,"Ricafort, Manila",,14.6094,120.971,,,0,,0
+LTFRB_1584,,"Dagupan, Manila",,14.6083,120.972,,,0,,0
+LTFRB_1585,,"Dagupan, Manila",,14.607,120.972,,,0,,0
+LTFRB_1586,,"Ricafort, Manila",,14.6096,120.969,,,0,,0
+LTFRB_1587,,"Tutuban Cluster Mall, CM Recto Avenue, Manila",,14.6063,120.973,,,0,,0
+LTFRB_1588,,"Claro M. Recto Ave / Ylaya Intersection, Manila",,14.6052,120.97,,,0,,0
+LTFRB_1589,,"Sto. Cristo / Claro M. Recto Ave Intersection, Manila",,14.6036,120.968,,,0,,0
+LTFRB_1590,,"Claro M. Recto Ave, Manila",,14.6019,120.967,,,0,,0
+LTFRB_1591,,"Del Pan Flyover, Manila",,14.5999,120.965,,,0,,0
+LTFRB_1592,,"Juan Luna, Manila",,14.6048,120.971,,,0,,0
+LTFRB_1593,,"Juan Luna / Sta. Elena Intersection, Manila",,14.6035,120.972,,,0,,0
+LTFRB_1594,,"Juan Luna, Manila",,14.6023,120.972,,,0,,0
+LTFRB_1595,,"Juan Luna / Veronica Intersection, Manila",,14.6008,120.973,,,0,,0
+LTFRB_1596,,"Soler St / Reina Regente Intersection, Manila",,14.6047,120.974,,,0,,0
+LTFRB_1597,,"Soler St / Roman Intersection, Manila",,14.6054,120.973,,,0,,0
+LTFRB_1598,,"Reina Regente / Dadivas Intersection, Manila",,14.6028,120.974,,,0,,0
+LTFRB_1599,,"T. Mapua, Manila",,14.6023,120.98,,,0,,0
+LTFRB_1600,,"T. Mapua, Manila",,14.6008,120.979,,,0,,0
+LTFRB_1601,,"Camba / Clavel Intersection, Manila",,14.6009,120.968,,,0,,0
+LTFRB_1602,,"Lavezares St / Madrid Intersection, Manila",,14.5995,120.969,,,0,,0
+LTFRB_1603,,"Lara / Madrid Intersection, Manila",,14.5984,120.97,,,0,,0
+LTFRB_1604,,Camba / San Nicolas,,14.5994,120.97,,,0,,0
+LTFRB_1605,,"Muelle Dela Industria / Madrid Intersection, Manila",,14.5966,120.971,,,0,,0
+LTFRB_1606,,"Numancia / Muelle Dela Industria Intersection, Manila",,14.5964,120.972,,,0,,0
+LTFRB_1607,,"Prensa / Muelle Dela Industria Intersection, Manila",,14.5962,120.973,,,0,,0
+LTFRB_1608,,"Dasmariñas / Juan Luna Intersection, Manila",,14.5971,120.975,,,0,,0
+LTFRB_1609,,"Juan Luna, Manila",,14.5989,120.974,,,0,,0
+LTFRB_1610,,"Quintin Paredes, Manila",,14.5985,120.976,,,0,,0
+LTFRB_1611,,"Dasmariñas, Manila",,14.5983,120.977,,,0,,0
+LTFRB_1612,,"Dasmariñas, Manila",,14.5995,120.979,,,0,,0
+LTFRB_1613,,"A F. Torres / Ronquillo Intersection, Manila",,14.6003,120.981,,,0,,0
+LTFRB_1614,,"Rizal Avenue, Manila",,14.6015,120.982,,,0,,0
+LTFRB_1615,,"Rizal Avenue, Manila",,14.5991,120.981,,,0,,0
+LTFRB_1616,,"Bustos / Rizal Avenue Intersection, Manila",,14.5998,120.981,,,0,,0
+LTFRB_1617,,"T. Pinpin Street / Escolta Intersection, Manila",,14.5981,120.979,,,0,,0
+LTFRB_1618,,"Escolta, Manila",,14.5972,120.978,,,0,,0
+LTFRB_1619,,"Juan Luna / Muelle Dela Industria Intersection, Manila",,14.596,120.976,,,0,,0
+LTFRB_1620,,"Jones Bridge / Riverside Dr Intersection, Manila",,14.5953,120.978,,,0,,0
+LTFRB_1621,,"McArthur Bridge , Manila",,14.5959,120.98,,,0,,0
+LTFRB_1622,,"Padre Burgos St, Manila",,14.5938,120.98,,,0,,0
+LTFRB_1623,,"Magallanes Dr, Manila",,14.595,120.979,,,0,,0
+LTFRB_1624,,"Riverside Dr, Manila",,14.5948,120.975,,,0,,0
+LTFRB_1625,,"Andres Soriano Jr Ave / Muralla Intersection, Manila",,14.5938,120.974,,,0,,0
+LTFRB_1626,,"Magallanes Dr, Manila",,14.5945,120.977,,,0,,0
+LTFRB_1627,,"Andres Soriano Jr Ave / General Luna, Manila",,14.5922,120.972,,,0,,0
+LTFRB_1628,,"Bonifacio Drive, Manila",,14.59,120.971,,,0,,0
+LTFRB_1629,,"Bonifacio Drive, Manila",,14.588,120.973,,,0,,0
+LTFRB_1630,,"Bonifacio Drive, Manila",,14.5855,120.974,,,0,,0
+LTFRB_1631,,"25th St / Antonio C. Delgado Intersection, Manila",,14.5841,120.973,,,0,,0
+LTFRB_1632,,"Antonio C. Delgado, Manila",,14.586,120.971,,,0,,0
+LTFRB_1633,,"Railroad Dr, Manila",,14.5865,120.973,,,0,,0
+LTFRB_1634,,"Railroad Dr, Manila",,14.5883,120.971,,,0,,0
+LTFRB_1635,,"Railroad Dr / 13th St Intersection, Manila",,14.5903,120.97,,,0,,0
+LTFRB_1636,,"Antonio C. Delgado / 13th St Intersection, Manila",,14.5887,120.969,,,0,,0
+LTFRB_1637,,"Antonio C. Delgado / 16th St Intersection, Manila",,14.5876,120.97,,,0,,0
+LTFRB_1638,,"Padre Burgos St / Padre Burgos Street Intersection, Manila",,14.5832,120.975,,,0,,0
+LTFRB_1639,,"Padre Burgos St, Manila",,14.5843,120.978,,,0,,0
+LTFRB_1640,,"Padre Burgos St, Manila",,14.586,120.98,,,0,,0
+LTFRB_1641,,"Padre Burgos /  Taft Ave Intersection St, Manila",,14.5882,120.981,,,0,,0
+LTFRB_1642,,"Taft Ave, Manila",,14.5921,120.98,,,0,,0
+LTFRB_1643,,"Padre Burgos St / Anda Intersection, Manila",,14.5939,120.978,,,0,,0
+LTFRB_1644,,"Padre Burgos St, Manila",,14.5938,120.979,,,0,,0
+LTFRB_1645,,"Taft Ave, Manila",,14.5908,120.981,,,0,,0
+LTFRB_1646,,"Taft Ave, Manila",,14.588,120.982,,,0,,0
+LTFRB_1647,,"Justice Cecilia Munoz-Palma, Manila",,14.5915,120.982,,,0,,0
+LTFRB_1648,,"Natividad Almeda-Lopez , Manila",,14.5904,120.984,,,0,,0
+LTFRB_1649,,"Mayor Antonio J. Villegas Rd, Manilla",,14.5933,120.982,,,0,,0
+LTFRB_1650,,"A F. Torres, Manila",,14.6013,120.98,,,0,,0
+LTFRB_1651,,"Ayala Blvd / Taft Avenue Intersection, Manila",,14.5861,120.983,,,0,,0
+LTFRB_1652,,"Taft Ave / T.M. Kalaw Intersection, Manila",,14.5836,120.984,,,0,,0
+LTFRB_1653,,"Taft Ave / Padre Faura Intersection, Manila",,14.5799,120.986,,,0,,0
+LTFRB_1654,,"Traft Avenue, Maila",,14.5816,120.985,,,0,,0
+LTFRB_1655,,"Taft Ave / Josefa Llanes Escoda Intersection, Manila",,14.5773,120.988,,,0,,0
+LTFRB_1656,,"Padre Faura / General Luna Street Intersection, Manila",,14.5806,120.988,,,0,,0
+LTFRB_1657,,"Josefa Llanes Escoda / Felipe Agoncillo Intersection, Manila",,14.578,120.989,,,0,,0
+LTFRB_1658,,"Leon Guinto Sr. / Pedro Gil Intersection, Manila",,14.5765,120.989,,,0,,0
+LTFRB_1659,,"Leon Guinto Sr. / G. Apacible Inreesection, Manila",,14.5788,120.988,,,0,,0
+LTFRB_1660,,T.M. Kalaw / Maria Y. Orosa St,,14.582,120.981,,,0,,0
+LTFRB_1661,,"Museum of Philippine History, Rizal Park, T.M. Kalaw, Manila",,14.5806,120.979,,,0,,0
+LTFRB_1662,,"United Nations Ave, Manila",,14.5817,120.983,,,0,,0
+LTFRB_1663,,"Robinson's Place Residences II, Padre Faura, Manila",,14.5785,120.983,,,0,,0
+LTFRB_1664,,"Mayfair Tower, United Nations Ave, Manila",,14.58,120.98,,,0,,0
+LTFRB_1665,,"Arquiza / Marcelo H. del Pilar Intersection, Manila",,14.5778,120.98,,,0,,0
+LTFRB_1666,,"Padre Faura / M Adriatico Intersection, Manila",,14.5777,120.982,,,0,,0
+LTFRB_1667,,"Jorge Bocobo, Manila",,14.5798,120.982,,,0,,0
+LTFRB_1668,,"Marcelo H. del Pilar / Salas Intersection, Manila",,14.5747,120.982,,,0,,0
+LTFRB_1669,,"Marcelo H. del Pilar / Sinagoga Intersection, Manila",,14.5712,120.983,,,0,,0
+LTFRB_1670,,"Marcelo H. del Pilar, Manila",,14.5683,120.985,,,0,,0
+LTFRB_1671,,"Sta. Monica / A.Mabini Intersection, Manila",,14.5762,120.982,,,0,,0
+LTFRB_1672,,"A.Mabini, Manila",,14.5733,120.983,,,0,,0
+LTFRB_1673,,"A.Mabini, Manila",,14.5702,120.985,,,0,,0
+LTFRB_1674,,"Philipine General Hospital, Pedro Gil, Manila",,14.5746,120.985,,,0,,0
+LTFRB_1675,,"UP College of Nursing, Pedro Gil, Manila",,14.5758,120.988,,,0,,0
+LTFRB_1676,,"Taft Ave, Manila",,14.5742,120.989,,,0,,0
+LTFRB_1677,,"President Quirino Ave / Taft Ave Intersection, Manila",,14.5703445188,120.9919166565,,,0,,0
+LTFRB_1678,,"Gen M Malvar / Luis Maria Guerero St Intersection, Manila",,14.5737,120.987,,,0,,0
+LTFRB_1679,,"Gen M Malvar / M Adriatico Intersection, Manila",,14.5725,120.985,,,0,,0
+LTFRB_1680,,"Remedios / Antonio Vasquez Intersection, Manila",,14.5717,120.989,,,0,,0
+LTFRB_1681,,"San Andres Market, San Andres / Leveriza Intersection, Manila",,14.5698,120.989,,,0,,0
+LTFRB_1682,,"M Adriatico / San Andres Intersection, Manila",,14.569,120.987,,,0,,0
+LTFRB_1683,,"A.Mabini, Manila",,14.5669,120.986,,,0,,0
+LTFRB_1684,,"Hospital, Marcelo H. del Pilar / President Quirino Ave Intersection, Manila",,14.565,120.986,,,0,,0
+LTFRB_1685,,"President Quirino Ave / Madre Ignacia Intersection, Manila",,14.5658,120.988,,,0,,0
+LTFRB_1686,,"Malate Catholic School - Boys Department, Madre Ignacia, Manila",,14.5681,120.986,,,0,,0
+LTFRB_1687,,"President Quirino Ave / Leveriza Intersection, Manila",,14.5679,120.99,,,0,,0
+LTFRB_1688,,"Remedios / Jorge Bocobo Intersection, Manila",,14.5705,120.987,,,0,,0
+LTFRB_1689,,"Leon Guinto Sr., Manila",,14.5742,120.991,,,0,,0
+LTFRB_1690,,"Leon Guinto Sr., Manila",,14.5719,120.992,,,0,,0
+LTFRB_1691,,"Leon Guinto Sr / C.Aragon Intersection., Manila",,14.5693,120.993,,,0,,0
+LTFRB_1692,,"Leon Guinto Sr., Manila",,14.5672,120.994,,,0,,0
+LTFRB_1693,,Leon Guinto Sr. / Estrada,,14.5647,120.995,,,0,,0
+LTFRB_1694,,"Taft Avenue / Pablo Ocampo Sreet, Avenue, Manila",,14.563,120.996,,,0,,0
+LTFRB_1695,,"Pablo Ocampo Sreet Avenue, Manila",,14.5615,120.994,,,0,,0
+LTFRB_1696,,"Taft Avenue, Manila",,14.5651,120.994,,,0,,0
+LTFRB_1697,,"Taft Avenue, Manila",,14.5682,120.992,,,0,,0
+LTFRB_1698,,"Leveriza, Manila",,14.5649,120.991,,,0,,0
+LTFRB_1699,,"Rizal Memorial Track and Football Stadium, M Adriatico, Manila",,14.5631,120.991,,,0,,0
+LTFRB_1700,,"Hotel Victoria, M Adriatico, Manila",,14.5671,120.988,,,0,,0
+LTFRB_1701,,"Hospital, A.Mabini, Manila",,14.563,120.988,,,0,,0
+LTFRB_1702,,"Century Park, Un-named road near A.Mabini, Manila",,14.5614,120.99,,,0,,0
+LTFRB_1703,,"HP Village Square, Pablo Ocampo Sr., Manila",,14.5602,120.99,,,0,,0
+LTFRB_1769,,"Mendiola / Legarda Intersection, Manila",,14.6003,120.991,,,0,,0
+LTFRB_1770,,"Manuel Quezon University, R Hidalgo, Manila",,14.5999,120.988,,,0,,0
+LTFRB_1771,,"Legarda, Manila",,14.5977,120.99,,,0,,0
+LTFRB_1772,,"Farnecio / Arlegui, Manila",,14.5955,120.989,,,0,,0
+LTFRB_1773,,"P. Casal, Manila",,14.5933,120.988,,,0,,0
+LTFRB_1774,,"Ayala Bridge, Manila",,14.5917,120.987,,,0,,0
+LTFRB_1775,,"Carlos Palanca Sr, Manila",,14.5935,120.986,,,0,,0
+LTFRB_1776,,"Carlos Palanca Sr, Manila",,14.5949,120.984,,,0,,0
+LTFRB_1777,,"Arlegui, Manila",,14.5968,120.987,,,0,,0
+LTFRB_1778,,"Quezon Blvd, Manila",,14.5974,120.984,,,0,,0
+LTFRB_1779,,"R Hidalgo, Manila",,14.5982,120.986,,,0,,0
+LTFRB_1780,,"Globo de Oro, Manila",,14.5962,120.985,,,0,,0
+LTFRB_1781,,"R Hidalgo, Manila",,14.5989,120.988,,,0,,0
+LTFRB_1782,,"Quezon Blvd, Manila",,14.5994,120.984,,,0,,0
+LTFRB_1783,,"Quezon Blvd, Manila",,14.6014,120.985,,,0,,0
+LTFRB_1784,,"Quezon Bridge, Manila",,14.5952,120.981,,,0,,0
+LTFRB_1785,,"Ayala Blvd, Manila",,14.5903,120.986,,,0,,0
+LTFRB_1786,,"Ayala Blvd, Manila",,14.5882,120.984,,,0,,0
+LTFRB_1787,,"Ayala Blvd, Manila",,14.5927,120.99,,,0,,0
+LTFRB_1788,,"Jose P Laurel Sr, Manila",,14.5927,120.992,,,0,,0
+LTFRB_1789,,"Aguado, Manila",,14.5945,120.993,,,0,,0
+LTFRB_1790,,"Arlegui, Manila",,14.5965,120.991,,,0,,0
+LTFRB_1791,,"Tuberias, Manila",,14.5983,120.993,,,0,,0
+LTFRB_1792,,"Tuberias, Manila",,14.5989,120.996,,,0,,0
+LTFRB_1793,,"Tuberias, Manila",,14.5995,120.998,,,0,,0
+LTFRB_1794,,"Ramon Magsaysay Blvd, Manila",,14.6012,120.999,,,0,,0
+LTFRB_1795,,"Ramon Magsaysay Blvd, Manila",,14.6008,120.995,,,0,,0
+LTFRB_1796,,"Jollibee Figueras Legarda / Bustillos Intersection, Manila",,14.6017,120.993,,,0,,0
+LTFRB_1797,,"M. Earnshaw, Manila",,14.6041,120.993,,,0,,0
+LTFRB_1798,,"F. Jhocson, Manila",,14.6055,120.995,,,0,,0
+LTFRB_1799,,"G. Tuazon, Manila",,14.6034,120.997,,,0,,0
+LTFRB_1800,,"M. Arenas, Manila",,14.6029,120.995,,,0,,0
+LTFRB_1801,,"Arsenio H. Lacson Ave, Manila",,14.6057,120.997,,,0,,0
+LTFRB_1802,,"Arsenio H. Lacson Ave / J. Fajardo Intersection, Manila",,14.6076,120.995,,,0,,0
+LTFRB_1803,,"F. Cayco, Manila",,14.6074,120.993,,,0,,0
+LTFRB_1804,,"Sergio H. Loyola St, Manila",,14.6056,120.991,,,0,,0
+LTFRB_1805,,"R.Papa, Manila",,14.6031,120.989,,,0,,0
+LTFRB_1806,,"G Tuazon, Manila",,14.6045,120.999,,,0,,0
+LTFRB_1807,,"G Tuazon / Vicente G Cruz Intersection, Manila",,14.6056,121.001,,,0,,0
+LTFRB_1808,,"Vicente G Cruz, Manila",,14.6078,120.999,,,0,,0
+LTFRB_1809,,"M. dela Fuente, Manila",,14.6064,120.999,,,0,,0
+LTFRB_1810,,"M. dela Fuente, Manila",,14.6095,120.996,,,0,,0
+LTFRB_1811,,"Vicente G Cruz, Manila",,14.6102,120.997,,,0,,0
+LTFRB_1812,,"G Tuazon, Manila",,14.6068,121.003,,,0,,0
+LTFRB_1813,,"G Tuazon / Masbate Intersection, Manila",,14.6087,121.004,,,0,,0
+LTFRB_1814,,"G Tuazon / Gerardo Intersection, Manila",,14.6109,121.005,,,0,,0
+LTFRB_1815,,"G Tuazon / Bataan Intersection, Manila",,14.6122,121.007,,,0,,0
+LTFRB_1818,,"Ramon Magsaysay Blvd, Manila",,14.6016,121.002,,,0,,0
+LTFRB_1819,,"Lardizabal, Manila",,14.603,121.001,,,0,,0
+LTFRB_1820,,"Pureza Extension / Ramon Magsaysay Blvd Intersection, Manila",,14.6019,121.004,,,0,,0
+LTFRB_1821,,"Paltok / Ramon Magsaysay Blvd Intersection, Manila",,14.6023,121.008,,,0,,0
+LTFRB_1822,,"Ramon Magsaysay Blvd / Altura Intersection, Manila",,14.6023,121.01,,,0,,0
+LTFRB_1823,,"Manga Ave / Buenos Aires Street Intersection, Manila",,14.6032,121.012,,,0,,0
+LTFRB_1824,,"A Santol / Sociego Intersection, Manila",,14.604,121.014,,,0,,0
+LTFRB_1830,,"Ramon Magsaysay Blvd, Manila",,14.6027,121.015,,,0,,0
+LTFRB_1831,,"Sociego, Quezon City",,14.6041,121.017,,,0,,0
+LTFRB_1843,,"Guadalcanal St, Manila",,14.6007,121.017,,,0,,0
+LTFRB_1844,,Valenzuela Extension / Victorio Mapa Blvd,,14.5977,121.018,,,0,,0
+LTFRB_1845,,"Old Sta. Mesa, Manila",,14.5996,121.015,,,0,,0
+LTFRB_1846,,"Internet Cafe, Old Sta. Mesa, Manila",,14.6011,121.013,,,0,,0
+LTFRB_1847,,"City Oil, Old Sta. Mesa, Manila",,14.601,121.02,,,0,,0
+LTFRB_1853,,"Victorio Mapa Blvd, Manila",,14.5959,121.02,,,0,,0
+LTFRB_1854,,"P. Sanchez St, Manila",,14.5953,121.023,,,0,,0
+LTFRB_1855,,"Valenzuela, Manila",,14.598,121.015,,,0,,0
+LTFRB_1856,,"Cordillera, Manila",,14.5963,121.015,,,0,,0
+LTFRB_1857,,"Lubiran, Manila",,14.5939,121.017,,,0,,0
+LTFRB_1858,,"Mag J A santos, Manila",,14.5919,121.02,,,0,,0
+LTFRB_1859,,"Bacood, Manila",,14.5899,121.02,,,0,,0
+LTFRB_1860,,"Bacood / Dalisay Intersection, Manila",,14.5895,121.017,,,0,,0
+LTFRB_1861,,"P. Sanchez St, Manila",,14.5942,121.026,,,0,,0
+LTFRB_1862,,"Daang Bakal / New Panaderos Extension Intersection, Manila",,14.5921,121.026,,,0,,0
+LTFRB_1863,,"New Panaderos Extension / 34 Rte Rev. G. Aglipay Intersection, Mandaluyong City",,14.5897,121.023,,,0,,0
+LTFRB_1864,,"New Panaderos / Castañeda Intersection, Manila",,14.5874,121.021,,,0,,0
+LTFRB_1865,,"F Y Manalo, Manila",,14.5875,121.017,,,0,,0
+LTFRB_1866,,"F Y Manalo, Manila",,14.5872,121.014,,,0,,0
+LTFRB_1867,,"F Y Manalo, Manila",,14.586,121.012,,,0,,0
+LTFRB_1868,,"Lamayan / New Panaderos Intersection, Manila",,14.5847,121.018,,,0,,0
+LTFRB_1869,,"New Panaderos / Old Panaderos Intersection, Manila",,14.582,121.013,,,0,,0
+LTFRB_1870,,"Pedro Gil, Manila",,14.5808,121.01,,,0,,0
+LTFRB_1871,,"Pedro Gil / Felix Intersection, Manila",,14.5798,121.006,,,0,,0
+LTFRB_1872,,"La Concordia College, Pedro Gil, Manila",,14.5791,121.003,,,0,,0
+LTFRB_1873,,"Pedro Gil / Fabie Intersection, Manila",,14.5787,121,,,0,,0
+LTFRB_1874,,"Pedro Gil / Union Intersection, Manila",,14.5788,120.997,,,0,,0
+LTFRB_1875,,"Perdigon / Penafrancia Intersection, Manila",,14.5801,120.997,,,0,,0
+LTFRB_1876,,"Plaza Dilao Rd, Manila",,14.581,121,,,0,,0
+LTFRB_1877,,"President Quirino Ave, Manila",,14.578,120.998,,,0,,0
+LTFRB_1878,,Angel Linao / Pedro Gil,,14.5782,120.993,,,0,,0
+LTFRB_1879,,"Pedro Gil, Manila",,14.58,120.989,,,0,,0
+LTFRB_1880,,"San Gregorio Bridge, Manila",,14.5809,120.992,,,0,,0
+LTFRB_1881,,"San Gregorio / Paz St, Manila",,14.5814,120.995,,,0,,0
+LTFRB_1882,,"President Quirino Ave. Ext / Paz St Intersection, Manila",,14.5846,120.995,,,0,,0
+LTFRB_1883,,"President Quirino Ave. Ext, Manila",,14.5826,120.997,,,0,,0
+LTFRB_1884,,"J. Zamora St / Burgos Intersection, Manila",,14.5842,120.999,,,0,,0
+LTFRB_1885,,"President Quirino Ave / J. Zamora St, Manila",,14.5862,121.002,,,0,,0
+LTFRB_1887,,"Industria / Hilum Intersection, Manila",,14.5897,121.003,,,0,,0
+LTFRB_1888,,"Jesus, Manila",,14.5929,121.004,,,0,,0
+LTFRB_1889,,"Palumpong / Beata Intersection, Manila",,14.5908,121.006,,,0,,0
+LTFRB_1890,,"Beata, Manila",,14.5911,121.008,,,0,,0
+LTFRB_1891,,"Lorenzo Dela Paz / Baretto Intersection, Manila",,14.5907,121.011,,,0,,0
+LTFRB_1892,,"Lorenzo Dela Paz, Manila",,14.5911,121.013,,,0,,0
+LTFRB_1893,,"Robinson's Place - Otis, Manila",,14.5872,120.995,,,0,,0
+LTFRB_1894,,"Paz Mendoza Guazon, Manila",,14.5897,120.997,,,0,,0
+LTFRB_1895,,"Paz Mendoza Guazon, Manila",,14.5922,121,,,0,,0
+LTFRB_1896,,"Nagtahan Bridge, Manila",,14.5943,121.002,,,0,,0
+LTFRB_1897,,"Nagtahan Bridge, Manila",,14.5972,121.001,,,0,,0
+LTFRB_1898,,"Nagtahan Flyover / Duhat Intersection, Manila",,14.5998,121,,,0,,0
+LTFRB_1899,,"President Quirino Ave / Angel Linao Intersection, Manila",,14.5745,120.995,,,0,,0
+LTFRB_1900,,"South Luzon Expressway, Manila",,14.5726,121,,,0,,0
+LTFRB_1901,,"Singalong, Manila",,14.5714,120.995,,,0,,0
+LTFRB_1902,,"Julio Nakpil, Manila",,14.5756,120.993,,,0,,0
+LTFRB_1903,,"Gen M Malvar, Manila",,14.5758,120.991,,,0,,0
+LTFRB_1904,,"Agusto Francisco, Manila",,14.574,121.004,,,0,,0
+LTFRB_1905,,"Agusto Francisco / Pasig Line Intersection, Manila",,14.5776,121.007,,,0,,0
+LTFRB_1906,,"Revellin, Manila",,14.5772,121.011,,,0,,0
+LTFRB_1907,,"Estrada / Arellano Ave Intersection, Manila",,14.566,120.998,,,0,,0
+LTFRB_1908,,"Dian / Pablo Ocampo Sr. Intersection, Manila",,14.5651,121,,,0,,0
+LTFRB_1909,,"Arellano Ave / Estrada Intersection, Manila",,14.562,120.999,,,0,,0
+LTFRB_1911,,"Zobel Roxas Ave / Madre Perla Intersection, Manila",,14.567,121.004,,,0,,0
+LTFRB_1912,,"Caton / Zobel Roxas Ave Intersection, Manila",,14.5691,121.006,,,0,,0
+LTFRB_1916,,"Pablo Ocampo Sr. / G.Del Pilar, Manila",,14.5661,121.002,,,0,,0
+LTFRB_1994,,"Tejeron, Makati City, Manila",,14.5751,121.012,,,0,,0
+LTFRB_321,,"P. Sevilla Street / 2th Avenue West Intersection, Caloocan City",,14.6334,120.981,,,0,,0
+LTFRB_337,,"Westminister High School / Tondo Hospital, North Bay Boulevard, Tondo",,14.6352,120.962,,,0,,0
+LTFRB_338,,"Dried Fish Dealer, North Bay Boulevard, Tondo",,14.6324,120.964,,,0,,0
+LTFRB_339,,"North Bay Boulevard / Rodriguez Intersection, Tondo",,14.6299,120.965,,,0,,0
+LTFRB_340,,"H. Lopez Blvd / Guidote Intersection, Tondo",,14.6271,120.966,,,0,,0
+LTFRB_341,,"SM Hypermarket, President Ferdinand E. Marcos Highway, ondo",,14.6324,120.959,,,0,,0
+LTFRB_342,,"President Ferdinand E. Marcos Highway / Miguel de Legaspi Intersection, Tondo",,14.63,120.959,,,0,,0
+LTFRB_343,,"Vitas Meat Slaughter House, President Ferdinand E. Marcos Highway, Tondo",,14.6283,120.96,,,0,,0
+LTFRB_344,,"President Ferdinand E. Marcos Highway / Bonifacio Intersection, Tondo",,14.6254,120.96,,,0,,0
+LTFRB_345,,"Manila Film Centre, President Ferdinand E. Marcos Highway, Tondo",,14.6226,120.96,,,0,,0
+LTFRB_346,,"Vitas, Velasquez, Tondo",,14.6282,120.962,,,0,,0
+LTFRB_347,,"Old Proctor and Gamble Factory, Vitas, Velasquez, Tondo",,14.6253,120.963,,,0,,0
+LTFRB_349,,"d E. Marcos Highway / Capulong Intersection, Velasquez, Tondo",,14.6204,120.96,,,0,,0
+LTFRB_350,,"d E. Marcos Highway / Herbosa Intersection, Velasquez, Tondo",,14.6177,120.96,,,0,,0
+LTFRB_351,,"San Pablo Apostle Pariah, Velasquez, Tondo",,14.6235,120.965,,,0,,0
+LTFRB_352,,"Velasquez, Tondo",,14.6221,120.965,,,0,,0
+LTFRB_353,,"F. Varona / Trinidad Intersection, Tondo",,14.6231,120.964,,,0,,0
+LTFRB_354,,"F. Varona / Nepomuceno Intersection, Tondo",,14.6215,120.965,,,0,,0
+LTFRB_355,,"Velasquez / Lallana Intersection, Tondo",,14.6209,120.965,,,0,,0
+LTFRB_356,,"Emilio Jacinto Elementary School, Velasquez, Tondo",,14.6199,120.966,,,0,,0
+LTFRB_357,,"Velasquez / Navaroo Intersection, Tondo",,14.6191,120.966,,,0,,0
+LTFRB_369,,"The Lord is my Shepard, A. Mabini Avenue, Manila",,14.6341,120.975,,,0,,0
+LTFRB_370,,"Juan Luma, / Hermosa, Manila",,14.6327,120.975,,,0,,0
+LTFRB_371,,"Angels Home Learning School, Juan Luma, Manila",,14.6312,120.974,,,0,,0
+LTFRB_372,,"St Joseph School, Juan Luma / Pampanga, Manila",,14.6288,120.974,,,0,,0
+LTFRB_373,,"Torres High School, Juan Luma, Manila",,14.6275,120.974,,,0,,0
+LTFRB_374,,"Gagalangin Fire Station, Juan Luma, Manila",,14.6253,120.973,,,0,,0
+LTFRB_375,,"Manila Faith Assembly of God, Juan Luma, Manila",,14.6221,120.972,,,0,,0
+LTFRB_376,,"Yan-An Cargo, North Bay Blvd, Manila",,14.6231,120.97,,,0,,0
+LTFRB_377,,"Immaculate Conception Academy, North Bay Blvd, Manila",,14.6246,120.968,,,0,,0
+LTFRB_378,,"F. Benitez Elementary School, Juan Luma, Caloocan City",,14.6264,120.973,,,0,,0
+LTFRB_379,,"Timoteo Paez Integrated School, Rodriguez, Manila",,14.6309,120.967,,,0,,0
+LTFRB_380,,"Don Bosco Tondo Soccer Field, Radial Road 10, Manila",,14.6155,120.96,,,0,,0
+LTFRB_381,,"Radial Road 10, Manila",,14.6128,120.96,,,0,,0
+LTFRB_382,,"Radial Road 10 / Moriones Intersection, Manila",,14.6096,120.961,,,0,,0
+LTFRB_383,,"Moriones / Masinop Intersection, Manila",,14.6097,120.963,,,0,,0
+LTFRB_384,,"Moriones / Sta. Maria Intersection, Manila",,14.6101,120.967,,,0,,0
+LTFRB_385,,"Philippine Ports Authority, President Ferdinand E. Marcos Highway, Manila",,14.6073,120.961,,,0,,0
+LTFRB_386,,"President Ferdinand E. Marcos Highway / Lakandula Intersection, Manila",,14.6027,120.962,,,0,,0
+LTFRB_387,,"President Ferdinand E. Marcos Highway / Kagitingan Intersection, Manila",,14.6028,120.963,,,0,,0
+LTFRB_388,,"E. Almario Elementary School, Kagitingan, Manila",,14.6017,120.964,,,0,,0
+LTFRB_389,,"Moriones, Manila",,14.6099,120.965,,,0,,0
+LTFRB_390,,"President Ferdinand E. Marcos Highway / Lakandula Intersection, Manila",,14.6046,120.961,,,0,,0
+LTFRB_391,,"Juan Luma / Raxa Bago Intersection, Manila",,14.6204,120.972,,,0,,0
+LTFRB_392,,"Pritil Public Market, Juan Luma / Tayuman Road Intersection, Manila",,14.6179,120.971,,,0,,0
+LTFRB_393,,"Jose Corazon de Jesus Elementary School, Juan Luma, Manila",,14.6142,120.97,,,0,,0
+LTFRB_394,,"Iglesia Ni Cristo, Juan Luma, Manila",,14.6106,120.969,,,0,,0
+LTFRB_395,,"Herbosa / Trinidad Rizal Intersection, Manila",,14.6182,120.967,,,0,,0
+LTFRB_396,,"Pritil Public Market, Herbosa, Manila",,14.6176,120.97,,,0,,0
+LTFRB_397,,"Yangco Elementary School, Franco, Manila",,14.6162,120.969,,,0,,0
+LTFRB_398,,"Sto. Nino Church, Nicolas Zamora, Manila",,14.608,120.967,,,0,,0
+LTFRB_399,,"Isabelo delos Reyes Elementary School, Nicolas Zamora, Manila",,14.6089,120.968,,,0,,0
+LTFRB_400,,"Wet Market, Juan Luma, Manila",,14.6081,120.969,,,0,,0
+LTFRB_401,,"Union Bank of Philippines, Juan Luca, Manila",,14.6065,120.97,,,0,,0
+LTFRB_402,,"P. Rada / Carman Planas Intersection, Manila",,14.6055,120.968,,,0,,0
+LTFRB_403,,"Ylayay, Manila",,14.6068,120.968,,,0,,0
+LTFRB_404,,"Tondo High School, Quezon, Manila",,14.6112,120.963,,,0,,0
+LTFRB_405,,"Quezon / Coral Street Intersection, Manila",,14.6138,120.963,,,0,,0
+LTFRB_406,,"Quezon / Dandan Intersection, Manila",,14.6165,120.963,,,0,,0
+LTFRB_407,,"Quezon / Herbosa Intersection, Manila",,14.618,120.962,,,0,,0
+LTFRB_4259,,"Roxas Blvd/President Querino Av, Manila",,14.5643,120.985,,,0,,0
+LTFRB_4260,,"Metropolitan Museum of Manila, Roxas Blvd, Manila",,14.5617,120.986,,,0,,0
+LTFRB_4273,,"PNR Vito Cruz Station, South Luzon Expressway, Makati City, Manila",,14.5667,121.003,,,0,,0
+LTFRB_4274,,"South Luzon Expressway, Makati City, Manila",,14.5693,121.001,,,0,,0
+LTFRB_4275,,"PNR San Andres Station, South Luzon Expressway, Makati City, Manila",,14.5756,120.998,,,0,,0
+LTFRB_4319,,"Pablo Ocampo Sr, Makati City, Manila",,14.5641,120.998,,,0,,0
+LTFRB_4320,,"Bautista, Makati City, Manila",,14.5639,120.999,,,0,,0
+LTFRB_4326,,"Philippine Normal University, San Marcelino / Ayala Blvd, Manila",,14.5887,120.985,,,0,,0
+LTFRB_4327,,"Technological University of Philippines, San Marcellino, Manila",,14.5871,120.985,,,0,,0
+LTFRB_4328,,"Adamson University, San Marcelino, Manila",,14.5857,120.986,,,0,,0
+LTFRB_4329,,"Lorrie's Kitchenette, San Marcelino / T.M. Kalaw, Manila",,14.5846,120.987,,,0,,0
+LTFRB_4330,,"D Romualdez Sr / United Nations Ave, Manila",,14.5837,120.988,,,0,,0
+LTFRB_4331,,"D Romualdez Sr, Manila",,14.5852,120.988,,,0,,0
+LTFRB_4332,,"D Romualdez Sr, Manila",,14.5869,120.987,,,0,,0
+LTFRB_4333,,"D Romualdez Sr / Zobel, Manila",,14.5886,120.987,,,0,,0
+LTFRB_4334,,"Silver Sand Beach Resort, United Nations Ave / P. Correa, Manila",,14.5841,120.99,,,0,,0
+LTFRB_4335,,"United Nations Ave / Tanque, Manila",,14.5847,120.992,,,0,,0
+LTFRB_4336,,"United Nations Ave / President Quirino Ave Ext, Manila",,14.5853,120.994,,,0,,0
+LTFRB_4396,,"Bonifacio Dr, Manila",,14.5927,120.969,,,0,,0
+LTFRB_4397,,"Bonifacio Dr, Manila",,14.5943,120.969,,,0,,0
+LTFRB_4399,,"Del Pan Flyover, Manila",,14.5975,120.966,,,0,,0
+LTFRB_4400,,"Del Pan Flyover, Manila",,14.5993,120.965,,,0,,0
+LTFRB_4402,,"Del Pan Flyover, Manila",,14.5977,120.966,,,0,,0
+LTFRB_4403,,"Bonifacio Dr, Manila",,14.5958,120.968,,,0,,0
+LTFRB_4404,,"Bonifacio Dr, Manila",,14.5941,120.969,,,0,,0
+LTFRB_4405,,"Bonifacio Dr, Manila",,14.5925,120.97,,,0,,0
+LTFRB_4406,,"Bonifacio Dr, Manila",,14.5912,120.971,,,0,,0
+LTFRB_4484,,"Maria Y. Orosa St, Manila",,14.5832,120.981,,,0,,0
+LTFRB_4485,,"Juan Luna Monument, Padre Burgos St / Maria Y. Orosa St, Manila",,14.5847,120.979,,,0,,0
+LTFRB_4486,,"Juan Luna Monument, General Luna St, Manila",,14.5859,120.978,,,0,,0
+LTFRB_4487,,"Juan Luna Monument, Padre Burgos St / General Luna St, Manila",,14.5853,120.979,,,0,,0
+LTFRB_4488,,"Padre Burgos St, Manila",,14.5872,120.981,,,0,,0
+LTFRB_4489,,"Padre Burgos St / Taft Ave, Manila",,14.5904,120.981,,,0,,0
+LTFRB_4490,,"Navidad Almeda-Lopez, Manila",,14.5904,120.983,,,0,,0
+LTFRB_4491,,"T.M. Kalaw, Manila",,14.5829,120.983,,,0,,0
+LTFRB_4492,,"T.M. Kalaw, Manila",,14.5824,120.982,,,0,,0
+LTFRB_4493,,"LRT-1 United Nations Ave Station, T.M. Kalaw / General Luna St, Manila",,14.5832,120.984,,,0,,0
+LTFRB_4664,,"Bataan, Manila City",,14.5961,121.018,,,0,,0
+LTFRB_4665,,"Bataan, Manila City",,14.5945,121.021,,,0,,0
+LTFRB_4667,,"Muelle de Binondo, Manila City",,14.5967,120.975,,,0,,0
+LTFRB_4669,,"Sto Cristo, Manila City",,14.5997,120.973,,,0,,0
+LTFRB_4670,,"Sto Cristo, Manila City",,14.601,120.971,,,0,,0
+LTFRB_4671,,"Sta Maria, Manila City",,14.6124,120.967,,,0,,0
+LTFRB_4672,,"Velasquez, Manila City",,14.6148,120.966,,,0,,0
+LTFRB_4673,,"Tayuman Road, Manila City",,14.6174,120.974,,,0,,0
+LTFRB_4674,,"Plaza Santa Cruz, Manila City",,14.5992,120.98,,,0,,0
+LTFRB_4675,,"Evangelista Street, Manila City",,14.6004,120.983,,,0,,0
+LTFRB_4676,,"Evangelista Street, Manila City",,14.6026,120.984,,,0,,0
+LTFRB_4677,,"Sergio H Loyola, Manila City",,14.6088,120.994,,,0,,0
+LTFRB_4678,,"Sergio H Loyola, Manila City",,14.6107,120.996,,,0,,0
+LTFRB_4679,,"Sergio H Loyola, Manila City",,14.613,120.999,,,0,,0
+LTFRB_4680,,"Matimyas, Manila City",,14.6138,121.001,,,0,,0
+LTFRB_4681,,"Matimyas, Manila City",,14.6134,121.002,,,0,,0
+LTFRB_4682,,"J Fajardo, Manila City",,14.6122,121,,,0,,0
+LTFRB_4683,,"J Fajardo, Manila City",,14.6109,120.999,,,0,,0
+LTFRB_4684,,"J Fajardo, Manila City",,14.6089,120.996,,,0,,0
+LTFRB_4988,,Tutuban PNR,,14.6113047664,120.9731197357,,,0,,0
+LTFRB_4991,,Blumentritt PNR,,14.6225687949,120.9845995903,,,0,,0
+LTFRB_4992,,Dapitan/Laon Laan PNR,,14.6164229634,120.9928822517,,,0,,0
+LTFRB_4993,,España PNR,,14.6124156225,120.9966695309,,,0,,0
+LTFRB_4994,,Paco PNR,,14.5790251975,120.9991693497,,,0,,0
+LTFRB_4995,,San Andres PNR,,14.5728781493,120.9997057915,,,0,,0
+LTFRB_4996,,Vito Cruz PNR,,14.5668970731,121.0029351711,,,0,,0
+LTFRB_4998,,Pandacan PNR,,14.5907373413,121.009093523,,,0,,0
+LTFRB_4999,,Santa Mesa PNR,,14.6006423383,121.0102844238,,,0,,0

@@ -1,20 +1,26 @@
 # Manila City GTFS
 
-Subset of the Sakay.ph / DOTC Philippine GTFS feed, clipped to the **City of Manila**
-(PSGC 1380600000 boundary, faeldon/philippines-json-maps 2023).
+Subset of the Sakay.ph / DOTC Philippine GTFS feed (about 2013–15), clipped to the
+**City of Manila** (PSGC 1380600000 boundary, faeldon/philippines-json-maps 2023).
 
-## How it was clipped (`tools/clip_gtfs.py`)
-1. **Stops**: kept if inside the boundary polygon or within 50 m of its edge (source
-   coordinates are rounded to ~55 m); a stop in that edge band is skipped if its name
-   names another city.
-2. **Trips**: each trip is cut into runs of consecutive kept stops. A run of 2+ stops
-   becomes its own trip (suffix `_a`, `_b`), so no fake ride crosses a gap outside the
-   city. Stop times are re-based so each run starts at 00:00:00.
-3. **Shapes**: cut to the part inside the polygon.
-4. **Cleanup**: routes, services, agencies, stops and shapes left unused are removed.
+531 stops · 599 routes (561 jeepney, 36 bus, LRT-1, LRT-2) · 663 trips
 
-Some trips therefore contain only the Manila portion of their original itinerary.
+## How it was built
+1. **Patched** (`tools/patch_gtfs.py`): calendar dates stretched to 2020-01-01 – 2035-12-31,
+   blank `route_short_name` filled from the LTFRB code, and a Sunday LRT-1 trip added
+   (`882223_sun`, service `FIX_SUNDAY`) because the source has no Sunday service toward Baclaran.
+2. **Clipped** (`tools/clip_gtfs.py --tolerance-m 0`): a stop is kept only if it is inside the
+   boundary polygon. Each trip is cut into runs of consecutive kept stops; a run of 2+ stops
+   becomes its own trip (suffix `_a`, `_b`, as for trips `726109`, `726259` and `726260`), so no
+   fake ride crosses a gap outside the city. Stop times are re-based so each run starts at
+   00:00:00. Shapes are cut to the part inside the polygon.
+3. **Cleaned up**: routes, services, agencies, stops and shapes left unused are removed.
+   PNR Metro Commuter (`ROUTE_880872`) is excluded because it has no service in Manila, and
+   MRT-3 does not enter the City of Manila.
 
-Original data: Metro Manila jeepney, bus and LRT services. PNR Metro Commuter (ROUTE_880872) was removed
-after clipping, and MRT-3 does not enter the
-City of Manila. See `LICENSE.md` for the DOTC license terms.
+Some trips therefore contain only the Manila portion of their original itinerary. Some
+LTFRB stop names say Quezon City or Caloocan; those are LTFRB's labels, and the coordinates
+are inside the boundary.
+
+Original data: Metro Manila jeepney, bus and LRT services. See `LICENSE.md` for the DOTC
+license terms, and `../Data_README.md` for fares, rebuild steps and known gaps.
