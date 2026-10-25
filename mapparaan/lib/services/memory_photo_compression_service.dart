@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class MemoryPhotoCompressionService {
@@ -14,11 +15,6 @@ class MemoryPhotoCompressionService {
       throw const FormatException('The selected image is empty.');
     }
 
-    // Offload heavy compression to a background thread to prevent UI freezing
-    return await compute(_compressInBackground, input);
-  }
-
-  static Future<Uint8List> _compressInBackground(Uint8List input) async {
     for (final dimension in _dimensionLimits) {
       for (final quality in _qualityLevels) {
         final compressed = await FlutterImageCompress.compressWithList(

@@ -19,11 +19,13 @@ import '../services/last_route_service.dart';
 import '../services/commuter_preference_service.dart';
 import '../services/saved_commute_service.dart';
 import '../services/local_ui_preferences_service.dart';
+import '../services/friend_sharing_service.dart';
 import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 import '../services/auth_service.dart';
+import '../widgets/photo_sharing_dialog.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
@@ -1030,7 +1032,32 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
         originalBytes,
       );
 
-      await MemoryPinService.addPin(
+      List<CommuterFriend> friends = [];
+      String? friendLoadMessage;
+      try {
+        friends = await FriendSharingService.listFriends();
+      } catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            context: ErrorDescription('while loading photo sharing options'),
+          ),
+        );
+        friendLoadMessage = 'Accepted friends could not be loaded. This photo can only be kept private right now.';
+      }
+      if (!mounted) return;
+
+      final sharing = await showDialog<PhotoShareSelection>(
+        context: context,
+        builder: (_) => PhotoSharingDialog(
+          friends: friends,
+          informationMessage: friendLoadMessage,
+        ),
+      );
+      if (sharing == null || !mounted) return;
+
+      final pinId = await MemoryPinService.addPin(
         placeName: widget.placeName,
         address: widget.address,
         coordinates: widget.coordinates,
@@ -1039,8 +1066,33 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
         imageBytes: imageBytes,
       );
 
+      var sharingFailed = false;
+      if (sharing.friendIds.isNotEmpty) {
+        try {
+          await FriendSharingService.setPhotoShares(
+            photoId: pinId,
+            friendIds: sharing.friendIds,
+          );
+        } catch (error, stackTrace) {
+          sharingFailed = true;
+          FlutterError.reportError(
+            FlutterErrorDetails(
+              exception: error,
+              stack: stackTrace,
+              context: ErrorDescription('while sharing a memory photo'),
+            ),
+          );
+        }
+      }
+
       if (mounted) {
-        _showMemoryPhotoMessage('Memory photo compressed and uploaded.');
+        _showMemoryPhotoMessage(
+          sharingFailed
+              ? 'Photo uploaded privately. Sharing failed; you can try again from your profile.'
+              : sharing.friendIds.isEmpty
+              ? 'Memory photo compressed and uploaded privately.'
+              : 'Memory photo shared with your selected friends.',
+        );
       }
     } on FormatException catch (error) {
       if (mounted) _showMemoryPhotoMessage(error.message);

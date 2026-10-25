@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'friends_screen.dart';
 import '../services/commuter_preference_service.dart';
 
 import '../services/ai_assistant_service.dart';
@@ -10,11 +11,14 @@ import 'search_location_screen.dart';
 import 'auth_screen.dart';
 import '../services/auth_service.dart';
 import '../services/memory_pin_service.dart';
+import '../services/friend_sharing_service.dart';
+import '../widgets/photo_sharing_dialog.dart';
 
 enum DrawerDestination {
   profile,
   savedPlaces,
   tripHistory,
+  friends,
   settings,
   helpSupport,
 }
@@ -44,6 +48,7 @@ class DrawerDestinationScreen extends StatelessWidget {
       DrawerDestination.profile => ('My Profile', Icons.person_outline),
       DrawerDestination.savedPlaces => ('Saved Places', Icons.bookmark_border),
       DrawerDestination.tripHistory => ('Trip History', Icons.history),
+      DrawerDestination.friends => ('Friends', Icons.people_outline),
       DrawerDestination.settings => ('Settings', Icons.settings_outlined),
       DrawerDestination.helpSupport => ('Help & Support', Icons.help_outline),
     };
@@ -67,6 +72,10 @@ class DrawerDestinationScreen extends StatelessWidget {
             DrawerDestination.tripHistory => const _AccountRequiredPage(
               feature: 'trip history',
               child: _TripHistoryPage(),
+            ),
+            DrawerDestination.friends => const _AccountRequiredPage(
+              feature: 'friends and shared photos',
+              child: FriendsScreen(),
             ),
             DrawerDestination.settings => const _SettingsPage(),
             DrawerDestination.helpSupport => const _HelpSupportPage(),
@@ -827,6 +836,14 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
               ),
               actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               actions: [
+                TextButton.icon(
+                  icon: const Icon(Icons.people_outline, size: 18),
+                  label: const Text('Photo sharing'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _managePhotoSharing(currentPin);
+                  },
+                ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: Text(
@@ -849,6 +866,55 @@ class _MemoryAlbumCardState extends State<_MemoryAlbumCard> {
         );
       },
     );
+  }
+
+  Future<void> _managePhotoSharing(MemoryPin pin) async {
+    if (pin.imagePath == null) {
+      _showMessage(
+        'This older photo has no private Storage path and cannot be shared safely.',
+      );
+      return;
+    }
+    try {
+      final results = await Future.wait([
+        FriendSharingService.listFriends(),
+        FriendSharingService.listPhotoShares(pin.id),
+      ]);
+      if (!mounted) return;
+      final friends = results[0] as List<CommuterFriend>;
+      final shares = results[1] as List<MemoryPhotoShare>;
+      final selection = await showDialog<PhotoShareSelection>(
+        context: context,
+        builder: (_) => PhotoSharingDialog(
+          friends: friends,
+          initialFriendIds: shares.map((share) => share.friendId).toList(),
+        ),
+      );
+      if (selection == null || !mounted) return;
+
+      await FriendSharingService.setPhotoShares(
+        photoId: pin.id,
+        friendIds: selection.friendIds,
+      );
+      if (mounted) {
+        _showMessage(
+          selection.friendIds.isEmpty
+              ? 'Photo is private; all friend access was removed.'
+              : 'Photo sharing was updated.',
+        );
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while updating memory photo sharing'),
+        ),
+      );
+      if (mounted) {
+        _showMessage('Could not update photo sharing. Please try again.');
+      }
+    }
   }
 
   Future<void> _deleteSpecificPhoto(MemoryPin pin) async {
@@ -1424,7 +1490,7 @@ class _SettingsPageState extends State<_SettingsPage> {
             Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Text(
-                'Your device location is used when you ask to center the map or plan a route. Place searches send your search text to OpenStreetMap Nominatim. Map tiles are loaded from the configured tile provider, which can infer the area you view. Route requests send the origin and destination to the configured transit planner. When signed in, saved places, trip history, preferences, and uploaded memory photos are stored in the configured Supabase project. Release builds require HTTPS for Supabase and the transit API; local development may use HTTP. This app does not provide end-to-end encryption. You can deny location access and still search manually.',
+                'Your device location is used when you ask to center the map or plan a route. Place searches send your search text to OpenStreetMap Nominatim. Map tiles are loaded from the configured tile provider, which can infer the area you view. Route requests send the origin and destination to the configured transit planner. When signed in, saved places, trip history, preferences, and uploaded memory photos are stored in the configured Supabase project. Memory photos are private unless you explicitly share an individual photo with selected accepted friends. Friends see only the broad area label you choose, not the exact pin, address, or place name; the image itself may still reveal details. Removing a friend revokes future access, but cannot recall a photo they already saved. Release builds require HTTPS for Supabase and the transit API; local development may use HTTP. This app does not provide end-to-end encryption. You can deny location access and still search manually.',
                 style: TextStyle(height: 1.45),
               ),
             ),

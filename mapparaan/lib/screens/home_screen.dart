@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/friend_sharing_service.dart';
 import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
@@ -34,6 +35,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum _MemoryMapFilter { mine, shared, all }
+
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _bottomAskController = TextEditingController();
@@ -43,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final RoutePreference _homePreference = RoutePreference.fastest;
   List<SavedCommute> _savedCommutes = const [];
   LocalUiPreferences _localPreferences = const LocalUiPreferences();
+  _MemoryMapFilter _memoryMapFilter = _MemoryMapFilter.all;
 
   @override
   void initState() {
@@ -823,6 +827,175 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _showSharedMemoryPhotoDialog(
+    List<SharedMemoryPhoto> album,
+  ) async {
+    var currentIndex = 0;
+    final pageController = PageController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final photo = album[currentIndex];
+          return AlertDialog(
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    photo.placeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (album.length > 1)
+                  Text(
+                    '${currentIndex + 1} / ${album.length}',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 10,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        PageView.builder(
+                          controller: pageController,
+                          itemCount: album.length,
+                          onPageChanged: (index) =>
+                              setDialogState(() => currentIndex = index),
+                          itemBuilder: (context, index) => Image.network(
+                            album[index].imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Text(
+                                'Photo unavailable. Open Friends and refresh to request a new link.',
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (album.length > 1) ...[
+                          if (currentIndex > 0)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton.filled(
+                                tooltip: 'Previous photo',
+                                onPressed: () => pageController.previousPage(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeInOut,
+                                ),
+                                icon: const Icon(Icons.chevron_left),
+                              ),
+                            ),
+                          if (currentIndex < album.length - 1)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton.filled(
+                                tooltip: 'Next photo',
+                                onPressed: () => pageController.nextPage(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeInOut,
+                                ),
+                                icon: const Icon(Icons.chevron_right),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (photo.address?.isNotEmpty == true) ...[
+                    const SizedBox(height: 12),
+                    Text(photo.address!),
+                  ],
+                  const SizedBox(height: 8),
+                  Text('Shared by ${photo.ownerName}'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    pageController.dispose();
+  }
+
+  Map<String, List<SharedMemoryPhoto>> _groupSharedPhotos(
+    List<SharedMemoryPhoto> photos,
+  ) {
+    final groups = <String, List<SharedMemoryPhoto>>{};
+    for (final photo in photos) {
+      final key =
+          '${photo.coordinates.latitude.toStringAsFixed(6)},'
+          '${photo.coordinates.longitude.toStringAsFixed(6)}';
+      groups.putIfAbsent(key, () => []).add(photo);
+    }
+    return groups;
+  }
+
+  String get _memoryMapFilterLabel => switch (_memoryMapFilter) {
+    _MemoryMapFilter.mine => 'My photos',
+    _MemoryMapFilter.shared => 'Shared with me',
+    _MemoryMapFilter.all => 'All photos',
+  };
+
+  Widget _memoryMapFilterButton() {
+    return PopupMenuButton<_MemoryMapFilter>(
+      tooltip: 'Photo layers: $_memoryMapFilterLabel',
+      padding: EdgeInsets.zero,
+      initialValue: _memoryMapFilter,
+      onSelected: (filter) => setState(() => _memoryMapFilter = filter),
+      itemBuilder: (context) => [
+        for (final filter in _MemoryMapFilter.values)
+          PopupMenuItem(
+            value: filter,
+            child: Row(
+              children: [
+                Icon(
+                  filter == _memoryMapFilter
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Text(switch (filter) {
+                  _MemoryMapFilter.mine => 'My photos',
+                  _MemoryMapFilter.shared => 'Shared with me',
+                  _MemoryMapFilter.all => 'All photos',
+                }),
+              ],
+            ),
+          ),
+      ],
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Material(
+          color: Theme.of(context).cardColor,
+          shape: const CircleBorder(),
+          elevation: 3,
+          child: Icon(
+            Icons.layers_outlined,
+            color: Theme.of(context).iconTheme.color,
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -833,7 +1006,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ValueListenableBuilder<List<MemoryPin>>(
               valueListenable: MemoryPinService.pins,
               builder: (context, memoryPins, _) {
-                final visibleMemoryPins = _localPreferences.dataSaver
+                final visibleMemoryPins =
+                    _localPreferences.dataSaver ||
+                        _memoryMapFilter == _MemoryMapFilter.shared
                     ? const <MemoryPin>[]
                     : memoryPins;
                 final albumsMap = <String, List<MemoryPin>>{};
@@ -842,72 +1017,139 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 final albums = albumsMap.values.toList();
 
-                return FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: const LatLng(
-                      AppConstants.defaultLat,
-                      AppConstants.defaultLng,
-                    ),
-                    initialZoom: AppConstants.defaultZoom,
-                    minZoom: AppConstants.minZoom,
-                    maxZoom: AppConstants.maxZoom,
-                    cameraConstraint: CameraConstraint.contain(
-                      bounds: AppConstants.manilaBounds,
-                    ),
-                  ),
-                  children: [
-                    const MapparaanTileLayer(),
-                    if (_userLocation != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _userLocation!,
-                            width: 24,
-                            height: 24,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.3),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
+                return ValueListenableBuilder<List<SharedMemoryPhoto>>(
+                  valueListenable: FriendSharingService.sharedPhotos,
+                  builder: (context, sharedPhotos, _) {
+                    final visibleSharedPhotos =
+                        _localPreferences.dataSaver ||
+                            _memoryMapFilter == _MemoryMapFilter.mine
+                        ? const <SharedMemoryPhoto>[]
+                        : sharedPhotos;
+                    final sharedAlbums = _groupSharedPhotos(visibleSharedPhotos)
+                        .values
+                        .toList();
+
+                    return FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: const LatLng(
+                          AppConstants.defaultLat,
+                          AppConstants.defaultLng,
+                        ),
+                        initialZoom: AppConstants.defaultZoom,
+                        minZoom: AppConstants.minZoom,
+                        maxZoom: AppConstants.maxZoom,
+                        cameraConstraint: CameraConstraint.contain(
+                          bounds: AppConstants.manilaBounds,
+                        ),
+                      ),
+                      children: [
+                        const MapparaanTileLayer(),
+                        if (_userLocation != null)
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: _userLocation!,
+                                width: 24,
+                                height: 24,
                                 child: Container(
-                                  width: 14,
-                                  height: 14,
                                   decoration: BoxDecoration(
-                                    color: Colors.blueAccent,
+                                    color: Colors.blue.withValues(alpha: 0.3),
                                     shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2.5,
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      width: 14,
+                                      height: 14,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueAccent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2.5,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
 
-                    // --- NEW MARKER INTEGRATION START ---
-                    if (albums.isNotEmpty)
-                      MarkerLayer(
-                        markers: albums.map<Marker>((album) {
-                          final latestPin = album.last;
-                          return Marker(
-                            point: latestPin.coordinates,
-                            width: 50,
-                            height: 54,
-                            alignment: Alignment.topCenter,
-                            child: MemoryPinMarker(
-                              imageUrl: latestPin.imageUrl,
-                              onTap: () => _showMemoryAlbumDialog(album),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    // --- NEW MARKER INTEGRATION END ---
-                  ],
+                        if (albums.isNotEmpty)
+                          MarkerLayer(
+                            markers: albums.map<Marker>((album) {
+                              final latestPin = album.last;
+                              return Marker(
+                                point: latestPin.coordinates,
+                                width: 50,
+                                height: 54,
+                                alignment: Alignment.topCenter,
+                                child: MemoryPinMarker(
+                                  imageUrl: latestPin.imageUrl,
+                                  onTap: () => _showMemoryAlbumDialog(album),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        if (sharedAlbums.isNotEmpty)
+                          MarkerLayer(
+                            markers: sharedAlbums.map<Marker>((album) {
+                              final latestPhoto = album.last;
+                              return Marker(
+                                point: latestPhoto.coordinates,
+                                width: 54,
+                                height: 58,
+                                alignment: Alignment.topCenter,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  alignment: Alignment.topCenter,
+                                  children: [
+                                    MemoryPinMarker(
+                                      imageUrl: latestPhoto.imageUrl,
+                                      onTap: () =>
+                                          _showSharedMemoryPhotoDialog(album),
+                                    ),
+                                    if (album.length > 1)
+                                      Positioned(
+                                        top: -4,
+                                        right: -2,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .error,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .surface,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4),
+                                            child: Text(
+                                              '${album.length}',
+                                              style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onError,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
             )
@@ -943,6 +1185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _memoryMapFilterButton(),
                   CircleIconButton(icon: Icons.tune, onTap: _showLocalTools),
                   const SizedBox(width: 6),
                   CircleIconButton(

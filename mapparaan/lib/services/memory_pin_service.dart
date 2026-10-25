@@ -118,7 +118,7 @@ class MemoryPinService {
     pins.value = loadedPins;
   }
 
-  static Future<void> addPin({
+  static Future<String> addPin({
     required String placeName,
     required String address,
     required LatLng coordinates,
@@ -206,6 +206,7 @@ class MemoryPinService {
     );
 
     pins.value = [...pins.value, newPin];
+    return pinId;
   }
 
   static Future<void> deletePin(String pinId) async {
@@ -254,6 +255,17 @@ class MemoryPinService {
         );
       }
     }
+  }
+
+  static Future<String> signedSharedImageUrl(String ownerId, String imagePath) {
+    if (_ownerIdFromPath(imagePath) != ownerId) {
+      throw StateError('Shared photo path does not match its owner');
+    }
+    final client = _clientOrNull;
+    if (client == null) {
+      throw StateError('Cloud services are not configured');
+    }
+    return client.storage.from('memory-photos').createSignedUrl(imagePath, 120);
   }
 
   static Future<String> _signedImageUrl(String userId, String imagePath) {
