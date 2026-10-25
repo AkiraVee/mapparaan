@@ -1,35 +1,44 @@
 {
-  "built_on": "2026-10-22",
+  "built_on": "2026-10-25",
   "source": "https://github.com/sakayph/gtfs (DOTC data, ~2013-15)",
-  "clipped_to": "City of Manila (PSGC 1380600000), faeldon/philippines-json-maps 2023; stops within 50 m of the boundary kept unless named for another city; PNR Metro Commuter (ROUTE_880872) excluded: no service in Manila",
+  "clipped_to": "City of Manila (PSGC 1380600000), faeldon/philippines-json-maps 2023",
   "calendar_patched_to": [
     "20200101",
     "20351231"
   ],
-  "services": 6,
+  "services": 9,
   "routes_by_mode": {
     "lrt1": 1,
     "lrt2": 1,
     "bus": 36,
-    "jeepney": 561
+    "jeepney": 561,
+    "pnr": 1
   },
   "rows": {
-    "agency.txt": 2,
-    "calendar.txt": 6,
-    "frequencies.txt": 661,
-    "routes.txt": 599,
-    "shapes.txt": 125,
-    "stop_times.txt": 11162,
-    "stops.txt": 534,
-    "trips.txt": 661,
-    "feed_info.txt": 1
+    "agency.txt": 3,
+    "calendar.txt": 9,
+    "feed_info.txt": 1,
+    "frequencies.txt": 673,
+    "routes.txt": 600,
+    "shapes.txt": 233,
+    "stop_times.txt": 11264,
+    "stops.txt": 540,
+    "trips.txt": 673
   },
-  "known_gaps": [
-    "No road geometry for jeepney/bus routes (only 5 shapes: LRT-1, LRT-2 and one jeepney route)",
-    "No UV Express routes",
-    "No fares in GTFS; fares come from fare_config.json (road fares effective 2026-09-28, LRT tables; UV Express provisional and unused)",
-    "Feed cannot tell traditional from modern jeepney or ordinary from aircon bus, so road fares are shown as a range",
-    "Schedules are headway-based and approximate"
+  "data_fixes": [
+    {
+      "route_id": "ROUTE_880747",
+      "from_stop": "LTFRB_4959",
+      "to_stop": "LTFRB_4948",
+      "copied_from_trip": "882223",
+      "new_trip": "882223_sun",
+      "reason": "no Sunday service in source feed"
+    }
   ],
-  "stop_edge_tolerance_m": 50
+  "known_gaps": [
+    "No road geometry for jeepney/bus routes (only 10 shapes)",
+    "No UV Express routes",
+    "No fares in GTFS; fare_config.json values are placeholders",
+    "Schedules are headway-based and approximate"
+  ]
 }

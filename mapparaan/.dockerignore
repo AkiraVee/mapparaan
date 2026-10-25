@@ -1,0 +1,13 @@
+data/raw
+data/build
+**/__pycache__
+.git
+lib
+android
+ios
+web
+windows
+linux
+macos
+build
+.dart_tool

@@ -435,7 +435,7 @@ class TransitPlannerService {
     PassengerType passengerType = PassengerType.general,
     DateTime? departureTime,
     Set<String> avoidModes = const {},
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 40),
   }) async {
     final result = await planTransitResult(
       origin: origin,
@@ -459,7 +459,7 @@ class TransitPlannerService {
     PassengerType passengerType = PassengerType.general,
     DateTime? departureTime,
     Set<String> avoidModes = const {},
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 40),
   }) async {
     try {
       final baseUrl = effectiveBaseUrl;

@@ -39,6 +39,14 @@ import shutil
 import sys
 import zipfile
 
+# Modes the planner does not support (PNR has no fare table and is not in the
+# planner's mode list), so their routes are removed from gtfs/.
+EXCLUDE_MODES = {"pnr"}
+
+# Files in reference/ that this script regenerates. Everything else in
+# reference/ (fare_config.json, README.md, ...) is yours and is kept.
+GENERATED_REFERENCE = {"route_modes.csv", "manifest.json", "manila_boundary.geojson"}
+
 NEW_START = "20200101"
 NEW_END = "20351231"
 
@@ -68,8 +76,10 @@ FARE_CONFIG = {
         "legal_basis": ["RA 11314", "RA 9994", "RA 10754"],
     },
     "modes": {
-        "jeepney": {"verified": False, "base_fare": 13.0, "base_km": 4, "per_km": 1.80},
-        "bus": {"verified": False, "base_fare": 13.0, "base_km": 5, "per_km": 2.25},
+        "jeepney": {"verified": "provisional", "base_fare": 14.0, "base_km": 4, "per_km": 2.00,
+                    "note": "Traditional jeepney, LTFRB provisional fare eff. 2026-03-19 (Philstar 2026-03-18). base_km is an assumption. Modern jeepney: 17.00 + 2.40/km."},
+        "bus": {"verified": "provisional", "base_fare": 15.0, "base_km": 5, "per_km": 2.49,
+                "note": "Ordinary bus, LTFRB provisional fare eff. 2026-03-19. Aircon: 18.00 + 2.98/km. Feed cannot tell ordinary from aircon. base_km is an assumption."},
         "uv_express": {"verified": False, "base_fare": 15.0, "base_km": 5, "per_km": 2.50},
         "lrt1": {"verified": False, "type": "stored_value_by_distance", "table": None},
         "lrt2": {"verified": False, "type": "stored_value_by_distance", "table": None},
@@ -107,6 +117,94 @@ def classify(route):
     return "unknown"
 
 
+def drop_routes(gtfs_dir, route_ids):
+    """Remove routes (and their trips, stop_times, frequencies) and then anything
+    left unused: stops, calendar rows, shapes, agencies."""
+    if not route_ids:
+        return 0
+    tables = {n: read_csv(os.path.join(gtfs_dir, n + ".txt"))
+              for n in ("routes", "trips", "stop_times", "frequencies", "stops",
+                        "calendar", "shapes", "agency")}
+    f = {n: t[0] for n, t in tables.items()}
+    rows = {n: t[1] for n, t in tables.items()}
+    rows["routes"] = [r for r in rows["routes"] if r["route_id"] not in route_ids]
+    keep_routes = {r["route_id"] for r in rows["routes"]}
+    rows["trips"] = [t for t in rows["trips"] if t["route_id"] in keep_routes]
+    keep_trips = {t["trip_id"] for t in rows["trips"]}
+    rows["stop_times"] = [r for r in rows["stop_times"] if r["trip_id"] in keep_trips]
+    rows["frequencies"] = [r for r in rows["frequencies"] if r["trip_id"] in keep_trips]
+    used_stops = {r["stop_id"] for r in rows["stop_times"]}
+    rows["stops"] = [r for r in rows["stops"] if r["stop_id"] in used_stops]
+    used_services = {t["service_id"] for t in rows["trips"]}
+    rows["calendar"] = [r for r in rows["calendar"] if r["service_id"] in used_services]
+    used_shapes = {t["shape_id"] for t in rows["trips"] if t.get("shape_id")}
+    rows["shapes"] = [r for r in rows["shapes"] if r["shape_id"] in used_shapes]
+    used_agencies = {r["agency_id"] for r in rows["routes"]}
+    rows["agency"] = [r for r in rows["agency"] if r["agency_id"] in used_agencies] or rows["agency"]
+    for n in tables:
+        write_csv(os.path.join(gtfs_dir, n + ".txt"), f[n], rows[n])
+    return len(route_ids)
+
+
+def fill_rail_day_gaps(gtfs_dir, rail_route_ids):
+    """The source feed has no Sunday service for LRT-1 toward Baclaran
+    (Roosevelt -> Vito Cruz) although the other direction runs. Rail runs both
+    directions every day, so for any rail direction with Saturday trips but no
+    Sunday trips, copy the Saturday trip with the longest headway as a Sunday
+    trip. Returns a list of what was added (goes into manifest.json)."""
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    cf, cal = read_csv(os.path.join(gtfs_dir, "calendar.txt"))
+    tf, trips = read_csv(os.path.join(gtfs_dir, "trips.txt"))
+    sf, st = read_csv(os.path.join(gtfs_dir, "stop_times.txt"))
+    ff, fr = read_csv(os.path.join(gtfs_dir, "frequencies.txt"))
+    cal_by = {c["service_id"]: c for c in cal}
+    by_trip = {}
+    for r in st:
+        by_trip.setdefault(r["trip_id"], []).append(r)
+    freq_by = {}
+    for r in fr:
+        freq_by.setdefault(r["trip_id"], []).append(r)
+
+    patterns = {}
+    for t in trips:
+        if t["route_id"] not in rail_route_ids or t["trip_id"] not in by_trip:
+            continue
+        rows = sorted(by_trip[t["trip_id"]], key=lambda r: int(r["stop_sequence"]))
+        key = (t["route_id"], rows[0]["stop_id"], rows[-1]["stop_id"])
+        patterns.setdefault(key, []).append(t)
+
+    added, new_service = [], None
+    for key, ts in patterns.items():
+        runs = lambda t, d: cal_by[t["service_id"]][d] == "1"
+        if any(runs(t, "sunday") for t in ts):
+            continue
+        sat = [t for t in ts if runs(t, "saturday")]
+        if not sat:
+            continue
+        pick = max(sat, key=lambda t: max(int(f["headway_secs"]) for f in freq_by.get(t["trip_id"], [{"headway_secs": 0}])))
+        if new_service is None:
+            new_service = {k: "0" for k in cf}
+            new_service.update(service_id="FIX_SUNDAY", sunday="1",
+                               start_date=NEW_START, end_date=NEW_END)
+            cal.append(new_service)
+        nid = pick["trip_id"] + "_sun"
+        nt = dict(pick); nt["trip_id"] = nid; nt["service_id"] = "FIX_SUNDAY"
+        trips.append(nt)
+        for r in by_trip[pick["trip_id"]]:
+            c = dict(r); c["trip_id"] = nid; st.append(c)
+        for r in freq_by.get(pick["trip_id"], []):
+            c = dict(r); c["trip_id"] = nid; fr.append(c)
+        added.append({"route_id": key[0], "from_stop": key[1], "to_stop": key[2],
+                      "copied_from_trip": pick["trip_id"], "new_trip": nid,
+                      "reason": "no Sunday service in source feed"})
+    if added:
+        write_csv(os.path.join(gtfs_dir, "calendar.txt"), cf, cal)
+        write_csv(os.path.join(gtfs_dir, "trips.txt"), tf, trips)
+        write_csv(os.path.join(gtfs_dir, "stop_times.txt"), sf, st)
+        write_csv(os.path.join(gtfs_dir, "frequencies.txt"), ff, fr)
+    return added
+
+
 def main():
     if len(sys.argv) not in (3, 4):
         print(__doc__)
@@ -120,6 +218,14 @@ def main():
     gtfs_dir = os.path.join(root, "gtfs")
     ref_dir = os.path.join(root, "reference")
     build_dir = os.path.join(root, "build")
+    kept_reference = {}
+    existing_ref = os.path.join(root, "reference")
+    if os.path.isdir(existing_ref):
+        for name in os.listdir(existing_ref):
+            path = os.path.join(existing_ref, name)
+            if name not in GENERATED_REFERENCE and os.path.isfile(path):
+                with open(path, "rb") as fh:
+                    kept_reference[name] = fh.read()
     keep_boundary = None
     if boundary:
         with open(boundary, "rb") as f:
@@ -127,6 +233,9 @@ def main():
     for d in (gtfs_dir, ref_dir, build_dir):
         shutil.rmtree(d, ignore_errors=True)
         os.makedirs(d)
+    for name, data in kept_reference.items():
+        with open(os.path.join(ref_dir, name), "wb") as fh:
+            fh.write(data)
     if keep_boundary:
         with open(os.path.join(ref_dir, "manila_boundary.geojson"), "wb") as f:
             f.write(keep_boundary)
@@ -164,9 +273,27 @@ def main():
     write_csv(os.path.join(gtfs_dir, "routes.txt"), fields, routes)
     write_csv(os.path.join(ref_dir, "route_modes.csv"), ["route_id", "mode"], modes)
 
+    excluded = {r["route_id"] for r, m in zip(routes, modes) if m["mode"] in EXCLUDE_MODES}
+    n_dropped = drop_routes(gtfs_dir, excluded)
+    if n_dropped:
+        routes = [r for r in routes if r["route_id"] not in excluded]
+        modes = [m for m in modes if m["route_id"] not in excluded]
+        counts = {k: v for k, v in counts.items() if k not in EXCLUDE_MODES}
+        write_csv(os.path.join(ref_dir, "route_modes.csv"), ["route_id", "mode"], modes)
+
+    # 2b. fix known gaps in the source schedule
+    rail_ids = {r["route_id"] for r, m in zip(routes, modes) if m["mode"] in ("lrt1", "lrt2", "mrt3", "pnr")}
+    data_fixes = fill_rail_day_gaps(gtfs_dir, rail_ids)
+    n_services = len(read_csv(os.path.join(gtfs_dir, "calendar.txt"))[1])
+
     # 3. fares + manifest
-    with open(os.path.join(ref_dir, "fare_config.json"), "w", encoding="utf-8") as f:
-        json.dump(FARE_CONFIG, f, indent=2)
+    fare_path = os.path.join(ref_dir, "fare_config.json")
+    if not os.path.exists(fare_path):  # never overwrite your real fare tables
+        with open(fare_path, "w", encoding="utf-8") as f:
+            json.dump(FARE_CONFIG, f, indent=2)
+        print("  WARNING: no fare_config.json found; wrote a PLACEHOLDER one. Copy your real one in.")
+    else:
+        print("  kept your existing reference/fare_config.json")
 
     def count_rows(name):
         with open(os.path.join(gtfs_dir, name), encoding="utf-8-sig") as f:
@@ -180,6 +307,8 @@ def main():
         "services": n_services,
         "routes_by_mode": counts,
         "rows": {n: count_rows(n) for n in GTFS_FILES},
+        "data_fixes": data_fixes,
+        "excluded_modes": sorted(EXCLUDE_MODES),
         "known_gaps": [
             "No road geometry for jeepney/bus routes (only 10 shapes)",
             "No UV Express routes",

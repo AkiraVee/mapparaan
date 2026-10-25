@@ -598,3 +598,4 @@ LTFRB,PUJ2609,Arroceros Retiro via Dimasalang,"Taft Ave, Manila - Dimasalang / A
 LTFRB,PUJ2610,Arroceros Retiro via Dimasalang,"Dimasalang / Aurora Boulevard Intersection, Quezon City - Taft Ave, Manila",3,,,,LTFRB_PUJ2610
 LTFRB,PUJ2615,DagatDagatan Delpan via Divisoria,"Sto. Nino Church, Nicolas Zamora, Manila - President Ferdinand E. Marcos Highway, Tondo",3,,,,LTFRB_PUJ2615
 LTFRB,PUJ2616,DagatDagatan Delpan via Divisoria,"President Ferdinand E. Marcos Highway, Tondo - Sto. Nino Church, Nicolas Zamora, Manila",3,,,,LTFRB_PUJ2616
+PNR,PNR MC,Metro Commuter,"PNT Metro South Commuter connects the cities of Manila, Pasay and Muntinlupa",2,http://www.pnr.gov.ph/metro_commuter.htm,e58e11,,ROUTE_880872
