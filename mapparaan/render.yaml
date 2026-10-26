@@ -10,3 +10,4 @@ services:
       # e.g. https://your-app.web.app (comma separate several). Render asks for it on first deploy.
       - key: MAPPARAAN_ALLOWED_ORIGINS
         sync: false
+        sync: false
