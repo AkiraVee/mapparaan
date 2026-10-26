@@ -110,6 +110,31 @@ class TransitLeg {
     this.path = const [],
   });
 
+  /// Copy with a new walking time, distance or geometry; every other field is kept.
+  TransitLeg copyWith({int? minutes, int? meters, List<LatLng>? path}) {
+    return TransitLeg(
+      type: type,
+      from: from,
+      to: to,
+      minutes: minutes ?? this.minutes,
+      meters: meters ?? this.meters,
+      mode: mode,
+      modeLabel: modeLabel,
+      routeId: routeId,
+      routeCode: routeCode,
+      routeName: routeName,
+      stops: stops,
+      waitMinutes: waitMinutes,
+      km: km,
+      fare: fare,
+      fareMax: fareMax,
+      fareDiscounted: fareDiscounted,
+      fareDiscountedMax: fareDiscountedMax,
+      fareEstimated: fareEstimated,
+      path: path ?? this.path,
+    );
+  }
+
   bool get isWalk => type == 'walk';
   bool get isRide => type == 'ride';
 
@@ -230,6 +255,30 @@ class TransitPlanOption {
     this.legs = const [],
     this.isMock = false,
   });
+
+  /// Copy with a new summary, total time or legs; every other field is kept.
+  TransitPlanOption copyWith({
+    String? summary,
+    int? etaMinutes,
+    List<TransitLeg>? legs,
+  }) {
+    return TransitPlanOption(
+      preference: preference,
+      title: title,
+      summary: summary ?? this.summary,
+      etaMinutes: etaMinutes ?? this.etaMinutes,
+      fare: fare,
+      fareMax: fareMax,
+      fareDiscounted: fareDiscounted,
+      fareDiscountedMax: fareDiscountedMax,
+      fareEstimated: fareEstimated,
+      fareSource: fareSource,
+      transfers: transfers,
+      modes: modes,
+      legs: legs ?? this.legs,
+      isMock: isMock,
+    );
+  }
 
   /// Returns the applicable (lowest) fare based on passenger category
   double effectiveFare(PassengerType passengerType) {

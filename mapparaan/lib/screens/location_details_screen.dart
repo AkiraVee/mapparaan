@@ -14,6 +14,7 @@ import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transit_planner_service.dart';
+import '../services/walk_route_service.dart';
 import '../services/trip_history_service.dart';
 import '../services/last_route_service.dart';
 import '../services/commuter_preference_service.dart';
@@ -85,6 +86,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   List<LatLng> _routePoints = [];
   LatLng? _routeOrigin;
   int _routeRequestId = 0;
+
+  /// Options whose walking legs were already sent for street routing, so a
+  /// failed lookup is not retried every time the user taps the option.
+  final Set<TransitPlanOption> _walkSnapTried = {};
 
   @override
   void initState() {
@@ -252,6 +257,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       if (!mounted || requestId != _routeRequestId) return;
 
       _fitCameraToBounds(points);
+      _snapWalkLegs(selected);
     } else {
       final cached = await LastRouteService.load();
       if (!mounted || requestId != _routeRequestId) return;
@@ -439,6 +445,42 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     _refreshRoute();
   }
 
+  /// Replaces the planner's straight-line walking legs with routes along real
+  /// streets. It runs after the option is already on screen, so nothing waits
+  /// for it, and if the lookup fails the straight line simply stays.
+  Future<void> _snapWalkLegs(TransitPlanOption option) async {
+    if (!WalkRouteService.needsSnapping(option) ||
+        !_walkSnapTried.add(option)) {
+      return;
+    }
+    final requestId = _routeRequestId;
+    final snapped = await WalkRouteService.snapOption(option);
+    if (!mounted || requestId != _routeRequestId || snapped == null) return;
+
+    final wasSelected = identical(_selectedOption, option);
+    setState(() {
+      final index = _routeOptions.indexWhere((o) => identical(o, option));
+      if (index >= 0) {
+        _routeOptions = [..._routeOptions]..[index] = snapped;
+      }
+      if (wasSelected) {
+        _selectedOption = snapped;
+        _routePoints = snapped.allPoints;
+      }
+    });
+    if (!wasSelected) return;
+
+    _fitCameraToBounds(_routePoints);
+    final origin = _routeOrigin;
+    if (origin != null) {
+      await LastRouteService.save(
+        origin: origin,
+        destination: widget.resolvedDestination,
+        option: snapped,
+      );
+    }
+  }
+
   void _selectOption(TransitPlanOption option) {
     setState(() {
       _selectedOption = option;
@@ -451,6 +493,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (_routePoints.length >= 2) {
       _fitCameraToBounds(_routePoints);
     }
+    _snapWalkLegs(option);
   }
 
   List<TransitPlanOption> _applyLocalRoutePreferences(
