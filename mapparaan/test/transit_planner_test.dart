@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mapparaan/services/ai_assistant_service.dart';
@@ -159,6 +160,22 @@ void main() {
           RoutePreference.fewestTransfers,
         ]),
       );
+    });
+  });
+
+  group('TransitPlannerService base URL', () {
+    test('uses the host loopback alias on Android emulators', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      expect(TransitPlannerService.effectiveBaseUrl, 'http://10.0.2.2:8080');
+    });
+
+    test('keeps localhost on non-Android platforms', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      expect(TransitPlannerService.effectiveBaseUrl, 'http://127.0.0.1:8080');
     });
   });
 

@@ -103,10 +103,18 @@ Before treating sharing as verified, use test accounts A, B, and C to check:
 - An invite cannot be accepted by its creator, accepted twice, or accepted
   after expiry.
 
-The transit planner binds to loopback by default. To make it available beyond
-the local machine, set `MAPPARAAN_ALLOWED_ORIGINS` to the exact web origins,
-use a trusted network during development, and put any public deployment behind
-TLS and appropriate abuse controls. CORS is not authentication.
+Run the transit planner locally from this directory with
+`python backend/planner/api.py --host 127.0.0.1 --port 8080`. The app's default
+`TRANSIT_API_URL` points to this local service; Android emulators are routed to
+the host machine automatically. If the app displays "Server offline", first
+check `http://127.0.0.1:8080/health`.
+
+The Render blueprint is at the repository root (`render.yaml`). Deploy that
+blueprint to create the hosted planner, then set `TRANSIT_API_URL` in the
+Flutter app's `.env` to the deployed HTTPS service URL. For Flutter web, also
+set `MAPPARAAN_ALLOWED_ORIGINS` on Render to the exact web-app origin. The API
+binds to loopback locally; public deployments require that allowlist, TLS, and
+appropriate abuse controls. CORS is not authentication.
 
 The Flutter planner sends route requests as JSON `POST /plan` requests so
 coordinates are not placed in request URLs. Older `GET /plan` requests remain

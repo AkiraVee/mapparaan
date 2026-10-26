@@ -1,6 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show debugPrint, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart' show Color;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -463,11 +464,15 @@ class TransitPlannerService {
   static String get effectiveBaseUrl {
     final configured = AppConstants.transitApiBaseUrl.trim();
     if (configured.isEmpty) return '';
-    // In web browsers, 10.0.2.2 cannot be reached; translate to the loopback
-    // address. 127.0.0.1 rather than "localhost": on Windows "localhost" can try
-    // IPv6 first, and each request then waits for a timeout before IPv4 is used.
-    if (kIsWeb && configured.contains('10.0.2.2')) {
-      return configured.replaceAll('10.0.2.2', '127.0.0.1');
+    final uri = Uri.parse(configured);
+    if (uri.host == '10.0.2.2' &&
+        (kIsWeb || defaultTargetPlatform != TargetPlatform.android)) {
+      return uri.replace(host: '127.0.0.1').toString();
+    }
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        (uri.host == '127.0.0.1' || uri.host == 'localhost')) {
+      return uri.replace(host: '10.0.2.2').toString();
     }
     return configured;
   }

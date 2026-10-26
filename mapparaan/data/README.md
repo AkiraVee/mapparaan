@@ -12,11 +12,13 @@ times, 7 service patterns (6 from the source feed plus `FIX_SUNDAY`) and 5 shape
 
 ## Scope: City of Manila
 
-`raw/` keeps the full Metro Manila feed. `gtfs/` is that feed, patched and then clipped
-to the official City of Manila boundary (`reference/manila_boundary.geojson`, PSGC
-1380600000, from faeldon/philippines-json-maps, 2023, MIT):
+The original source feed is not stored in this repository; provide it separately
+when rebuilding. `gtfs/` is patched and clipped to the official City of Manila
+boundary (`reference/manila_boundary.geojson`, PSGC 1380600000, from
+faeldon/philippines-json-maps, 2023, MIT):
 
-- a stop is kept only if it is inside the boundary polygon (`--tolerance-m 0`, a strict test)
+- a stop is kept if it is inside the boundary or within 50 m of its edge
+  (`--tolerance-m 50`), except when its name clearly identifies another city
 - each trip is cut into runs of consecutive inside-stops; a trip that leaves and
   re-enters becomes two trips (`_a`, `_b`); runs under 2 stops are dropped. Trips
   `726109`, `726259` and `726260` are split this way
@@ -28,20 +30,15 @@ to the official City of Manila boundary (`reference/manila_boundary.geojson`, PS
   coordinates are inside the boundary
 
 **Border stops.** Source coordinates are rounded to about 3 decimals (up to ~55 m error),
-so a stop on the city line can land just outside the polygon. `clip_gtfs.py` can keep
-stops within `--tolerance-m` metres of the edge (default 50, skipping any whose name
-names another city), but this feed was built with `--tolerance-m 0`. As a result three
-stops that are clearly in Manila, 2 to 14 m outside the line, are not in the feed:
-"Roxas Blvd / Pablo Ocampo Sr.", "Halcon / Florentino Intersection" and "Bonifacio Dr".
-Rebuilding with the default tolerance adds them and stops trip `726259` being split in two.
+so the 50 m tolerance helps retain stops near the city boundary without adding stops
+whose names identify another city. Use `--tolerance-m 0` only when a strict polygon
+clip is specifically required.
 
 ## Layout
 
 ```
 data/
-├── Data_README.md           this file
-├── raw/
-│   └── sakay_gtfs/          UNTOUCHED copy of the source feed (incl. LICENSE.md)
+├── README.md                this file
 ├── gtfs/                    patched, clipped, standard GTFS files only
 │   ├── agency.txt           2 agencies (LRTA, LTFRB)
 │   ├── routes.txt           599 routes
@@ -57,18 +54,20 @@ data/
 │   ├── route_modes.csv      route_id -> mode (one row per route in routes.txt)
 │   ├── fare_config.json     fare rules, tables and discounts (maintained by hand)
 │   └── manifest.json        row counts and build info
-├── build/
-│   └── mapparaan_gtfs.zip   OpenTripPlanner bundle; not used by the planner
+├── gtfs_backup_before_drop_pnr/  original files saved by drop_pnr.py
+├── build/                   generated OpenTripPlanner output (not committed)
 └── tools/
     ├── patch_gtfs.py        patches the source feed (see "Patches")
     └── clip_gtfs.py         clips a patched feed to the boundary
 ```
 
-Rules of thumb: **raw/** is never edited. **gtfs/** is generated and can be rebuilt at any
-time; hand edits belong in the scripts, not in the generated files. **fare_config.json** is the
-opposite: it holds hand-checked fares, so never regenerate or overwrite it. Keep
-`route_modes.csv` in step with `gtfs/routes.txt`. `build/mapparaan_gtfs.zip` may predate
-the PNR removal and the Sunday fix, so regenerate it before using it.
+The original raw GTFS feed is not included in this repository; supply it separately if
+rebuilding the feed. **gtfs/** is generated and can be rebuilt from that source;
+hand edits belong in the scripts, not in generated files. **fare_config.json** is
+maintained separately and must not be overwritten by a feed rebuild. Keep
+`route_modes.csv` in step with `gtfs/routes.txt`. The OpenTripPlanner ZIP is generated
+output, is not used by the current planner, and is intentionally not tracked. Generate
+a fresh bundle from current GTFS data before using OpenTripPlanner.
 
 ## Rebuild
 
@@ -76,11 +75,11 @@ the PNR removal and the Sunday fix, so regenerate it before using it.
 # 1. patch the full feed (see "Patches" below): tools/patch_gtfs.py
 # 2. clip the patched feed to Manila
 python3 tools/clip_gtfs.py <patched_full_feed_dir> data/reference/manila_boundary.geojson data/gtfs \
-    --tolerance-m 0 --exclude-routes ROUTE_880872
-# other options: --tolerance-m 50 (default), --review-csv stops_to_review.csv
+    --tolerance-m 50 --exclude-routes ROUTE_880872
+# other options: --tolerance-m 0 (strict polygon), --review-csv stops_to_review.csv
 ```
 
-Given the patched feed, step 2 reproduces every file in `gtfs/`.
+Given the patched feed, step 2 reproduces the current Manila-focused GTFS.
 
 ## Patches applied to the source feed
 

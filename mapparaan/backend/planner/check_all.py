@@ -43,7 +43,7 @@ def read(path):
 try:
     cfg = json.load(open(os.path.join(DATA, "reference", "fare_config.json"), encoding="utf-8"))
     modes = cfg.get("modes", {})
-    placeholder = "PLACEHOLDER" in str(cfg.get("_note", "")).upper()
+    placeholder = str(cfg.get("_note", "")).strip().upper().startswith("PLACEHOLDER")
     record("fare_config.json is not the placeholder", not placeholder,
            "It still says PLACEHOLDER. Restore your real file (VS Code Timeline / git / backup).")
     need = ("jeepney", "modern_jeepney", "bus", "aircon_bus")
@@ -99,7 +99,15 @@ try:
     with urllib.request.urlopen(base + "/health", timeout=10) as r:
         health = json.loads(r.read().decode())
     record(f"/health ({health['stops']} stops, {health['trips']} trips)", health["stops"] > 0 and health["trips"] > 0)
-    d = post({"from": "14.6042,120.9822", "to": "14.5636,120.9950", "passenger": "student"})
+    route_time = datetime.datetime.now().replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
+    d = post({
+        "from": "14.6042,120.9822",
+        "to": "14.5636,120.9950",
+        "passenger": "student",
+        "when": route_time.isoformat(),
+    })
     record("POST /plan inside Manila returns routes", bool(d.get("options")), str(d)[:200])
     if d.get("options"):
         o = d["options"][0]

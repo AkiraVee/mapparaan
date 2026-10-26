@@ -23,4 +23,4 @@ LTFRB stop names say Quezon City or Caloocan; those are LTFRB's labels, and the 
 are inside the boundary.
 
 Original data: Metro Manila jeepney, bus and LRT services. See `LICENSE.md` for the DOTC
-license terms, and `../Data_README.md` for fares, rebuild steps and known gaps.
+license terms, and `../README.md` for fares, rebuild steps and known gaps.

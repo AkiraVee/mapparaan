@@ -43,8 +43,8 @@ import zipfile
 # planner's mode list), so their routes are removed from gtfs/.
 EXCLUDE_MODES = {"pnr"}
 
-# Files in reference/ that this script regenerates. Everything else in
-# reference/ (fare_config.json, README.md, ...) is yours and is kept.
+# Files in reference/ that this script regenerates. Other reference data,
+# including the hand-maintained fare configuration, is preserved.
 GENERATED_REFERENCE = {"route_modes.csv", "manifest.json", "manila_boundary.geojson"}
 
 NEW_START = "20200101"
@@ -310,9 +310,9 @@ def main():
         "data_fixes": data_fixes,
         "excluded_modes": sorted(EXCLUDE_MODES),
         "known_gaps": [
-            "No road geometry for jeepney/bus routes (only 10 shapes)",
+            "No road geometry for many jeepney/bus routes; most such legs are straight lines",
             "No UV Express routes",
-            "No fares in GTFS; fare_config.json values are placeholders",
+            "No fares in GTFS; fare estimates and their verification status are maintained in fare_config.json",
             "Schedules are headway-based and approximate",
         ],
     }
