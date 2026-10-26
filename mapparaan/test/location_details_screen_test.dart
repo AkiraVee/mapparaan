@@ -90,6 +90,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('National Museum of the Philippines'), findsOneWidget);
+      expect(find.text('Leave now'), findsOneWidget);
+      expect(find.text('Schedule departure'), findsOneWidget);
+      expect(find.text('Planning from current Manila time'), findsOneWidget);
       final exception = tester.takeException();
       expect(exception, isNull, reason: 'Viewport: $size');
 
@@ -97,6 +100,14 @@ void main() {
         expect(find.byTooltip('More place actions'), findsOneWidget);
       } else {
         expect(find.byTooltip('More place actions'), findsNothing);
+      }
+      if (size.width == 393) {
+        await tester.tap(find.text('Schedule departure'));
+        await tester.pumpAndSettle();
+        expect(find.text('Choose travel date'), findsOneWidget);
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
       }
     }
   });

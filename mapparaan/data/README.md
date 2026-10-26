@@ -154,6 +154,7 @@ each check and exits with code 1 if anything fails. Run it after every data or f
 ## Known gaps
 
 - Data is circa 2013–15 (DOTC / Philippine Transit App Challenge); some routes will be outdated or missing.
+- The planner checks service calendars and headway windows at each estimated boarding time, including after walking and transfers. Wait and ride times remain estimates; the circa 2013–15 feed does not include live operator updates or current holiday exceptions. Verify current service hours before travel.
 - Times are estimates: schedules are headway-based, and the feed's jeepney and bus headways are about 1 minute (synthetic), so the planner assumes a minimum wait.
 - No road geometry for jeepney/bus routes: they draw as straight lines between stops until shapes are generated.
 - No UV Express or PNR routes.

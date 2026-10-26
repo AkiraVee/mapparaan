@@ -60,6 +60,42 @@ class ServiceDayTests(unittest.TestCase):
                 fastest = next(o for o in options if o["preference"] == "fastest")
                 self.assertIn("lrt1", fastest["modes"], f"{a} -> {b} at {hour:02d}:{minute:02d} on Sunday")
 
+    def test_lrt_is_not_boardable_outside_its_feed_frequency_window(self):
+        for hour, minute in ((4, 59), (22, 0)):
+            when = at(1, hour, minute)
+            for trip in self.p.trips:
+                if trip["mode"] in RAIL_MODES:
+                    self.assertIsNone(
+                        self.p.trip_wait_s(trip, when),
+                        f"{trip['mode']} should be closed at {when:%H:%M}",
+                    )
+
+    def test_road_routes_remain_available_after_lrt_closes(self):
+        when = at(1, 22, 15)
+        options = self.p.plan(
+            (14.6097, 120.9894),
+            self.stop["Vito Cruz LRT"],
+            when=when,
+        )
+        self.assertTrue(options, "road alternatives should remain available")
+        for option in options:
+            self.assertFalse(set(option["modes"]) & RAIL_MODES)
+        self.assertTrue(
+            any(set(option["modes"]) & {"jeepney", "bus"} for option in options)
+        )
+
+    def test_transfer_arrival_time_is_used_for_lrt_boarding(self):
+        options = self.p.plan(
+            (14.6097, 120.9894),
+            self.stop["Vito Cruz LRT"],
+            when=at(1, 21, 55),
+        )
+        self.assertTrue(options, "a practical road alternative should be returned")
+        self.assertTrue(
+            all(not (set(option["modes"]) & RAIL_MODES) for option in options),
+            "do not recommend rail when the first transfer would arrive after closing",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
