@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart' show Color;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -463,21 +463,11 @@ class TransitPlannerService {
   static String get effectiveBaseUrl {
     final configured = AppConstants.transitApiBaseUrl.trim();
     if (configured.isEmpty) return '';
-    // 10.0.2.2 is the Android emulator's loopback alias for the host machine.
-    // On any other platform (Windows desktop, macOS, Linux, iOS, Web),
-    // 10.0.2.2 is unreachable and must be mapped to 127.0.0.1.
-    if ((kIsWeb || defaultTargetPlatform != TargetPlatform.android) &&
-        configured.contains('10.0.2.2')) {
+    // In web browsers, 10.0.2.2 cannot be reached; translate to the loopback
+    // address. 127.0.0.1 rather than "localhost": on Windows "localhost" can try
+    // IPv6 first, and each request then waits for a timeout before IPv4 is used.
+    if (kIsWeb && configured.contains('10.0.2.2')) {
       return configured.replaceAll('10.0.2.2', '127.0.0.1');
-    }
-    // Conversely, on an Android emulator, 127.0.0.1 refers to the emulator
-    // itself, so translate to 10.0.2.2 when running on Android.
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        (configured.contains('127.0.0.1') || configured.contains('localhost'))) {
-      return configured
-          .replaceAll('127.0.0.1', '10.0.2.2')
-          .replaceAll('localhost', '10.0.2.2');
     }
     return configured;
   }
