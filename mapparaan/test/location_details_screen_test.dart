@@ -59,4 +59,45 @@ void main() {
     },
   );
 
+  testWidgets('LocationDetailsScreen adapts to mobile and tablet widths', (
+    WidgetTester tester,
+  ) async {
+    const testPlace = PlaceResult(
+      name: 'National Museum of the Philippines',
+      subtitle: 'Padre Burgos Ave, Ermita, Manila',
+      coordinates: LatLng(14.5869, 120.9812),
+    );
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+
+    for (final size in const [
+      Size(320, 568),
+      Size(393, 852),
+      Size(768, 1024),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: LocationDetailsScreen(
+            place: testPlace,
+            userLocation: LatLng(14.5943, 120.9721),
+            initialPreference: RoutePreference.fastest,
+            passengerType: PassengerType.general,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('National Museum of the Philippines'), findsOneWidget);
+      final exception = tester.takeException();
+      expect(exception, isNull, reason: 'Viewport: $size');
+
+      if (size.width < 520) {
+        expect(find.byTooltip('More place actions'), findsOneWidget);
+      } else {
+        expect(find.byTooltip('More place actions'), findsNothing);
+      }
+    }
+  });
 }

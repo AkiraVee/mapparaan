@@ -920,11 +920,13 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                             SizedBox(width: 10),
-                            Text(
-                              'Finding best transit routes...',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                'Finding best transit routes...',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -1031,7 +1033,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
 }
 
 class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
-  double _heightFactor = 0.42;
+  double _heightFactor = 0.56;
   bool _isUploadingMemory = false;
 
   static const double _minFactor = 0.30;
@@ -1314,14 +1316,19 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
 
   void _onDragUpdate(DragUpdateDetails details) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final compactUi = CommuterPreferencesService.current.value.compactUi;
+    final maxFactor = compactUi ? 0.55 : _maxFactor;
     setState(() {
       _heightFactor -= details.primaryDelta! / screenHeight;
-      _heightFactor = _heightFactor.clamp(_minFactor, _maxFactor);
+      _heightFactor = _heightFactor.clamp(_minFactor, maxFactor);
     });
   }
 
   void _onDragEnd(DragEndDetails details) {
-    const targets = [0.30, 0.42, 0.65, 0.90];
+    final compactUi = CommuterPreferencesService.current.value.compactUi;
+    final targets = compactUi
+        ? const [0.30, 0.42, 0.55]
+        : const [0.36, 0.58, 0.90];
     var closest = targets.first;
     var minDist = (_heightFactor - closest).abs();
     for (final t in targets) {
@@ -1359,316 +1366,374 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
         elevation: 12,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            // Drag handle + title → moves WHOLE sheet
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onVerticalDragUpdate: _onDragUpdate,
-              onVerticalDragEnd: _onDragEnd,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[400],
-                          borderRadius: BorderRadius.circular(3),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              // Drag handle + title → moves WHOLE sheet
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: _onDragUpdate,
+                onVerticalDragEnd: _onDragEnd,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(3),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            widget.placeName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final compact = constraints.maxWidth < 520;
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.placeName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: widget.isSaved
+                                    ? 'Remove saved place'
+                                    : 'Save place',
+                                visualDensity: compact
+                                    ? VisualDensity.standard
+                                    : VisualDensity.compact,
+                                icon: Icon(
+                                  widget.isSaved
+                                      ? Icons.bookmark
+                                      : Icons.bookmark_border,
+                                  color: widget.isSaved
+                                      ? primary
+                                      : colorScheme.onSurface,
+                                ),
+                                onPressed: widget.onSaveToggle,
+                              ),
+                              if (compact)
+                                PopupMenuButton<String>(
+                                  tooltip: 'More place actions',
+                                  onSelected: (action) {
+                                    switch (action) {
+                                      case 'commute':
+                                        widget.onSaveCommute();
+                                      case 'share':
+                                        widget.onShare();
+                                      case 'invite':
+                                        widget.onInviteCommuter();
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'commute',
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Icon(Icons.route_outlined),
+                                        title: Text('Save commute shortcut'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'share',
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Icon(Icons.share_outlined),
+                                        title: Text('Share place'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'invite',
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Icon(Icons.group_add_outlined),
+                                        title: Text('Invite a commuter'),
+                                      ),
+                                    ),
+                                  ],
+                                  child: const SizedBox.square(
+                                    dimension: 48,
+                                    child: Icon(Icons.more_vert),
+                                  ),
+                                )
+                              else ...[
+                                IconButton(
+                                  tooltip: 'Save commute shortcut',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.route_outlined),
+                                  onPressed: widget.onSaveCommute,
+                                ),
+                                IconButton(
+                                  tooltip: 'Share place',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.share),
+                                  onPressed: widget.onShare,
+                                ),
+                                IconButton(
+                                  tooltip: 'Invite a commuter',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.group_add_outlined),
+                                  onPressed: widget.onInviteCommuter,
+                                ),
+                              ],
+                              IconButton(
+                                tooltip: 'Close route details',
+                                visualDensity: compact
+                                    ? VisualDensity.standard
+                                    : VisualDensity.compact,
+                                icon: const Icon(Icons.close),
+                                onPressed: widget.onClose,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content scrolls independently
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  children: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: AuthService.isLoggedIn,
+                      builder: (context, isLoggedIn, _) {
+                        if (!isLoggedIn) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: OutlinedButton.icon(
+                            icon: _isUploadingMemory
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.camera_alt, size: 18),
+                            label: Text(
+                              _isUploadingMemory
+                                  ? 'Uploading photo...'
+                                  : 'Add Memory Photo',
                             ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primary,
+                              side: BorderSide(color: primary),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                            ),
+                            onPressed: _isUploadingMemory
+                                ? null
+                                : _addMemoryPhoto,
                           ),
+                        );
+                      },
+                    ),
+
+                    _PassengerTypeSelector(
+                      selectedType: widget.passengerType,
+                      onSelected: widget.onPassengerTypeSelected,
+                    ),
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _showBudgetCalculator,
+                          icon: const Icon(Icons.calculate_outlined, size: 17),
+                          label: const Text('Budget'),
                         ),
-                        IconButton(
-                          tooltip: widget.isSaved
-                              ? 'Remove saved place'
-                              : 'Save place',
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(
-                            widget.isSaved
-                                ? Icons.bookmark
-                                : Icons.bookmark_border,
-                            color: widget.isSaved
-                                ? primary
-                                : colorScheme.onSurface,
+                        OutlinedButton.icon(
+                          onPressed: _showFareChecker,
+                          icon: const Icon(
+                            Icons.receipt_long_outlined,
+                            size: 17,
                           ),
-                          onPressed: widget.onSaveToggle,
+                          label: const Text('Check fare'),
                         ),
-                        IconButton(
-                          tooltip: 'Save commute shortcut',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.route_outlined),
-                          onPressed: widget.onSaveCommute,
-                        ),
-                        IconButton(
-                          tooltip: 'Share place',
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(Icons.share, color: colorScheme.onSurface),
-                          onPressed: widget.onShare,
-                        ),
-                        IconButton(
-                          tooltip: 'Invite a commuter',
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(
-                            Icons.group_add_outlined,
-                            color: colorScheme.onSurface,
-                          ),
-                          onPressed: widget.onInviteCommuter,
-                        ),
-                        IconButton(
-                          tooltip: 'Close route details',
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(Icons.close, color: colorScheme.onSurface),
-                          onPressed: widget.onClose,
+                        OutlinedButton.icon(
+                          onPressed: _showEmergencyInfo,
+                          icon: const Icon(Icons.emergency_outlined, size: 17),
+                          label: const Text('Emergency'),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(height: 8),
 
-            // Content scrolls independently
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                children: [
-                  ValueListenableBuilder<bool>(
-                    valueListenable: AuthService.isLoggedIn,
-                    builder: (context, isLoggedIn, _) {
-                      if (!isLoggedIn) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: OutlinedButton.icon(
-                          icon: _isUploadingMemory
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt, size: 18),
-                          label: Text(
-                            _isUploadingMemory
-                                ? 'Uploading photo...'
-                                : 'Add Memory Photo',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: primary,
-                            side: BorderSide(color: primary),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                          onPressed: _isUploadingMemory
-                              ? null
-                              : _addMemoryPhoto,
-                        ),
-                      );
-                    },
-                  ),
-
-                  _PassengerTypeSelector(
-                    selectedType: widget.passengerType,
-                    onSelected: widget.onPassengerTypeSelected,
-                  ),
-                  const SizedBox(height: 10),
-
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _showBudgetCalculator,
-                        icon: const Icon(Icons.calculate_outlined, size: 17),
-                        label: const Text('Budget'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _showFareChecker,
-                        icon: const Icon(Icons.receipt_long_outlined, size: 17),
-                        label: const Text('Check fare'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _showEmergencyInfo,
-                        icon: const Icon(Icons.emergency_outlined, size: 17),
-                        label: const Text('Emergency'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    children: [
-                      _PreferenceButton(
-                        label: 'Fastest',
-                        active:
-                            widget.selectedPreference ==
+                    Row(
+                      children: [
+                        _PreferenceButton(
+                          label: 'Fastest',
+                          active:
+                              widget.selectedPreference ==
+                              RoutePreference.fastest,
+                          accent: primary,
+                          onPressed: () => widget.onPreferenceSelected(
                             RoutePreference.fastest,
-                        accent: primary,
-                        onPressed: () => widget.onPreferenceSelected(
-                          RoutePreference.fastest,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      _PreferenceButton(
-                        label: 'Cheapest',
-                        active:
-                            widget.selectedPreference ==
+                        const SizedBox(width: 8),
+                        _PreferenceButton(
+                          label: 'Cheapest',
+                          active:
+                              widget.selectedPreference ==
+                              RoutePreference.cheapest,
+                          accent: primary,
+                          onPressed: () => widget.onPreferenceSelected(
                             RoutePreference.cheapest,
-                        accent: primary,
-                        onPressed: () => widget.onPreferenceSelected(
-                          RoutePreference.cheapest,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      _PreferenceButton(
-                        label: 'Fewest\nTransfers',
-                        active:
-                            widget.selectedPreference ==
+                        const SizedBox(width: 8),
+                        _PreferenceButton(
+                          label: 'Fewest\nTransfers',
+                          active:
+                              widget.selectedPreference ==
+                              RoutePreference.fewestTransfers,
+                          accent: primary,
+                          onPressed: () => widget.onPreferenceSelected(
                             RoutePreference.fewestTransfers,
-                        accent: primary,
-                        onPressed: () => widget.onPreferenceSelected(
-                          RoutePreference.fewestTransfers,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: widget.onDepartureTimeSelected,
+                      icon: const Icon(Icons.schedule, size: 17),
+                      label: Text(
+                        widget.departureTime == null
+                            ? 'Leave now'
+                            : 'Depart at ${widget.departureTime!.hour.toString().padLeft(2, '0')}:${widget.departureTime!.minute.toString().padLeft(2, '0')}',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Avoid modes (optional)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: widget.onDepartureTimeSelected,
-                    icon: const Icon(Icons.schedule, size: 17),
-                    label: Text(
-                      widget.departureTime == null
-                          ? 'Leave now'
-                          : 'Depart at ${widget.departureTime!.hour.toString().padLeft(2, '0')}:${widget.departureTime!.minute.toString().padLeft(2, '0')}',
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Avoid modes (optional)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Wrap(
+                      spacing: 6,
+                      children: modeLabels.entries
+                          .map(
+                            (entry) => FilterChip(
+                              label: Text(entry.value),
+                              selected: widget.avoidModes.contains(entry.key),
+                              onSelected: (selected) => widget
+                                  .onAvoidModeChanged(entry.key, selected),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ),
-                  Wrap(
-                    spacing: 6,
-                    children: modeLabels.entries
-                        .map(
-                          (entry) => FilterChip(
-                            label: Text(entry.value),
-                            selected: widget.avoidModes.contains(entry.key),
-                            onSelected: (selected) =>
-                                widget.onAvoidModeChanged(entry.key, selected),
-                          ),
-                        )
-                        .toList(),
-                  ),
 
-                  if (widget.isOfflineFallback)
-                    Container(
-                      margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3E0),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFFE0B2)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 14,
-                            color: Color(0xFFE65100),
-                          ),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Server offline: these are rough distance-based samples, not real routes. Start backend/planner/api.py for real routes.',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFFBF360C),
+                    if (widget.isOfflineFallback)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFFE0B2)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 14,
+                              color: Color(0xFFE65100),
+                            ),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Server offline: these are rough distance-based samples, not real routes. Start backend/planner/api.py for real routes.',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFFBF360C),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+
+                    if (widget.serviceAreaMessage != null)
+                      _NoticeBanner(
+                        icon: Icons.location_off_outlined,
+                        text:
+                            '${widget.serviceAreaMessage} Choose a start and destination inside the City of Manila.',
+                      ),
+                    if (widget.serverErrorMessage != null)
+                      _NoticeBanner(
+                        icon: Icons.error_outline,
+                        text: widget.serverErrorMessage!,
+                      ),
+                    if (widget.noRouteFound)
+                      const _NoticeBanner(
+                        icon: Icons.alt_route,
+                        text: 'No transit route found for this trip. Try another departure time, or allow more modes.',
+                      ),
+
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: widget.onReportProblem,
+                        icon: const Icon(Icons.flag_outlined, size: 16),
+                        label: const Text('Report a problem'),
                       ),
                     ),
 
-                  if (widget.serviceAreaMessage != null)
-                    _NoticeBanner(
-                      icon: Icons.location_off_outlined,
-                      text:
-                          '${widget.serviceAreaMessage} Choose a start and destination inside the City of Manila.',
-                    ),
-                  if (widget.serverErrorMessage != null)
-                    _NoticeBanner(
-                      icon: Icons.error_outline,
-                      text: widget.serverErrorMessage!,
-                    ),
-                  if (widget.noRouteFound)
-                    const _NoticeBanner(
-                      icon: Icons.alt_route,
-                      text: 'No transit route found for this trip. Try another departure time, or allow more modes.',
-                    ),
+                    const SizedBox(height: 12),
 
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: widget.onReportProblem,
-                      icon: const Icon(Icons.flag_outlined, size: 16),
-                      label: const Text('Report a problem'),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  ...widget.routeOptions.map((route) {
-                    final isSelected =
-                        widget.selectedOption == route ||
-                        (widget.selectedOption == null &&
-                            route == widget.routeOptions.first);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _RouteResultCard(
-                        route: route,
-                        isSelected: isSelected,
-                        passengerType: widget.passengerType,
-                        onTap: () => widget.onOptionSelected(route),
-                      ),
-                    );
-                  }),
-                ],
+                    ...widget.routeOptions.map((route) {
+                      final isSelected =
+                          widget.selectedOption == route ||
+                          (widget.selectedOption == null &&
+                              route == widget.routeOptions.first);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _RouteResultCard(
+                          route: route,
+                          isSelected: isSelected,
+                          passengerType: widget.passengerType,
+                          onTap: () => widget.onOptionSelected(route),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1872,297 +1937,338 @@ class _RouteResultCard extends StatelessWidget {
     final primary = colorScheme.primary;
     final container = colorScheme.primaryContainer;
 
-    return Semantics(
-      button: true,
-      label:
-          '${route.title}, estimated ${route.etaMinutes} minutes, '
-          '${route.fareEstimated ? 'estimated ' : ''}fare ${formatPesoPlain(effectiveFare)} pesos'
-          '${hasFareRange ? ', up to ${formatPesoPlain(fareUpTo)} pesos on a modern or air-conditioned vehicle' : ''}',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.all(12),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 640;
+        final routeDetails = _buildRouteDetails(context, colorScheme, primary);
+        final farePanel = _buildFarePanel(
+          context,
+          compact: compact,
+          effectiveFare: effectiveFare,
+          fareUpTo: fareUpTo,
+          hasFareRange: hasFareRange,
+          showDiscount: showDiscount,
+          primary: primary,
+          container: container,
+        );
+        final leading = Container(
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: isSelected
-                ? container.withValues(alpha: 0.35)
-                : colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? primary : colorScheme.outlineVariant,
-              width: isSelected ? 2 : 1,
-            ),
+            color: isSelected ? container : colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? container
-                      : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
+          child: Icon(_getLeadingIcon(), size: 22, color: primary),
+        );
+
+        return Semantics(
+          button: true,
+          label:
+              '${route.title}, estimated ${route.etaMinutes} minutes, '
+              '${route.fareEstimated ? 'estimated ' : ''}fare ${formatPesoPlain(effectiveFare)} pesos'
+              '${hasFareRange ? ', up to ${formatPesoPlain(fareUpTo)} pesos on a modern or air-conditioned vehicle' : ''}',
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? container.withValues(alpha: 0.35)
+                    : colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected ? primary : colorScheme.outlineVariant,
+                  width: isSelected ? 2 : 1,
                 ),
-                child: Icon(_getLeadingIcon(), size: 22, color: primary),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          route.title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            leading,
+                            const SizedBox(width: 12),
+                            Expanded(child: routeDetails),
+                          ],
                         ),
-                        if (isSelected) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: primary,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Active map route',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                                color: colorScheme.onPrimary,
-                              ),
-                            ),
-                          ),
-                        ],
+                        const SizedBox(height: 10),
+                        farePanel,
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        leading,
+                        const SizedBox(width: 12),
+                        Expanded(child: routeDetails),
+                        const SizedBox(width: 8),
+                        farePanel,
                       ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (route.legs.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: route.legs.map((leg) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: leg.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: leg.color.withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  leg.isWalk
-                                      ? Icons.directions_walk
-                                      : Icons.directions_bus,
-                                  size: 11,
-                                  color: leg.color,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  leg.isWalk
-                                      ? '${leg.minutes}m'
-                                      : '${leg.modeLabel ?? 'Ride'} ${leg.routeCode ?? ''} (${leg.minutes}m)',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: leg.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                    if (route.summary.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        route.summary,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (route.legs.isNotEmpty)
-                      Material(
-                        type: MaterialType.transparency,
-                        child: ExpansionTile(
-                          tilePadding: EdgeInsets.zero,
-                          dense: true,
-                          title: const Text(
-                            'View step-by-step directions',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          children: route.legs.asMap().entries.map((entry) {
-                            final index = entry.key + 1;
-                            final leg = entry.value;
-                            final distance = leg.meters == null
-                                ? ''
-                                : ' • ${(leg.meters! / 1000).toStringAsFixed(1)} km';
-                            final detail = leg.isWalk
-                                ? 'Walk from ${leg.from} to ${leg.to}'
-                                : 'Take ${leg.modeLabel ?? 'transit'}'
-                                      '${leg.routeCode == null ? '' : ' ${leg.routeCode}'} '
-                                      'from ${leg.from} to ${leg.to}';
-                            return ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              leading: CircleAvatar(
-                                radius: 13,
-                                backgroundColor: leg.color.withValues(
-                                  alpha: 0.15,
-                                ),
-                                child: Text(
-                                  '$index',
-                                  style: TextStyle(color: leg.color),
-                                ),
-                              ),
-                              title: Text(
-                                detail,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              subtitle: Text(
-                                '${leg.minutes} min$distance${leg.stops == null ? '' : ' • ${leg.stops} stops'}',
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                  ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRouteDetails(
+    BuildContext context,
+    ColorScheme colorScheme,
+    Color primary,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              route.title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            if (isSelected)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Active map route',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onPrimary,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (route.legs.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: route.legs.map((leg) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: colorScheme.outlineVariant),
+                  color: leg.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: leg.color.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      formatPeso(effectiveFare),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: primary,
-                      ),
+                    Icon(
+                      leg.isWalk ? Icons.directions_walk : Icons.directions_bus,
+                      size: 12,
+                      color: leg.color,
                     ),
-                    if (hasFareRange)
-                      Text(
-                        'up to ${formatPeso(fareUpTo)} if modern/aircon',
-                        textAlign: TextAlign.end,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                    const SizedBox(width: 3),
                     Text(
-                      route.fareEstimated ? 'Estimated' : 'Per fare table',
+                      leg.isWalk
+                          ? '${leg.minutes}m'
+                          : '${leg.modeLabel ?? 'Ride'} ${leg.routeCode ?? ''} (${leg.minutes}m)',
                       style: TextStyle(
-                        fontSize: 9,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Text(
-                      'Round trip ${formatPeso(effectiveFare * 2)}',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (showDiscount) ...[
-                      Text(
-                        formatPeso(route.fare),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: colorScheme.onSurfaceVariant,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: container,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '-${route.discountPercent}%',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (showDiscount)
-                      Text(
-                        'Bring a valid ID',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    Text(
-                      route.fareSource,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: leg.color,
                       ),
                     ),
                   ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        if (route.summary.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(
+            route.summary,
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+          ),
+        ],
+        if (route.legs.isNotEmpty)
+          Material(
+            type: MaterialType.transparency,
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text(
+                'View step-by-step directions',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              children: route.legs.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final leg = entry.value;
+                final distance = leg.meters == null
+                    ? ''
+                    : ' • ${(leg.meters! / 1000).toStringAsFixed(1)} km';
+                final detail = leg.isWalk
+                    ? 'Walk from ${leg.from} to ${leg.to}'
+                    : 'Take ${leg.modeLabel ?? 'transit'}'
+                          '${leg.routeCode == null ? '' : ' ${leg.routeCode}'} '
+                          'from ${leg.from} to ${leg.to}';
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 13,
+                    backgroundColor: leg.color.withValues(alpha: 0.15),
+                    child: Text('$index', style: TextStyle(color: leg.color)),
+                  ),
+                  title: Text(detail, style: const TextStyle(fontSize: 12)),
+                  subtitle: Text(
+                    '${leg.minutes} min$distance${leg.stops == null ? '' : ' • ${leg.stops} stops'}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFarePanel(
+    BuildContext context, {
+    required bool compact,
+    required double effectiveFare,
+    required double fareUpTo,
+    required bool hasFareRange,
+    required bool showDiscount,
+    required Color primary,
+    required Color container,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final fareText = Text(
+      formatPeso(effectiveFare),
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        color: primary,
+      ),
+    );
+    final rangeText = hasFareRange
+        ? Text(
+            'Up to ${formatPeso(fareUpTo)} for modern/aircon',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          )
+        : const SizedBox.shrink();
+    final discountDetails = showDiscount
+        ? Wrap(
+            spacing: 6,
+            runSpacing: 3,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                formatPeso(route.fare),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onSurfaceVariant,
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: container,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '-${route.discountPercent}%',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: primary,
+                  ),
+                ),
+              ),
+              Text(
+                'Bring a valid ID',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
-          ),
-        ),
+          )
+        : const SizedBox.shrink();
+    final fareSource = Text(
+      route.fareSource,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+    );
+    final labels = Text(
+      '${route.fareEstimated ? 'Estimated' : 'Per fare table'} • '
+      'Round trip ${formatPeso(effectiveFare * 2)}',
+      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+    );
+
+    return Container(
+      width: compact ? double.infinity : null,
+      constraints: compact ? null : const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [fareText, labels],
+                ),
+                if (hasFareRange) ...[const SizedBox(height: 2), rangeText],
+                if (showDiscount) ...[
+                  const SizedBox(height: 3),
+                  discountDetails,
+                ],
+                const SizedBox(height: 2),
+                fareSource,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                fareText,
+                if (hasFareRange) rangeText,
+                labels,
+                if (showDiscount) ...[discountDetails],
+                fareSource,
+              ],
+            ),
     );
   }
 }

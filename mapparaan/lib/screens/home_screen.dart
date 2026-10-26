@@ -37,6 +37,8 @@ class HomeScreen extends StatefulWidget {
 
 enum _MemoryMapFilter { mine, shared, all }
 
+enum _HomeMapAction { myLocation, commuteTools }
+
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _bottomAskController = TextEditingController();
@@ -996,6 +998,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _compactMapActionsButton() {
+    return PopupMenuButton<_HomeMapAction>(
+      tooltip: 'More map actions',
+      onSelected: (action) {
+        switch (action) {
+          case _HomeMapAction.myLocation:
+            _goToMyLocation();
+          case _HomeMapAction.commuteTools:
+            _showLocalTools();
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _HomeMapAction.myLocation,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.my_location),
+            title: Text('My location'),
+          ),
+        ),
+        PopupMenuItem(
+          value: _HomeMapAction.commuteTools,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.tune),
+            title: Text('Commute tools'),
+          ),
+        ),
+      ],
+      child: SizedBox.square(
+        dimension: 48,
+        child: Material(
+          color: Theme.of(context).cardColor,
+          shape: const CircleBorder(),
+          elevation: 3,
+          child: Icon(
+            Icons.more_vert,
+            color: Theme.of(context).iconTheme.color,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1161,39 +1207,59 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Builder(
-                    builder: (context) {
-                      return CircleIconButton(
-                        icon: Icons.menu,
-                        onTap: () => Scaffold.of(context).openDrawer(),
-                      );
-                    },
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+                return Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 12 : 16,
+                    vertical: 8,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: AskMapparaanBar(
-                      controller: _searchController,
-                      hintText: 'Search here',
-                      readOnly: true,
-                      leadingIcon: Icons.search,
-                      onTap: () => _goToSearchScreen(_searchController.text),
-                      onSubmitted: (value) => _goToSearchScreen(value),
-                    ),
+                  child: Row(
+                    children: [
+                      Builder(
+                        builder: (context) {
+                          return CircleIconButton(
+                            icon: Icons.menu,
+                            tooltip: 'Open navigation menu',
+                            onTap: () => Scaffold.of(context).openDrawer(),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AskMapparaanBar(
+                          controller: _searchController,
+                          hintText: 'Search here',
+                          readOnly: true,
+                          leadingIcon: Icons.search,
+                          onTap: () =>
+                              _goToSearchScreen(_searchController.text),
+                          onSubmitted: (value) => _goToSearchScreen(value),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (compact) ...[
+                        _memoryMapFilterButton(),
+                        _compactMapActionsButton(),
+                      ] else ...[
+                        _memoryMapFilterButton(),
+                        CircleIconButton(
+                          icon: Icons.tune,
+                          tooltip: 'Commute tools',
+                          onTap: _showLocalTools,
+                        ),
+                        const SizedBox(width: 6),
+                        CircleIconButton(
+                          icon: Icons.my_location,
+                          tooltip: 'My location',
+                          onTap: _goToMyLocation,
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  _memoryMapFilterButton(),
-                  CircleIconButton(icon: Icons.tune, onTap: _showLocalTools),
-                  const SizedBox(width: 6),
-                  CircleIconButton(
-                    icon: Icons.my_location,
-                    onTap: _goToMyLocation,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
 

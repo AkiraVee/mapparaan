@@ -5,27 +5,31 @@ import 'package:flutter/material.dart';
 class CircleIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   const CircleIconButton({
     super.key,
     required this.icon,
     required this.onTap,
+    this.tooltip,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).cardColor, // Dynamic Background
-      shape: const CircleBorder(),
-      elevation: 3,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: Theme.of(context).iconTheme.color), // Dynamic Icon Color
+    final button = SizedBox.square(
+      dimension: 48,
+      child: Material(
+        color: Theme.of(context).cardColor,
+        shape: const CircleBorder(),
+        elevation: 3,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Icon(icon, color: Theme.of(context).iconTheme.color),
         ),
       ),
     );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }
