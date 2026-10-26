@@ -6,7 +6,7 @@ class MemoryPhotoCompressionService {
   MemoryPhotoCompressionService._();
 
   static const int maxUploadBytes = 8 * 1024 * 1024;
-  static const int maxDimension = 1600;
+  static const int maxDimension = 1600; // Restored this line!
   static const List<int> _qualityLevels = [82, 72, 62, 52, 42];
   static const List<int> _dimensionLimits = [1600, 1200, 900, 700];
 
@@ -26,10 +26,9 @@ class MemoryPhotoCompressionService {
           autoCorrectionAngle: true,
           keepExif: false,
         );
-        if (compressed.isEmpty) {
-          throw const FormatException('Could not compress the selected image.');
+        if (compressed.isNotEmpty && compressed.length <= maxUploadBytes) {
+          return compressed;
         }
-        if (compressed.length <= maxUploadBytes) return compressed;
       }
     }
 

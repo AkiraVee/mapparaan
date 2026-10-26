@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'services/commuter_preference_service.dart';
 import 'services/memory_pin_service.dart';
+import 'services/friend_sharing_service.dart';
 import 'screens/home_screen.dart';
 import 'constants.dart';
 import 'services/auth_service.dart';
@@ -148,6 +149,7 @@ class _AuthGateState extends State<AuthGate> {
     AuthService.isLoggedIn.value = supabase.auth.currentSession != null;
     AuthService.isGuest.value = false;
     _loadMemoryPins();
+    _loadSharedMemoryPhotos();
     _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
       AuthService.isLoggedIn.value = state.session != null;
       if (state.session != null) AuthService.isGuest.value = false;
@@ -155,6 +157,7 @@ class _AuthGateState extends State<AuthGate> {
         CommuterPreferencesService.current.value = const CommuterPreferences();
         MemoryPinService.pins.value = [];
         MemoryPinService.loadStatus.value = MemoryPinLoadStatus.idle;
+        FriendSharingService.clearSharedPhotos();
         return;
       }
       if (state.session != null) {
@@ -162,6 +165,7 @@ class _AuthGateState extends State<AuthGate> {
         if (state.event == AuthChangeEvent.initialSession ||
             state.event == AuthChangeEvent.signedIn) {
           _loadMemoryPins();
+          _loadSharedMemoryPhotos();
         }
       }
     });
@@ -190,6 +194,24 @@ class _AuthGateState extends State<AuthGate> {
           exception: error,
           stack: stackTrace,
           context: ErrorDescription('while loading memory photos'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadSharedMemoryPhotos() async {
+    if (supabase.auth.currentUser == null) {
+      FriendSharingService.clearSharedPhotos();
+      return;
+    }
+    try {
+      await FriendSharingService.refreshSharedPhotos();
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while loading shared memory photos'),
         ),
       );
     }

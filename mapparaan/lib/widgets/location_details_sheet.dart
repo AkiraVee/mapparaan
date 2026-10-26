@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 enum TransportMode { walking, jeep, bus, uv, lrtMrt }
 
@@ -37,6 +39,29 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
   void dispose() {
     _sheetController.dispose();
     super.dispose();
+  }
+
+  // Helper to convert the enum to a friendly string
+  String get _modeName {
+    switch (_selectedMode) {
+      case TransportMode.walking: return 'walking';
+      case TransportMode.jeep: return 'taking a Jeepney';
+      case TransportMode.bus: return 'taking a Bus';
+      case TransportMode.uv: return 'taking a UV Express';
+      case TransportMode.lrtMrt: return 'taking the LRT/MRT';
+      default: return 'commuting';
+    }
+  }
+
+  void _handleShare() {
+    HapticFeedback.mediumImpact(); 
+    final modeText = _selectedMode != null ? ' by $_modeName' : '';
+    final text = 'I\'m heading to ${widget.title}$modeText via Mapparaan! 📍';
+    
+    // Uses the latest share_plus format to fix the deprecation warning
+    Share.share(text);
+    
+    widget.onShare?.call();
   }
 
   @override
@@ -145,7 +170,10 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                             'Directions',
                             colorScheme.primary,
                             colorScheme.onPrimary,
-                            widget.onDirections,
+                            () {
+                              HapticFeedback.lightImpact();
+                              widget.onDirections?.call();
+                            },
                           ),
                           const SizedBox(width: 8),
                           _pill(
@@ -159,7 +187,7 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                             'Share',
                             colorScheme.secondaryContainer,
                             colorScheme.onSecondaryContainer,
-                            widget.onShare,
+                            _handleShare,
                           ),
                         ],
                       ),
@@ -176,7 +204,7 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ===== Transport mode cards (styled like Figma) =====
+                    // ===== Transport mode cards =====
                     _modeCard(
                       mode: TransportMode.walking,
                       icon: Icons.directions_walk,

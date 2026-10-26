@@ -52,6 +52,57 @@ and apply the scripts to the correct Supabase project. These SQL files are
 not applied from the Flutter client; this workspace cannot verify or change
 the live project's settings.
 
+### Friend-only memory photo sharing
+
+The friend-sharing feature is a separate incremental change. For an existing
+project, first apply the 20261022 and 20261023 migrations if they have not
+already been applied, then apply
+`supabase/migrations/20261026_friend_memory_sharing.sql` once. For a new
+project, run `supabase/master_schema.sql` first, then migrations 20261026 and
+20261027 in order. Do not replace or edit migrations already applied to a
+database.
+
+If the sharing migration 20261026 has already been applied, apply only
+`supabase/migrations/20261027_friend_shared_photo_locations.sql` next before
+using this updated app. It does not modify or replace the earlier migration.
+
+The migration adds normalized friendships, hashed single-use invite codes
+(24-hour expiry, maximum five invites created per account per 24 hours), and
+per-photo/per-recipient grants. Existing photos stay private. Migration 20261027
+adds a friend-only RPC that returns the saved place name, address, and exact
+map coordinates only for photos explicitly shared with the signed-in
+recipient. Shared photos appear as markers on the map; tapping a marker shows
+the photo and location. Multiple shared photos at the same coordinates are
+grouped into a marker with next/previous controls. The map layer selector
+switches between your photos, photos shared with you, or both. Selecting a
+friend is explicit consent to share that precise location as well as the
+image. Review saved place data before sharing: an incorrect or overly specific
+address will be shown as stored.
+
+The Storage bucket remains private and friends can request a signed image URL
+only while the friendship and that exact photo grant remain active. Friend URLs
+expire after two minutes, but cannot recall an image already downloaded or
+copied. Photo contents themselves may reveal more than the saved location.
+Friend invite codes are bearer secrets: share them privately. Acceptance
+requires a signed-in account and an explicit action. Removing a friend deletes
+their photo grants, and re-adding them does not restore those grants. Verify
+both migrations and Storage policies in the intended Supabase project before
+testing with real accounts.
+
+Before treating sharing as verified, use test accounts A, B, and C to check:
+
+- B cannot see A's photos before accepting A's invite, and cannot see any
+  unshared photo after accepting.
+- After A shares one photo with B only, B can see that image and broad area;
+  C and other signed-in users cannot. The friend-facing response must not
+  contain the pin geometry, address, or place name.
+- B cannot upload to or delete from A's Storage folder. A can still manage
+  A's own photos.
+- Removing B revokes future access and removes the grant. An already issued
+  signed URL may remain usable for up to two minutes.
+- An invite cannot be accepted by its creator, accepted twice, or accepted
+  after expiry.
+
 The transit planner binds to loopback by default. To make it available beyond
 the local machine, set `MAPPARAAN_ALLOWED_ORIGINS` to the exact web origins,
 use a trusted network during development, and put any public deployment behind

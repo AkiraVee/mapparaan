@@ -99,6 +99,12 @@ class MapparaanDrawer extends StatelessWidget {
                       DrawerDestination.tripHistory,
                     ),
                   ),
+                  _MenuItem(
+                    icon: Icons.people_outline,
+                    label: 'Friends & Shared Photos',
+                    onTap: () =>
+                        _openDestination(context, DrawerDestination.friends),
+                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
                     child: Text(

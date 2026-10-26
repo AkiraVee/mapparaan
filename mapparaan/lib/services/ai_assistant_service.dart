@@ -115,6 +115,18 @@ class AiAssistantService {
     String? origin;
     String? destination;
 
+    // Insert this right before the existing `fromMatch` block
+    final toFromMatch = RegExp(
+    r'\bto\s+(.+?)\s+\b(?:from|coming from|galing)\b\s+(.+)$',
+    caseSensitive: false,
+    ).firstMatch(cleanQuery);
+
+    if (toFromMatch != null) {
+    destination = toFromMatch.group(1)?.trim();
+    origin = toFromMatch.group(2)?.trim();
+    } else {
+  // Keep your existing `fromMatch` logic here...
+
     final fromMatch = RegExp(
       r'\bfrom\s+(.+?)\s+\bto\b\s+(.+)$',
       caseSensitive: false,
@@ -153,8 +165,9 @@ class AiAssistantService {
         ).firstMatch(cleanQuery);
         if (simpleMatch != null) {
           destination = simpleMatch.group(1)?.trim();
+         }
         }
-      }
+     }
     }
 
     if (destination == null && origin == null) {
