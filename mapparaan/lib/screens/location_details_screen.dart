@@ -195,8 +195,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     // should intentionally leave the result list empty.
     if (result != null &&
         result.options.isEmpty &&
-        !result.isServerError &&
-        result.isOutsideServiceArea) {
+        !result.isServerError) {
       setState(() {
         _isOfflineFallback = false;
         if (result.isOutsideServiceArea) {
@@ -214,12 +213,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       return;
     }
 
-    if (result != null &&
-        result.options.isEmpty &&
-        !result.isServerError &&
-        !result.isOutsideServiceArea) {
-      _serverErrorMessage = 'The transit planner returned no route data. Showing an estimated route.';
-    }
+
 
     final realPlans = result?.options;
     if (realPlans != null && realPlans.isNotEmpty) {
