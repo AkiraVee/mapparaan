@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net" modified="2026-10-28T00:00:00.000Z" agent="Copilot" version="24.7.17" type="device">
+  <diagram id="mapparaan-supabase-erd" name="Mapparaan Supabase ERD">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1150" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Mapparaan Supabase ERD&#xa;Crow's foot markers and labels show relationship cardinality" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#17365D;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="800" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="auth_users" value="&lt;b&gt;auth.users&lt;/b&gt;&lt;hr&gt;PK id : uuid" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E8F0FE;strokeColor=#4A6FA5;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="210" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="users" value="&lt;b&gt;public.users&lt;/b&gt;&lt;hr&gt;PK, FK id : uuid&lt;br&gt;full_name : text&lt;br&gt;created_at : timestamptz" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E8F0FE;strokeColor=#4A6FA5;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="340" y="110" width="240" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="preferences" value="&lt;b&gt;user_preferences&lt;/b&gt;&lt;hr&gt;PK, FK user_id : uuid&lt;br&gt;passenger_type : text&lt;br&gt;theme_mode : text&lt;br&gt;color_palette : text&lt;br&gt;use_metric_units : bool&lt;br&gt;high_contrast_map : bool&lt;br&gt;compact_ui : bool" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E8F0FE;strokeColor=#4A6FA5;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="690" y="100" width="270" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="invites" value="&lt;b&gt;friend_invites&lt;/b&gt;&lt;hr&gt;PK id : uuid&lt;br&gt;FK inviter_id : uuid&lt;br&gt;token_hash : text&lt;br&gt;created_at : timestamptz&lt;br&gt;expires_at : timestamptz&lt;br&gt;accepted_at : timestamptz&lt;br&gt;FK accepted_by : uuid (optional)&lt;br&gt;revoked_at : timestamptz" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="100" width="300" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="friendships" value="&lt;b&gt;friendships&lt;/b&gt;&lt;hr&gt;PK id : uuid&lt;br&gt;FK user_a : uuid&lt;br&gt;FK user_b : uuid&lt;br&gt;created_at : timestamptz&lt;br&gt;accepted_at : timestamptz" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="110" width="260" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="saved_places" value="&lt;b&gt;saved_places&lt;/b&gt;&lt;hr&gt;PK id : text&lt;br&gt;FK user_id : uuid&lt;br&gt;name : text&lt;br&gt;subtitle : text&lt;br&gt;geom : geography&lt;br&gt;created_at : timestamptz" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E2F0D9;strokeColor=#70AD47;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="410" width="250" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="memory_pins" value="&lt;b&gt;memory_pins&lt;/b&gt;&lt;hr&gt;PK id : uuid&lt;br&gt;FK user_id : uuid&lt;br&gt;place_name : text&lt;br&gt;address : text&lt;br&gt;geom : geography&lt;br&gt;image_url : text&lt;br&gt;created_at : timestamptz&lt;br&gt;image_path : text" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E2F0D9;strokeColor=#70AD47;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="400" y="390" width="280" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="trip_history" value="&lt;b&gt;trip_history&lt;/b&gt;&lt;hr&gt;PK id : uuid&lt;br&gt;FK user_id : uuid&lt;br&gt;origin_name : text&lt;br&gt;dest_name : text&lt;br&gt;preference : text&lt;br&gt;duration_minutes : int4&lt;br&gt;fare_estimate : float8&lt;br&gt;route_summary : text&lt;br&gt;created_at : timestamptz" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#E2F0D9;strokeColor=#70AD47;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="270" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="shares" value="&lt;b&gt;memory_pin_shares&lt;/b&gt;&lt;hr&gt;PK id : uuid&lt;br&gt;FK memory_pin_id : uuid&lt;br&gt;FK friend_id : uuid&lt;br&gt;FK friendship_id : uuid&lt;br&gt;area_code : text (optional)&lt;br&gt;created_at : timestamptz&lt;br&gt;Unique: memory_pin_id + friend_id&lt;br&gt;Owner derived from memory_pins.user_id" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FCE4D6;strokeColor=#C65911;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="850" y="450" width="310" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="spatial_ref_sys" value="&lt;b&gt;spatial_ref_sys&lt;/b&gt;&lt;hr&gt;PK srid : integer&lt;br&gt;auth_name : varchar&lt;br&gt;auth_srid : integer&lt;br&gt;srtext : varchar&lt;br&gt;proj4text : varchar&lt;br&gt;&lt;i&gt;PostGIS reference metadata&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#F2F2F2;strokeColor=#7F7F7F;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="400" y="740" width="280" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_users" value="one-to-one (profile optional)&#xa;id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToOne;endFill=0;strokeColor=#4A6FA5;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_preferences" value="one-to-one&#xa;user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToOne;endFill=0;strokeColor=#4A6FA5;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="preferences">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_inviter" value="one-to-many&#xa;inviter_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#D6B656;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="invites">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_accepted_by" value="optional accepted_by&#xa;many-to-one" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERzeroToMany;startFill=0;endArrow=ERone;endFill=0;strokeColor=#D6B656;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="invites" target="auth_users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_friendship_a" value="one-to-many&#xa;user_a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#D6B656;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="friendships">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_friendship_b" value="one-to-many&#xa;user_b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#D6B656;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="friendships">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_saved" value="one-to-many&#xa;user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#70AD47;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="saved_places">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_pin_owner" value="one-to-many&#xa;user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#70AD47;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="memory_pins">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_history" value="one-to-many&#xa;user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#70AD47;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="trip_history">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_pin_share" value="one-to-many&#xa;memory_pin_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#C65911;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="memory_pins" target="shares">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_share_friend" value="many-to-many via memory_pin_shares&#xa;friend_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERzeroToMany;startFill=0;endArrow=ERzeroToMany;endFill=0;strokeColor=#C65911;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="auth_users" target="shares">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge_share_friendship" value="many-to-one&#xa;friendship_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERzeroToMany;startFill=0;endArrow=ERone;endFill=0;strokeColor=#C65911;fontSize=13;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="shares" target="friendships">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="Join tables: friendships models many-to-many friendships between auth.users; memory_pin_shares models photo access from memory_pins to recipient auth.users. Owner is derived from memory_pins.user_id and friendship membership is trigger-validated.&#xa;PostGIS spatial_ref_sys, geography_columns, and geometry_columns are metadata. Storage objects are not included." style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="780" y="760" width="650" height="120" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
