@@ -81,57 +81,87 @@ traffic-aware.
 
 Commands below use PowerShell from the repository root.
 
-1. Configure the Flutter app:
+### Run the app with the hosted planner
+
+Contributors can use the deployed Render API without running the Python backend:
+
+1. Create a local environment file if you do not already have one:
 
    ```powershell
    Copy-Item mapparaan\.env.example mapparaan\.env
    ```
 
-   Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in
-   `mapparaan/.env` to enable Supabase-backed features. The app also accepts
-   the legacy `SUPABASE_ANON_KEY`. `CARTO_API_KEY` is optional. The debug app
-   defaults to the local transit API at `http://127.0.0.1:8080`.
+2. Set `TRANSIT_API_URL` in `mapparaan/.env` to the deployed planner URL:
 
-   The `.env` file is bundled as a Flutter asset, so its values are visible in
-   the built app. Only use public client keys there. Never put a Supabase
-   `service_role` key or other privileged secret in it. For database and
-   Storage setup, follow [`mapparaan/README.md`](mapparaan/README.md).
-
-2. Start the transit planner in a terminal:
-
-   ```powershell
-   Set-Location mapparaan
-   python backend\planner\api.py --host 127.0.0.1 --port 8080
+   ```dotenv
+   TRANSIT_API_URL=https://mapparaan-planner.onrender.com
    ```
 
-   Check that it is ready from another terminal:
+   Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to enable Supabase-backed
+   features. `CARTO_API_KEY` is optional. Do not share or commit `.env`; it is
+   bundled into the app, so only public client keys belong there.
+
+3. Optionally wake the free Render service and check that it is ready:
 
    ```powershell
-   curl.exe http://127.0.0.1:8080/health
+   Invoke-RestMethod https://mapparaan-planner.onrender.com/health
    ```
 
-3. In another terminal, install Flutter packages and run the app:
+   A free service may sleep when idle. Its first request after inactivity can
+   take longer while Render starts it; wait for the health check to return
+   `status: ok` before retrying route planning.
+
+4. Run Flutter web from the project directory:
 
    ```powershell
    Set-Location mapparaan
    flutter pub get
-   flutter run
+   flutter run -d edge --web-port 5000
    ```
 
-   The Android emulator's localhost URL is translated to the host machine by
-   the app. A physical device needs a reachable host LAN address and a planner
-   bound to the network interface; the API requires
-   `MAPPARAAN_ALLOWED_ORIGINS` when binding beyond loopback. For Flutter web,
-   configure the exact web origin in that allowlist. CORS is not
-   authentication.
+   The deployed API must allow the web app's origin (for example,
+   `http://localhost:5000`) in Render's `MAPPARAAN_ALLOWED_ORIGINS` setting.
+   CORS is not authentication.
 
-For a deployed planner, set `TRANSIT_API_URL` in `mapparaan/.env` to its HTTPS
-base URL. Any configured service URL in a release build must use HTTPS;
-configure a transit API endpoint to enable backend route planning in release
-builds.
+### Run the planner locally
+
+The debug app defaults to `http://127.0.0.1:8080` when `TRANSIT_API_URL` is
+unset. To use the local planner, start it from `mapparaan/`:
+
+```powershell
+Set-Location mapparaan
+python backend\planner\api.py --host 127.0.0.1 --port 8080
+```
+
+In another terminal, run Flutter as above. If `.env` sets `TRANSIT_API_URL` to
+Render, the app continues using Render instead of this local server.
+
+The Android emulator's localhost URL is translated to the host machine by the
+app. A physical device needs a reachable host LAN address and a planner bound
+to the network interface; the API requires `MAPPARAAN_ALLOWED_ORIGINS` when
+binding beyond loopback.
+
+Any configured service URL in a release build must use HTTPS; configure a
+transit API endpoint to enable backend route planning in release builds.
 [`render.yaml`](render.yaml) defines a Render deployment, but the blueprint
 must be deployed and configured before the hosted API is available. Do not
 expose the unauthenticated planner publicly without suitable abuse controls.
+
+### Deploy planner changes
+
+The Flutter app uses the API URL in its `.env`; changing Python code locally
+does not update the hosted service. For a GitHub-connected Render service:
+
+1. Confirm the Render service's configured repository and auto-deploy branch.
+2. Commit and push the intended backend changes to that branch.
+3. Wait for the Render deployment to finish successfully.
+4. Check `/health`, then make a route request for the changed behavior against
+   the hosted API. A healthy `/health` response alone does not confirm that a
+   particular code change has deployed.
+
+When diagnosing a mismatch, check which API host the app is configured to use
+and test that same host. A cold start can delay a request, but it does not
+indicate that new backend code has been deployed.
 
 ## API
 
