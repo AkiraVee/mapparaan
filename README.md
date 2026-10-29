@@ -1,89 +1,97 @@
 # Mapparaan
 
-Mapparaan is a Flutter mapping and public-transit trip planner for commuters in
-Metro Manila. Transit coverage is focused on the City of Manila. The app runs
-on Android and iOS, with Flutter web and Windows targets available for
-development.
+## About
 
-## Features
+Mapparaan is an interactive mapping and route-planning app for Metro Manila
+commuters, with transit data focused on **Manila City**. It combines place
+search, multimodal route options, estimated fares, and applicable discounts.
 
-- Explore a map, search for places, use your current location, and view place
-  details.
-- Compare walking and public-transit routes by **fastest**, **cheapest**, or
-  **fewest transfers**.
-- Choose **Leave now** or schedule a future departure in Manila local time.
-  The planner estimates service availability at each boarding time, including
-  time spent walking, waiting, riding, and transferring. When LRT service is
-  outside the supplied frequency window, it avoids that rail leg and can still
-  suggest available jeepney or bus routes.
-- Review estimated fares and eligible student, senior, and PWD discounts.
-- Save places and review trip history and commuter preferences.
-- Sign in with Supabase to use account-backed memory photos and friend-only
-  photo sharing.
-- Use a responsive interface designed for mobile as well as larger screens.
+The app supports route preferences (fastest, cheapest, or fewest transfers),
+scheduled departures, and public-transit alternatives based on the available
+GTFS data. It does not provide live vehicle tracking or traffic-aware transit
+ETAs.
 
-## Important limitations
+## Scope and limitations
 
-Transit schedules come from a static Sakay.ph / DOTC GTFS feed dating from
-circa 2013–15. The calendar dates in the feed were extended, but the service
-patterns are not current operator confirmations. Schedule-aware routing is an
-estimate based on the feed's service days and headway windows; it does not
-model exact vehicle departures, live closures, or real-time alerts. Verify
-current operating hours before traveling.
+Mapparaan is a static, schedule-based system, not a live vehicle-tracking app.
+It does not provide live GPS positions of public-transport vehicles, vehicle-
+specific ETAs, or seat/capacity availability. Transit recommendations use the
+Sakay.ph / DOTC GTFS feed (circa 2013–15), filtered to Manila City. User
+location can be current, and walking route geometry is requested from OSRM,
+but transit suggestions do not account for live traffic or service alerts.
 
-If the API responds successfully but no supported service is available for the
-selected time, the app reports that no transit route was found rather than
-showing an offline warning or inventing a transit route. If a scheduled transit
-segment is available but does not reach the destination, the API can return a
-labeled partial route using its real stops and fare data; the remaining
-distance is a straight-line estimate, not walking directions. For an empty
-transit result, the app can show a street-routed walking option when the
-pedestrian router returns a verified path, with walking time marked estimated.
-When the estimated wait for the next GTFS service is within 12 hours, the
-planner can also show that transit option with the wait clearly identified.
-This can include jeepney or bus routes that begin after rail service resumes;
-it does not imply those routes are running at the selected departure time.
-LRT-1 and LRT-2 are excluded from every recommendation when the supplied GTFS
-does not show them as boardable at the selected departure time; they are not
-reintroduced as a later-service or transfer leg. This availability check is
-based on the historical feed, not a verified current operator timetable.
-The planner includes feasible alternatives for each supported mode in its
-actual route data rather than only showing the overall fastest, cheapest, and
-fewest-transfer winners.
-A previous service day is considered after midnight only when the GTFS
-frequency window explicitly extends beyond 24:00. The current feed has no such
-after-midnight frequency windows, so it cannot support verified transit
-recommendations after midnight.
+LRT-1 and LRT-2 are excluded from recommendations when the supplied GTFS does
+not show them as boardable at the selected departure time. They are not brought
+back as a later-service or transfer leg. This is an estimate based on the
+historical feed, not confirmation of current operator hours. The current feed
+has no frequency windows extending past midnight, so it cannot verify
+after-midnight service based on the previous service day.
 
-The app does not track public-transport vehicles, provide live vehicle ETAs,
-or account for live traffic. Fares are estimates; the feed does not distinguish
-traditional and modern jeepneys or ordinary and air-conditioned buses, so some
-road fares are ranges. See
-[`mapparaan/data/README.md`](mapparaan/data/README.md) and
-[`mapparaan/data/reference/fare_config.json`](mapparaan/data/reference/fare_config.json)
-for data scope, sources, and fare notes.
+If the API is reachable but finds no supported route, the app distinguishes
+that result from an API or connectivity failure. It can return verified
+partial transit segments or a street-routed walking option when available.
+Next-service suggestions may use later bus or jeepney service windows and are
+clearly marked as estimates; they do not mean those vehicles are operating at
+the requested departure time. If the backend is unreachable, the app may show
+clearly labeled sample fallback routes.
 
-The transit planner covers the City of Manila feed; places elsewhere in Metro
-Manila may be outside practical transit coverage. Map tiles, place search, and
-walking/driving geometry use external providers. These features are not
-traffic-aware.
+> **Fares are estimates, not live quotes.** The feed does not distinguish
+> traditional from modern jeepneys or ordinary from air-conditioned buses, so
+> road fares may be shown as a range. See
+> [`mapparaan/data/reference/fare_config.json`](mapparaan/data/reference/fare_config.json)
+> for fare sources and verification notes.
+
+## Current status
+
+| Feature | Status |
+| --- | --- |
+| Interactive map, place search, current-location controls, and place details | Implemented |
+| Walking/driving route geometry via OSRM | Implemented; public demo service and not traffic-aware |
+| Transit planner API and schedule-aware GTFS route search | Implemented; local backend changes require deployment to affect Render |
+| Fastest, cheapest, fewest-transfer, and supported-mode alternatives | Implemented from available route data |
+| LRT-1/LRT-2 availability filtering | Implemented against the historical GTFS; not a current operator timetable |
+| Empty-result, API-error, and connectivity state handling | Implemented |
+| Estimated fares and student, senior, and PWD discounts | Implemented; source data may need current verification |
+| Saved places, trip history, preferences, and memory-photo sharing | Implemented; account-backed features require Supabase configuration |
+| Basic natural-language query parsing | Implemented as a lightweight parser; not a full chatbot/NLU system |
+| Live transit vehicle locations, live service alerts, and traffic-aware transit ETAs | Not available |
+| Current verified operating schedules and broader-than-Manila transit coverage | Not available |
+| Detailed road geometry for most jeepney and bus routes | Not available; many legs use stop-to-stop lines |
+
+## Tech stack
+
+| Layer | Technology | Notes |
+| --- | --- | --- |
+| App | Flutter / Dart | Android, iOS, web, and Windows development targets |
+| Map rendering | `flutter_map`, `latlong2` | Interactive map, markers, and route overlays |
+| Map tiles | CARTO Voyager / OpenStreetMap | Raster tiles with visible attribution |
+| Place search | OpenStreetMap Nominatim | Metro Manila-biased; public service has usage limits |
+| Device location | `geolocator` | Location access is requested when needed |
+| Walking/driving geometry | OSRM public demo | External routing service; not traffic-aware |
+| Transit routing | Custom Python GTFS planner | Python standard library; headway-based estimates |
+| Backend API | Python `http.server` | `POST /plan`, `GET /health`; CORS configurable, no API authentication |
+| Cloud data and account features | Supabase | Auth, database, Storage, and friend/photo-sharing data |
+| Local preferences | `shared_preferences` | Saved app preferences and local data |
+| Transit data | Sakay.ph / DOTC GTFS | Static feed filtered to Manila City; circa 2013–15 |
+| Fare and discount rules | JSON fare configuration | Estimates; consult each mode's source and verification notes |
+| Hosting | Render | Deployment blueprint is in [`render.yaml`](render.yaml); deployed service must be updated separately from local code |
+| Natural-language assistance | Regex-based query parser | Placeholder for a future full NLU/chatbot integration |
 
 ## Requirements
 
 - Flutter and Dart compatible with the SDK constraint in
   [`mapparaan/pubspec.yaml`](mapparaan/pubspec.yaml).
-- Python 3 for the standard-library transit planner API.
-- A Supabase project for sign-in, account-backed memory photos, and friend
-  sharing. Guests can use the map and local features without cloud
-  configuration.
+- Python 3 for the local transit planner API.
+- A Supabase project and public client configuration for account-backed
+  features. Guests can use map and local features without cloud configuration.
 
 ## Run locally
 
 Commands below use PowerShell from the repository root.
 
-### Run the app with the hosted planner
+### Run Flutter with the hosted planner
 
-Contributors can use the deployed Render API without running the Python backend:
+Contributors can use the deployed Render API without running the Python backend.
 
 1. Create a local environment file if you do not already have one:
 
@@ -141,16 +149,13 @@ app. A physical device needs a reachable host LAN address and a planner bound
 to the network interface; the API requires `MAPPARAAN_ALLOWED_ORIGINS` when
 binding beyond loopback.
 
-Any configured service URL in a release build must use HTTPS; configure a
-transit API endpoint to enable backend route planning in release builds.
-[`render.yaml`](render.yaml) defines a Render deployment, but the blueprint
-must be deployed and configured before the hosted API is available. Do not
-expose the unauthenticated planner publicly without suitable abuse controls.
+Release builds require HTTPS for configured service URLs and a configured
+transit API endpoint for backend route planning.
 
-### Deploy planner changes
+## Deploy planner changes
 
-The Flutter app uses the API URL in its `.env`; changing Python code locally
-does not update the hosted service. For a GitHub-connected Render service:
+Changing Python code locally does not update the hosted service. For a
+GitHub-connected Render service:
 
 1. Confirm the Render service's configured repository and auto-deploy branch.
 2. Commit and push the intended backend changes to that branch.
@@ -161,11 +166,12 @@ does not update the hosted service. For a GitHub-connected Render service:
 
 When diagnosing a mismatch, check which API host the app is configured to use
 and test that same host. A cold start can delay a request, but it does not
-indicate that new backend code has been deployed.
+indicate that new backend code has been deployed. Do not expose the
+unauthenticated planner publicly without suitable abuse controls.
 
 ## API
 
-The Python standard-library API loads the local GTFS and fare data at startup:
+The Python standard-library API loads GTFS and fare data at startup:
 
 - `GET /health` — readiness check.
 - `POST /plan` — plan a route using JSON coordinates, passenger type, and
@@ -193,15 +199,11 @@ transfer behavior, and API security/smoke checks.
 
 ```text
 repository/
-├── README.md                         Project overview and quick start
+├── README.md                         Project overview and setup
 ├── render.yaml                       Render planner-service blueprint
 └── mapparaan/
-    ├── lib/
-    │   ├── screens/                  App screens
-    │   ├── services/                 Routing, search, auth, data, and sharing
-    │   ├── widgets/                  Reusable UI and map widgets
-    │   └── utils/                    Shared utilities
-    ├── test/                         Flutter widget and unit tests
+    ├── lib/                          App screens, services, widgets, utilities
+    ├── test/                         Flutter tests
     ├── backend/planner/              Python API, GTFS planner, tests, checks
     ├── data/
     │   ├── gtfs/                     Static transit feed
@@ -211,25 +213,41 @@ repository/
     ├── android/ ios/ web/ windows/   Flutter platform projects
     ├── .env.example                  Local configuration template
     ├── Dockerfile                    Planner API container
-    └── pubspec.yaml                  Flutter package and SDK constraints
+    └── pubspec.yaml                  Flutter dependencies and SDK constraints
 ```
 
-## Data and attribution
+## Transit data
 
-The current feed contains 531 stops, 599 routes, 663 trips, and 11,174 stop
-times. It includes jeepney, bus, LRT-1, and LRT-2 services; only a small number
-of routes have shape geometry. More detail and feed rebuild instructions are
-in [`mapparaan/data/README.md`](mapparaan/data/README.md).
+The planner reads `mapparaan/data/gtfs/` and `mapparaan/data/reference/`.
+Details, schemas, and rebuild instructions are in
+[`mapparaan/data/README.md`](mapparaan/data/README.md).
 
-- Transit data: Sakay.ph / DOTC GTFS; see
+| Entity | Count | Notes |
+| --- | ---: | --- |
+| Stops | 531 | Manila-focused GTFS stops |
+| Routes | 599 | Jeepney, bus, LRT-1, and LRT-2 |
+| Trips | 663 | Headway-based; no fixed departure timetable |
+| Stop times | 11,174 | Manila-focused feed |
+| Shape points | 125 | Geometry exists for five routes; most road legs use stop-to-stop lines |
+| Agencies | 2 | PNR routes are excluded |
+
+**Source:** Sakay.ph / DOTC GTFS (circa 2013–15), cleaned and geographically
+restricted to Manila City. Some routes may be outdated or missing. The GTFS
+does not contain fare data; fares come from `fare_config.json`. Rebuild and
+filter the feed using the tools under `mapparaan/data/tools/`.
+
+## Data sources and attribution
+
+- **Sakay.ph GTFS** — route data derived from DOTC data; see
   [`mapparaan/data/gtfs/LICENSE.md`](mapparaan/data/gtfs/LICENSE.md).
-- Map data: © OpenStreetMap contributors.
-- Basemap tiles: © CARTO.
-- Walking/driving route geometry: OSRM public demo service.
-- Fare sources and verification notes: `mapparaan/data/reference/fare_config.json`.
-- Discount rules: RA 11314, RA 9994, and RA 10754.
+- **OpenStreetMap** — map data used by the basemap, place search, and OSRM.
+- **CARTO Voyager** — basemap tiles.
+- **OSRM** — walking/driving route geometry.
+- **DOTr/LTFRB fare orders** — sources and verification notes in
+  `mapparaan/data/reference/fare_config.json`.
+- **RA 11314 / RA 9994 / RA 10754** — legal basis for applicable discounts.
 
-The app should display the required OpenStreetMap and CARTO attribution.
+Display the required OpenStreetMap and CARTO attribution in the app.
 
 ## Known gaps
 
@@ -237,5 +255,6 @@ The app should display the required OpenStreetMap and CARTO attribution.
 - Most road-transit legs do not have route shape geometry.
 - Search, tiles, and OSRM use public services with usage limits; production use
   may require self-hosting or another provider.
-- The planner API has no user authentication; secure any public deployment
-  with appropriate network and abuse controls.
+- The planner API has no user authentication; secure any public deployment with
+  appropriate network and abuse controls.
+- Full chatbot/NLU integration and live transit service data are not available.
