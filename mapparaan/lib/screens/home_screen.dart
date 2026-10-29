@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
+import '../services/commuter_preference_service.dart';
 import '../services/friend_sharing_service.dart';
 import '../services/memory_pin_service.dart';
 import '../services/place_search_service.dart';
@@ -12,11 +15,9 @@ import '../services/route_planner_service.dart';
 import '../services/saved_commute_service.dart';
 import '../services/last_route_service.dart';
 import '../services/local_ui_preferences_service.dart';
-import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
-import '../widgets/memory_pin_marker.dart'; // <-- Added the new marker import here!
 import 'location_details_screen.dart';
 import 'location_disabled_screen.dart';
 import 'search_location_screen.dart';
@@ -38,6 +39,190 @@ class HomeScreen extends StatefulWidget {
 enum _MemoryMapFilter { mine, shared, all }
 
 enum _HomeMapAction { myLocation, commuteTools }
+
+class AskMapparaanBar extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final bool autofocus;
+  final bool readOnly;
+  final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onTap;
+  final VoidCallback? onMicTap;
+  final IconData leadingIcon;
+  final VoidCallback? onLeadingTap;
+  final FocusNode? focusNode;
+
+  const AskMapparaanBar({
+    super.key,
+    required this.controller,
+    this.hintText = 'Ask MapParaan',
+    this.autofocus = false,
+    this.readOnly = false,
+    this.onSubmitted,
+    this.onChanged,
+    this.onTap,
+    this.onMicTap,
+    this.leadingIcon = Icons.search,
+    this.onLeadingTap,
+    this.focusNode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(28),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onLeadingTap ?? onTap,
+              customBorder: const CircleBorder(),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  leadingIcon,
+                  color: Theme.of(context).iconTheme.color
+                      ?.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: autofocus,
+                readOnly: readOnly,
+                onTap: onTap,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  border: InputBorder.none,
+                ),
+                onSubmitted: onSubmitted,
+                onChanged: onChanged,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              ),
+            ),
+            IconButton(
+              tooltip: onSubmitted == null ? 'Voice search' : 'Search',
+              icon: Icon(
+                onSubmitted == null ? Icons.mic : Icons.send,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              onPressed: () {
+                final value = controller.text.trim();
+                if (onSubmitted != null) {
+                  if (value.isNotEmpty) {
+                    onSubmitted!(value);
+                  }
+                  FocusScope.of(context).unfocus();
+                  return;
+                }
+                onMicTap?.call();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinArrowPainter extends CustomPainter {
+  final Color color;
+  _PinArrowPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final path = ui.Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class MemoryPinMarker extends StatelessWidget {
+  final String imageUrl;
+  final VoidCallback onTap;
+
+  const MemoryPinMarker({
+    super.key,
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<CommuterPreferences>(
+      valueListenable: CommuterPreferencesService.current,
+      builder: (context, prefs, child) {
+        final themeColor = prefs.colorPalette.primary;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2), // Thinner border
+                decoration: BoxDecoration(
+                  color: themeColor,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black38,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(
+                    imageUrl,
+                    width: 44, // Smaller width
+                    height: 38, // Smaller height
+                    fit: BoxFit.cover,
+                    errorBuilder: (ctx, err, stack) => Container(
+                      width: 44,
+                      height: 38,
+                      color: Colors.grey,
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              CustomPaint(
+                size: const Size(16, 10), // Smaller arrow
+                painter: _PinArrowPainter(color: themeColor),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
@@ -981,9 +1166,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
       ],
-      child: SizedBox(
-        width: 44,
-        height: 44,
+      child: SizedBox.square(
+        dimension: 48,
         child: Material(
           color: Theme.of(context).cardColor,
           shape: const CircleBorder(),
@@ -1001,6 +1185,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _compactMapActionsButton() {
     return PopupMenuButton<_HomeMapAction>(
       tooltip: 'More map actions',
+      padding: EdgeInsets.zero,
       onSelected: (action) {
         switch (action) {
           case _HomeMapAction.myLocation:
@@ -1241,9 +1426,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       if (compact) ...[
                         _memoryMapFilterButton(),
+                        const SizedBox(width: 6),
                         _compactMapActionsButton(),
                       ] else ...[
                         _memoryMapFilterButton(),
+                        const SizedBox(width: 6),
                         CircleIconButton(
                           icon: Icons.tune,
                           tooltip: 'Commute tools',

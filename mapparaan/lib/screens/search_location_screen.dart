@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
-import '../widgets/ask_mapparaan_bar.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 
@@ -373,14 +372,63 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: AskMapparaanBar(
-                            controller: _topSearchController,
-                            focusNode: _topSearchFocusNode,
-                            hintText: 'Search here',
-                            autofocus: true,
-                            leadingIcon: Icons.search,
-                            onChanged: _onSearchChanged,
-                            onSubmitted: _onSearchChanged,
+                          child: Material(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(28),
+                            elevation: 4,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    customBorder: const CircleBorder(),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Icon(
+                                        Icons.search,
+                                        color: Theme.of(context).iconTheme.color
+                                            ?.withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _topSearchController,
+                                      focusNode: _topSearchFocusNode,
+                                      autofocus: true,
+                                      textInputAction: TextInputAction.search,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Search here',
+                                        border: InputBorder.none,
+                                      ),
+                                      onChanged: _onSearchChanged,
+                                      onSubmitted: _onSearchChanged,
+                                      onTapOutside: (_) =>
+                                          FocusScope.of(context).unfocus(),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Search',
+                                    icon: Icon(
+                                      Icons.send,
+                                      color: Theme.of(context).iconTheme.color,
+                                    ),
+                                    onPressed: () {
+                                      final value = _topSearchController.text
+                                          .trim();
+                                      if (value.isNotEmpty) {
+                                        _onSearchChanged(value);
+                                      }
+                                      FocusScope.of(context).unfocus();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'friends_screen.dart';
 import '../services/commuter_preference_service.dart';
+import '../services/local_ui_preferences_service.dart';
 
 import '../services/ai_assistant_service.dart';
 import '../services/place_search_service.dart';
@@ -1335,6 +1336,7 @@ class _SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<_SettingsPage> {
   CommuterPreferences _prefs = const CommuterPreferences();
+  LocalUiPreferences _localPrefs = const LocalUiPreferences();
   bool _isLoading = true;
 
   @override
@@ -1345,9 +1347,11 @@ class _SettingsPageState extends State<_SettingsPage> {
 
   Future<void> _loadPreferences() async {
     final loaded = await CommuterPreferencesService.load();
+    final loadedLocal = await LocalUiPreferencesService.load();
     if (!mounted) return;
     setState(() {
       _prefs = loaded;
+      _localPrefs = loadedLocal;
       _isLoading = false;
     });
   }
@@ -1355,6 +1359,12 @@ class _SettingsPageState extends State<_SettingsPage> {
   Future<void> _updatePreferences(CommuterPreferences newPrefs) async {
     setState(() => _prefs = newPrefs);
     await CommuterPreferencesService.save(newPrefs);
+  }
+
+  Future<void> _updateColorVisionFilter(ColorVisionFilter filter) async {
+    final updated = _localPrefs.copyWith(colorVisionFilter: filter);
+    setState(() => _localPrefs = updated);
+    await LocalUiPreferencesService.save(updated);
   }
 
   @override
@@ -1439,6 +1449,44 @@ class _SettingsPageState extends State<_SettingsPage> {
               },
             );
           }).toList(),
+        ),
+
+        const Divider(height: 32),
+
+        const Text(
+          'Color Vision Accessibility',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Optional screen-wide color adjustments. Maps and photos are affected too; choose Off if colors look less clear.',
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<ColorVisionFilter>(
+          isExpanded: true,
+          initialValue: _localPrefs.colorVisionFilter,
+          decoration: const InputDecoration(labelText: 'Color filter'),
+          items: ColorVisionFilter.values.map((filter) {
+            return DropdownMenuItem(
+              value: filter,
+              child: Text(filter.label, overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
+          onChanged: (filter) {
+            if (filter != null) _updateColorVisionFilter(filter);
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _localPrefs.colorVisionFilter.description,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
 
         const Divider(height: 32),
