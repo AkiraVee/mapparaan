@@ -1166,9 +1166,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
       ],
-      child: SizedBox(
-        width: 44,
-        height: 44,
+      child: SizedBox.square(
+        dimension: 48,
         child: Material(
           color: Theme.of(context).cardColor,
           shape: const CircleBorder(),
@@ -1186,6 +1185,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _compactMapActionsButton() {
     return PopupMenuButton<_HomeMapAction>(
       tooltip: 'More map actions',
+      padding: EdgeInsets.zero,
       onSelected: (action) {
         switch (action) {
           case _HomeMapAction.myLocation:
@@ -1426,9 +1426,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       if (compact) ...[
                         _memoryMapFilterButton(),
+                        const SizedBox(width: 6),
                         _compactMapActionsButton(),
                       ] else ...[
                         _memoryMapFilterButton(),
+                        const SizedBox(width: 6),
                         CircleIconButton(
                           icon: Icons.tune,
                           tooltip: 'Commute tools',
