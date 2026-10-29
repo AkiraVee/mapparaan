@@ -34,7 +34,7 @@ TRANSFER_WALK_M = 300         # max walk between two stops when transferring
 ACCESS_RADII_M = (600, 1000, 1500)   # walk from origin/dest to first stop
 WALK_ONLY_MAX_M = 1200        # offer a walk-only option below this distance
 PARTIAL_PROGRESS_MIN_M = 100  # avoid partial transit legs that barely advance
-NEXT_SERVICE_MAX_WAIT_S = 2 * 60 * 60
+NEXT_SERVICE_MAX_WAIT_S = 12 * 60 * 60
 ROAD_DETOUR = 1.3             # straight-line stop distance -> road distance (fares)
 MIN_WAIT_ROAD_S = 300         # feed headways for jeep/bus are ~1 min (synthetic)
 MIN_WAIT_RAIL_S = 120
@@ -58,6 +58,7 @@ MODE_LABEL = {
     "fort_bus": "Fort Bus",
 }
 RAIL_MODES = {"lrt1", "lrt2", "mrt3"}
+LRT_MODES = {"lrt1", "lrt2"}
 
 PREFS = {
     # transfer_penalty_s, peso_weight_s
@@ -377,12 +378,17 @@ class Planner:
         when = to_manila(when)
         cal = self.calendar.get(trip["service_id"])
         local_secs = when.hour * 3600 + when.minute * 60 + when.second
-        candidates = [(when.date(), local_secs)]
+        candidates = [(when.date(), local_secs, 0)]
         if trip["freq"] and any(end > 86400 for _, end, _ in trip["freq"]):
             previous_date = when.date() - datetime.timedelta(days=1)
-            candidates.append((previous_date, local_secs + 86400))
+            candidates.append((previous_date, local_secs + 86400, 0))
+        if max_wait_s is not None:
+            final_day_offset = (local_secs + max_wait_s) // 86400
+            for day_offset in range(1, final_day_offset + 1):
+                service_day = when.date() + datetime.timedelta(days=day_offset)
+                candidates.append((service_day, 0, day_offset))
 
-        for service_day, service_secs in candidates:
+        for service_day, service_secs, day_offset in candidates:
             service_date = service_day.strftime("%Y%m%d")
             exception = self.calendar_exceptions.get(trip["service_id"], {}).get(service_date)
             if exception == "2":
@@ -418,7 +424,12 @@ class Planner:
                     continue
                 start, window_end, headway = future_start
                 estimated_boarding_wait = max(headway / 2, floor)
-                wait = start - service_secs + estimated_boarding_wait
+                wait = (
+                    day_offset * 86400
+                    + start
+                    - local_secs
+                    + estimated_boarding_wait
+                )
                 if wait > max_wait_s:
                     continue
                 if start + estimated_boarding_wait >= window_end:
@@ -434,7 +445,15 @@ class Planner:
         return None
 
     # ── search ───────────────────────────────────────────────────────────────
-    def _search(self, origin, dest, pref, when, avoid_modes=None):
+    def _search(
+        self,
+        origin,
+        dest,
+        pref,
+        when,
+        avoid_modes=None,
+        allow_next_service=True,
+    ):
         avoid_modes = avoid_modes or set()
         transfer_pen, peso_w = PREFS[pref]
         ns = self.n_stops
@@ -512,7 +531,11 @@ class Planner:
                 board_time = when + datetime.timedelta(seconds=label["elapsed"])
                 wait_s = self.trip_wait_s(self.trips[ti], board_time)
                 next_service = False
-                if wait_s is None:
+                if (
+                    wait_s is None
+                    and allow_next_service
+                    and self.trips[ti]["mode"].lower() not in LRT_MODES
+                ):
                     wait_s = self.trip_wait_s(
                         self.trips[ti],
                         board_time,
@@ -714,6 +737,13 @@ class Planner:
         of mode names (e.g. {"jeepney"}) whose routes are left out of the search."""
         when = to_manila(when)
         avoid_modes = {str(m).strip().lower() for m in (avoid_modes or ()) if str(m).strip()}
+        available_lrt_modes = {
+            trip["mode"].lower()
+            for trip in self.trips
+            if trip["mode"].lower() in LRT_MODES
+            and self.trip_wait_s(trip, when) is not None
+        }
+        avoid_modes |= LRT_MODES - available_lrt_modes
         # Both the regular and the discounted fare are always returned; the
         # client picks which one to show based on the passenger type.
         options, seen = [], set()
@@ -728,33 +758,29 @@ class Planner:
 
         titles = {"fastest": "Fastest route", "cheapest": "Cheapest route",
                   "fewest_transfers": "Fewest transfers"}
-        for pref in ("fastest", "cheapest", "fewest_transfers"):
-            search_result = self._search(
-                origin,
-                dest,
-                pref,
-                when,
-                avoid_modes=avoid_modes,
-            )
+
+        def append_search_option(pref, search_result, title):
             if not search_result:
-                continue
+                return
             legs, remaining_distance_m, is_next_service = search_result
-            # Keep one result for each preference even when the same physical
-            # route wins multiple cost functions. The client uses the
-            # preference label to let commuters switch between route goals.
-            key = (pref, tuple(l.get("route_id", "w") for l in legs))
+            path_key = tuple(
+                (leg["type"], leg.get("route_id"), leg["from"], leg["to"])
+                for leg in legs
+            )
+            key = (pref, path_key)
             if key in seen:
-                continue
+                return
             seen.add(key)
+
             opt = self._summarise(pref, legs)
             if is_next_service:
                 opt["is_next_service"] = True
                 opt["next_service_message"] = (
                     "No transit is scheduled at the selected time. This route "
-                    "uses the next GTFS service window within 2 hours; waiting "
-                    "time is estimated from frequency data."
+                    "uses a later eligible GTFS service window within 12 hours; "
+                    "waiting time is estimated from frequency data. LRT-1 and "
+                    "LRT-2 closed at the selected time are excluded."
                 )
-                opt["title"] = f"Next service: {titles[pref]}"
             if remaining_distance_m is not None:
                 end_stop = next(
                     (leg["to"] for leg in reversed(legs) if leg["type"] == "ride"),
@@ -767,15 +793,44 @@ class Planner:
                     f"The destination is about {remaining_distance_m / 1000:.1f} km "
                     "away in a straight line; no complete transit itinerary was found."
                 )
-                label = f"Next service: {titles[pref]}" if is_next_service else titles[pref]
-                opt["title"] = f"{label} (partial)"
-                options.append(opt)
-                continue
-            # A paid ride that is not faster than the free walk is never worth offering.
-            if walk_eta is not None and opt["eta_minutes"] >= walk_eta:
-                continue
-            opt["title"] = titles[pref]
+                title = f"{title} (partial)"
+            elif walk_eta is not None and opt["eta_minutes"] >= walk_eta:
+                return
+
+            opt["title"] = f"Next service: {title}" if is_next_service else title
             options.append(opt)
+
+        for pref in ("fastest", "cheapest", "fewest_transfers"):
+            for allow_next_service in (False, True):
+                append_search_option(
+                    pref,
+                    self._search(
+                        origin,
+                        dest,
+                        pref,
+                        when,
+                        avoid_modes=avoid_modes,
+                        allow_next_service=allow_next_service,
+                    ),
+                    titles[pref],
+                )
+
+        all_modes = {trip["mode"] for trip in self.trips}
+        for mode in sorted(all_modes - avoid_modes):
+            mode_avoid = avoid_modes | (all_modes - {mode})
+            for allow_next_service in (False, True):
+                append_search_option(
+                    "fastest",
+                    self._search(
+                        origin,
+                        dest,
+                        "fastest",
+                        when,
+                        avoid_modes=mode_avoid,
+                        allow_next_service=allow_next_service,
+                    ),
+                    f"{MODE_LABEL.get(mode, mode)} alternative",
+                )
         return options
 
     def _summarise(self, pref, legs):

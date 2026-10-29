@@ -141,7 +141,7 @@ void main() {
         'is_partial': true,
         'remaining_distance_m': 2400,
         'is_next_service': true,
-        'next_service_message': 'No transit is scheduled at the selected time. This route uses the next GTFS service window within 2 hours.',
+        'next_service_message': 'No transit is scheduled at the selected time. This route uses the next GTFS service window within 12 hours.',
         'partial_message': 'This verified transit segment ends at Stop A. The destination is about 2.4 km away in a straight line.',
         'legs': [
           {
@@ -163,7 +163,7 @@ void main() {
       expect(option.isPartial, isTrue);
       expect(option.remainingDistanceM, 2400);
       expect(option.isNextService, isTrue);
-      expect(option.nextServiceMessage, contains('within 2 hours'));
+      expect(option.nextServiceMessage, contains('within 12 hours'));
       expect(option.partialMessage, contains('straight line'));
       expect(option.legs.single.routeId, 'PUJ2137');
     });

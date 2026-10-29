@@ -2183,6 +2183,13 @@ class _RouteResultCard extends StatelessWidget {
             color: colorScheme.onSurfaceVariant,
           ),
         ),
+        if (route.isNextService && route.nextServiceMessage != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            route.nextServiceMessage!,
+            style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+          ),
+        ],
         if (route.isPartial && route.partialMessage != null) ...[
           const SizedBox(height: 5),
           Text(

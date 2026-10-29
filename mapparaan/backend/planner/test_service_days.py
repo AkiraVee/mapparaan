@@ -16,7 +16,7 @@ from collections import defaultdict
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gtfs_planner import Planner, RAIL_MODES  # noqa: E402
+from gtfs_planner import LRT_MODES, Planner, RAIL_MODES  # noqa: E402
 
 DATA_DIR = os.environ.get(
     "MAPPARAAN_DATA_DIR",
@@ -71,22 +71,64 @@ class ServiceDayTests(unittest.TestCase):
                         f"{trip['mode']} should be closed at {when:%H:%M}",
                     )
 
-    def test_early_friday_trip_uses_next_real_rail_window_with_wait(self):
+    def test_early_friday_does_not_recommend_lrt_next_service(self):
         options = self.p.plan(
             self.stop["Blumentritt LRT"],
             self.stop["Vito Cruz LRT"],
             when=at(4, 3, 20),
         )
 
+        self.assertTrue(
+            all(not (set(option["modes"]) & LRT_MODES) for option in options)
+        )
+        self.assertTrue(
+            all(
+                not any(
+                    leg.get("mode") in LRT_MODES
+                    for leg in option["legs"]
+                    if leg["type"] == "ride"
+                )
+                for option in options
+            )
+        )
+
+    def test_early_friday_offers_road_alternative_without_closed_lrt(self):
+        options = self.p.plan(
+            (14.5943, 120.9721),
+            self.stop["Blumentritt LRT"],
+            when=at(4, 3, 34),
+        )
+
         transit_options = [option for option in options if option["modes"]]
         self.assertTrue(transit_options)
-        for option in transit_options:
-            self.assertTrue(option["is_next_service"])
-            self.assertIn("within 2 hours", option["next_service_message"])
-            self.assertIn("lrt1", option["modes"])
-            ride = next(leg for leg in option["legs"] if leg["type"] == "ride")
-            self.assertGreaterEqual(ride["wait_minutes"], 100)
-            self.assertLessEqual(ride["wait_minutes"], 120)
+        offered_modes = {
+            mode for option in transit_options for mode in option["modes"]
+        }
+        self.assertIn("jeepney", offered_modes)
+        self.assertFalse(offered_modes & LRT_MODES)
+        self.assertTrue(all(option["is_next_service"] for option in transit_options))
+
+    def test_bus_only_alternative_is_returned_when_its_next_window_is_available(self):
+        origin = self.stop[
+            "Dimasalang Birdge / New Antipolo Intersection, Quezon City"
+        ]
+        destination = self.stop["Valariano Fugoso, Manila"]
+        options = self.p.plan(origin, destination, when=at(4, 3, 34))
+
+        bus_options = [
+            option for option in options if option["modes"] == ["bus"]
+        ]
+        self.assertTrue(bus_options, "the route list should include a bus-only choice")
+        self.assertTrue(all(option["is_next_service"] for option in bus_options))
+        self.assertTrue(
+            any(
+                leg["route_id"] == "LTFRB_PUB1138"
+                for option in bus_options
+                for leg in option["legs"]
+                if leg["type"] == "ride"
+            ),
+            "include the verified bus line serving the selected stops",
+        )
 
     def test_road_routes_remain_available_after_lrt_closes(self):
         when = at(1, 22, 15)
@@ -102,13 +144,45 @@ class ServiceDayTests(unittest.TestCase):
             any(set(option["modes"]) & {"jeepney", "bus"} for option in options)
         )
 
-    def test_friday_2305_has_no_service_from_weekend_only_late_window(self):
+    def test_closed_lrt_lines_never_appear_in_late_night_or_after_midnight_options(self):
+        for when in (at(1, 22, 15), at(4, 23, 5), at(5, 0, 30)):
+            with self.subTest(departure=when):
+                options = self.p.plan(
+                    (14.6097, 120.9894),
+                    self.stop["Vito Cruz LRT"],
+                    when=when,
+                )
+                for option in options:
+                    self.assertFalse(set(option["modes"]) & LRT_MODES)
+                    self.assertFalse(
+                        any(
+                            leg.get("mode") in LRT_MODES
+                            for leg in option["legs"]
+                            if leg["type"] == "ride"
+                        )
+                    )
+
+    def test_friday_2305_does_not_use_weekend_service_as_if_running_now(self):
+        trip = next(t for t in self.p.trips if t["trip_id"] == "881763")
+        friday_2305 = at(4, 23, 5)
+        self.assertIsNone(self.p.trip_wait_s(trip, friday_2305))
+        next_service_wait = self.p.trip_wait_s(
+            trip,
+            friday_2305,
+            max_wait_s=12 * 60 * 60,
+        )
+        self.assertIsNotNone(next_service_wait)
+        self.assertGreater(next_service_wait, 8 * 60 * 60)
+        self.assertLessEqual(next_service_wait, 12 * 60 * 60)
+
         options = self.p.plan(
             (14.6097, 120.9894),
             self.stop["Vito Cruz LRT"],
-            when=at(4, 23, 5),
+            when=friday_2305,
         )
-        self.assertEqual(options, [])
+        self.assertTrue(
+            all(not (set(option["modes"]) & LRT_MODES) for option in options)
+        )
 
     def test_saturday_2305_returns_partial_from_the_active_gtfs_jeepney(self):
         options = self.p.plan(
@@ -118,15 +192,29 @@ class ServiceDayTests(unittest.TestCase):
         )
 
         self.assertTrue(options)
-        self.assertTrue(all(option.get("is_partial") for option in options))
-        for option in options:
-            ride_legs = [leg for leg in option["legs"] if leg["type"] == "ride"]
-            self.assertTrue(ride_legs)
-            self.assertEqual(
-                {leg["route_id"] for leg in ride_legs},
-                {"LTFRB_PUJ2137"},
+        current_jeepney_options = [
+            option
+            for option in options
+            if not option.get("is_next_service")
+            and any(
+                leg.get("route_id") == "LTFRB_PUJ2137"
+                for leg in option["legs"]
+                if leg["type"] == "ride"
             )
-            self.assertGreater(option["remaining_distance_m"], 1500)
+        ]
+        self.assertTrue(
+            current_jeepney_options,
+            "preserve a route that is boardable now alongside later options",
+        )
+        self.assertTrue(
+            all(option.get("is_partial") for option in current_jeepney_options)
+        )
+        self.assertTrue(
+            all(
+                option["remaining_distance_m"] > 1500
+                for option in current_jeepney_options
+            )
+        )
 
     def test_transfer_arrival_time_is_used_for_lrt_boarding(self):
         options = self.p.plan(

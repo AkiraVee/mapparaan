@@ -39,8 +39,17 @@ labeled partial route using its real stops and fare data; the remaining
 distance is a straight-line estimate, not walking directions. For an empty
 transit result, the app can show a street-routed walking option when the
 pedestrian router returns a verified path, with walking time marked estimated.
-When the estimated wait for the next GTFS service is within two hours, the
+When the estimated wait for the next GTFS service is within 12 hours, the
 planner can also show that transit option with the wait clearly identified.
+This can include jeepney or bus routes that begin after rail service resumes;
+it does not imply those routes are running at the selected departure time.
+LRT-1 and LRT-2 are excluded from every recommendation when the supplied GTFS
+does not show them as boardable at the selected departure time; they are not
+reintroduced as a later-service or transfer leg. This availability check is
+based on the historical feed, not a verified current operator timetable.
+The planner includes feasible alternatives for each supported mode in its
+actual route data rather than only showing the overall fastest, cheapest, and
+fewest-transfer winners.
 A previous service day is considered after midnight only when the GTFS
 frequency window explicitly extends beyond 24:00. The current feed has no such
 after-midnight frequency windows, so it cannot support verified transit
