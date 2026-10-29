@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'services/commuter_preference_service.dart';
+import 'services/local_ui_preferences_service.dart';
 import 'services/memory_pin_service.dart';
 import 'services/friend_sharing_service.dart';
 import 'screens/home_screen.dart';
@@ -104,6 +105,20 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Mapparaan',
           debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            return ValueListenableBuilder<LocalUiPreferences>(
+              valueListenable: LocalUiPreferencesService.current,
+              builder: (context, localPreferences, child) {
+                final filter = localPreferences.colorVisionFilter;
+                if (filter == ColorVisionFilter.none) return child!;
+                return ColorFiltered(
+                  colorFilter: ColorFilter.matrix(filter.matrix),
+                  child: child,
+                );
+              },
+              child: child,
+            );
+          },
           theme: ThemeData(
             brightness: Brightness.light,
             primaryColor: palette.primary,

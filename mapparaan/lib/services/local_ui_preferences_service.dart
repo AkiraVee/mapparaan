@@ -1,6 +1,109 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum ColorVisionFilter {
+  none('Off', 'No screen color adjustment', <double>[
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ]),
+  redGreen(
+    'Red-green contrast',
+    'Adds a blue cue to help distinguish red and green',
+    <double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0.2, -0.2, 1, 0, 0, 0, 0, 0, 1, 0],
+  ),
+  blueYellow(
+    'Blue-yellow contrast',
+    'Adds a red-green cue to help distinguish blue and yellow',
+    <double>[
+      1.15,
+      0,
+      -0.15,
+      0,
+      0,
+      0,
+      1.15,
+      -0.15,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ],
+  ),
+  protanopia(
+    'Protanopia',
+    'Stronger red-weakness adjustment; adds a blue cue to red',
+    <double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0.45, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+  ),
+  deuteranopia(
+    'Deuteranopia',
+    'Stronger green-weakness adjustment; adds a blue cue to green',
+    <double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.45, 1, 0, 0, 0, 0, 0, 1, 0],
+  ),
+  tritanopia(
+    'Tritanopia',
+    'Stronger blue-weakness adjustment; adds a red cue to blue',
+    <double>[1, 0, 0.45, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+  ),
+  achromatopsia(
+    'Achromatopsia / Monochromacy',
+    'Grayscale view; color distinctions are not restored',
+    <double>[
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ],
+  );
+
+  const ColorVisionFilter(this.label, this.description, this.matrix);
+
+  final String label;
+  final String description;
+  final List<double> matrix;
+}
+
 class LocalUiPreferences {
   final bool seniorMode;
   final bool simpleWords;
@@ -10,6 +113,7 @@ class LocalUiPreferences {
   final bool avoidFloods;
   final double? walkingLimitKm;
   final String language;
+  final ColorVisionFilter colorVisionFilter;
 
   const LocalUiPreferences({
     this.seniorMode = false,
@@ -20,6 +124,7 @@ class LocalUiPreferences {
     this.avoidFloods = false,
     this.walkingLimitKm,
     this.language = 'English',
+    this.colorVisionFilter = ColorVisionFilter.none,
   });
 
   LocalUiPreferences copyWith({
@@ -31,6 +136,7 @@ class LocalUiPreferences {
     bool? avoidFloods,
     Object? walkingLimitKm = _unchanged,
     String? language,
+    ColorVisionFilter? colorVisionFilter,
   }) {
     return LocalUiPreferences(
       seniorMode: seniorMode ?? this.seniorMode,
@@ -43,6 +149,7 @@ class LocalUiPreferences {
           ? this.walkingLimitKm
           : walkingLimitKm as double?,
       language: language ?? this.language,
+      colorVisionFilter: colorVisionFilter ?? this.colorVisionFilter,
     );
   }
 
@@ -55,6 +162,7 @@ class LocalUiPreferences {
     'avoid_floods': avoidFloods,
     'walking_limit_km': walkingLimitKm,
     'language': language,
+    'color_vision_filter': colorVisionFilter.name,
   };
 
   static const _unchanged = Object();
@@ -79,6 +187,11 @@ class LocalUiPreferencesService {
       avoidFloods: store.getBool('${_prefix}avoid_floods') ?? false,
       walkingLimitKm: store.getDouble('${_prefix}walking_limit_km'),
       language: store.getString('${_prefix}language') ?? 'English',
+      colorVisionFilter: ColorVisionFilter.values.firstWhere(
+        (filter) =>
+            filter.name == store.getString('${_prefix}color_vision_filter'),
+        orElse: () => ColorVisionFilter.none,
+      ),
     );
     current.value = value;
     return value;
@@ -102,5 +215,9 @@ class LocalUiPreferencesService {
       );
     }
     await store.setString('${_prefix}language', value.language);
+    await store.setString(
+      '${_prefix}color_vision_filter',
+      value.colorVisionFilter.name,
+    );
   }
 }
