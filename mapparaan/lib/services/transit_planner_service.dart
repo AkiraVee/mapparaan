@@ -1,7 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show debugPrint, defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show
+        debugPrint,
+        defaultTargetPlatform,
+        kIsWeb,
+        TargetPlatform,
+        visibleForTesting;
 import 'package:flutter/material.dart' show Color;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -18,6 +24,10 @@ const String outsideServiceAreaReason = 'outside_service_area';
 /// This is different from "unreachable": the server is up but could not plan the
 /// trip, so the app shows an error instead of sample routes.
 const String serverErrorReason = 'server_error';
+
+enum TransitPlanFailure { connectivity, server, invalidResponse, configuration }
+
+enum TransitPlanOutcome { routes, noRoute, outsideServiceArea, offline, error }
 
 /// Formats a peso amount without the currency sign: whole pesos as "18",
 /// otherwise two decimals ("21.75", "14.50").
@@ -239,6 +249,11 @@ class TransitPlanOption {
   final List<String> modes;
   final List<TransitLeg> legs;
   final bool isMock;
+  final bool isPartial;
+  final String? partialMessage;
+  final int? remainingDistanceM;
+  final bool isNextService;
+  final String? nextServiceMessage;
 
   const TransitPlanOption({
     required this.preference,
@@ -255,6 +270,11 @@ class TransitPlanOption {
     this.modes = const [],
     this.legs = const [],
     this.isMock = false,
+    this.isPartial = false,
+    this.partialMessage,
+    this.remainingDistanceM,
+    this.isNextService = false,
+    this.nextServiceMessage,
   });
 
   /// Copy with a new summary, total time or legs; every other field is kept.
@@ -278,6 +298,52 @@ class TransitPlanOption {
       modes: modes,
       legs: legs ?? this.legs,
       isMock: isMock,
+      isPartial: isPartial,
+      partialMessage: partialMessage,
+      remainingDistanceM: remainingDistanceM,
+      isNextService: isNextService,
+      nextServiceMessage: nextServiceMessage,
+    );
+  }
+
+  factory TransitPlanOption.walking({
+    required String from,
+    required String to,
+    required List<LatLng> path,
+    required int distanceMeters,
+  }) {
+    final minutes = (distanceMeters / 1.2 / 60)
+        .round()
+        .clamp(1, 0x7fffffff)
+        .toInt();
+    return TransitPlanOption(
+      preference: 'walk',
+      title: 'Walking route',
+      summary: 'Walk from $from to $to (time estimated)',
+      etaMinutes: minutes,
+      fare: 0,
+      fareMax: 0,
+      fareDiscounted: 0,
+      fareDiscountedMax: 0,
+      fareEstimated: false,
+      fareSource: 'Walking: no fare.',
+      transfers: 0,
+      legs: [
+        TransitLeg(
+          type: 'walk',
+          from: from,
+          to: to,
+          minutes: minutes,
+          meters: distanceMeters,
+          km: distanceMeters / 1000,
+          fare: 0,
+          fareMax: 0,
+          fareDiscounted: 0,
+          fareDiscountedMax: 0,
+          fareEstimated: false,
+          path: path,
+        ),
+      ],
     );
   }
 
@@ -377,6 +443,11 @@ class TransitPlanOption {
       modes: parsedModes,
       legs: parsedLegs,
       isMock: false,
+      isPartial: json['is_partial'] as bool? ?? false,
+      partialMessage: json['partial_message'] as String?,
+      remainingDistanceM: (json['remaining_distance_m'] as num?)?.toInt(),
+      isNextService: json['is_next_service'] as bool? ?? false,
+      nextServiceMessage: json['next_service_message'] as String?,
     );
   }
 
@@ -394,6 +465,11 @@ class TransitPlanOption {
     'transfers': transfers,
     'modes': modes,
     'legs': legs.map((leg) => leg.toJson()).toList(),
+    'is_partial': isPartial,
+    'partial_message': partialMessage,
+    'remaining_distance_m': remainingDistanceM,
+    'is_next_service': isNextService,
+    'next_service_message': nextServiceMessage,
   };
 
   /// Converts a legacy RouteOption to TransitPlanOption fallback
@@ -420,7 +496,8 @@ class TransitPlanOption {
       fareDiscounted: mock.fareDiscounted,
       fareDiscountedMax: mock.fareDiscountedMax,
       fareEstimated: true,
-      fareSource: 'Rough distance-based estimate (offline); verify before travel.',
+      fareSource:
+          'Rough distance-based estimate (offline); verify before travel.',
       transfers: mock.transfers,
       modes: [mock.modeLabel],
       legs: [
@@ -448,17 +525,36 @@ class TransitPlanResult {
   final List<TransitPlanOption> options;
   final String? reason;
   final String? message;
+  final TransitPlanFailure? failure;
 
-  const TransitPlanResult({this.options = const [], this.reason, this.message});
+  const TransitPlanResult({
+    this.options = const [],
+    this.reason,
+    this.message,
+    this.failure,
+  });
 
   bool get isOutsideServiceArea => reason == outsideServiceAreaReason;
-  bool get isServerError => reason == serverErrorReason;
+  bool get isConnectivityFailure => failure == TransitPlanFailure.connectivity;
+  bool get isServerError =>
+      failure == TransitPlanFailure.server || reason == serverErrorReason;
+  TransitPlanOutcome get outcome {
+    if (isConnectivityFailure) return TransitPlanOutcome.offline;
+    if (failure != null || isServerError) return TransitPlanOutcome.error;
+    if (isOutsideServiceArea) return TransitPlanOutcome.outsideServiceArea;
+    return options.isEmpty
+        ? TransitPlanOutcome.noRoute
+        : TransitPlanOutcome.routes;
+  }
 }
 
 /// Service that coordinates with the backend transit planner API,
 /// falling back to local mocked calculations if the server is unreachable.
 class TransitPlannerService {
   TransitPlannerService._();
+
+  @visibleForTesting
+  static http.Client? clientOverride;
 
   /// Resolves the API base URL based on runtime platform
   static String get effectiveBaseUrl {
@@ -480,9 +576,8 @@ class TransitPlannerService {
   /// Calls the transit planner API using a JSON body so coordinates are not
   /// placed in request URLs or routine access logs.
   ///
-  /// Returns a list of real options on success, or `null` if the API is offline
-  /// or unreachable. An empty list means the server answered with no routes
-  /// (including trips outside Manila); use [planTransitResult] to tell why.
+  /// Returns real options on success, an empty list when no route is available,
+  /// or `null` when the API cannot be reached or returns an error.
   static Future<List<TransitPlanOption>?> planTransit({
     required LatLng origin,
     required LatLng destination,
@@ -499,15 +594,17 @@ class TransitPlannerService {
       avoidModes: avoidModes,
       timeout: timeout,
     );
-    if (result == null || result.isServerError) return null;
+    if (result.outcome == TransitPlanOutcome.offline ||
+        result.outcome == TransitPlanOutcome.error) {
+      return null;
+    }
     return result.options;
   }
 
   /// Like [planTransit], but also reports the server's reason when it returns
-  /// no options (for example [outsideServiceAreaReason], or [serverErrorReason]
-  /// when the server answered with an HTTP error). Returns `null` only when the
-  /// API is offline or unreachable.
-  static Future<TransitPlanResult?> planTransitResult({
+  /// no options (for example [outsideServiceAreaReason]) and failures such as
+  /// connectivity, HTTP, configuration, or malformed-response errors.
+  static Future<TransitPlanResult> planTransitResult({
     required LatLng origin,
     required LatLng destination,
     PassengerType passengerType = PassengerType.general,
@@ -515,48 +612,112 @@ class TransitPlannerService {
     Set<String> avoidModes = const {},
     Duration timeout = const Duration(seconds: 40),
   }) async {
+    final String baseUrl;
     try {
-      final baseUrl = effectiveBaseUrl;
-      if (baseUrl.isEmpty) return null;
-      final uri = Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/plan');
-      final request = <String, dynamic>{
-        'from': '${origin.latitude},${origin.longitude}',
-        'to': '${destination.latitude},${destination.longitude}',
-        'passenger': passengerType.apiValue,
-        if (departureTime != null) 'when': departureTime.toIso8601String(),
-        if (avoidModes.isNotEmpty) 'avoid': avoidModes.join(','),
-      };
-      final response = await http
-          .post(
+      baseUrl = effectiveBaseUrl;
+    } on StateError catch (error) {
+      debugPrint('Transit planner configuration error: $error');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.configuration,
+        message: 'The route planner is not configured correctly.',
+      );
+    }
+    if (baseUrl.isEmpty) {
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.configuration,
+        message: 'The route planner API URL is not configured.',
+      );
+    }
+
+    final Uri uri;
+    try {
+      uri = Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/plan');
+    } on FormatException catch (error) {
+      debugPrint('Transit planner URL is invalid: $error');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.configuration,
+        message: 'The route planner URL is invalid.',
+      );
+    }
+
+    final request = <String, dynamic>{
+      'from': '${origin.latitude},${origin.longitude}',
+      'to': '${destination.latitude},${destination.longitude}',
+      'passenger': passengerType.apiValue,
+      if (departureTime != null) 'when': departureTime.toIso8601String(),
+      if (avoidModes.isNotEmpty) 'avoid': avoidModes.join(','),
+    };
+
+    final http.Response response;
+    try {
+      final requestFuture =
+          clientOverride?.post(
             uri,
             headers: const {'Content-Type': 'application/json'},
             body: json.encode(request),
-          )
-          .timeout(timeout);
-      if (response.statusCode != 200) {
-        debugPrint('Transit planner API returned HTTP ${response.statusCode}');
-        return const TransitPlanResult(
-          reason: serverErrorReason,
-          message: 'The route planner ran into a problem. Please try again.',
-        );
-      }
+          ) ??
+          http.post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode(request),
+          );
+      response = await requestFuture.timeout(timeout);
+    } on http.ClientException catch (error) {
+      debugPrint('Transit planner connection failed: $error');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.connectivity,
+        message: 'The route planner could not be reached. Showing offline estimates.',
+      );
+    } on TimeoutException {
+      debugPrint('Transit planner request timed out.');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.connectivity,
+        message: 'The route planner took too long to respond. Showing offline estimates.',
+      );
+    }
 
-      final dynamic decoded = json.decode(utf8.decode(response.bodyBytes));
-      final List rawOptions;
-      String? reason;
-      String? message;
-      if (decoded is List) {
-        rawOptions = decoded;
-      } else if (decoded is Map<String, dynamic> &&
-          decoded['options'] is List) {
-        rawOptions = decoded['options'] as List;
-        reason = decoded['reason'] as String?;
-        message = decoded['message'] as String?;
-      } else {
-        debugPrint('Transit planner API returned an invalid response shape');
-        return null;
-      }
+    if (response.statusCode != 200) {
+      debugPrint('Transit planner API returned HTTP ${response.statusCode}');
+      return const TransitPlanResult(
+        reason: serverErrorReason,
+        failure: TransitPlanFailure.server,
+        message: 'The route planner returned an error. Please try again.',
+      );
+    }
 
+    final dynamic decoded;
+    try {
+      decoded = json.decode(utf8.decode(response.bodyBytes));
+    } on FormatException catch (error) {
+      debugPrint('Transit planner returned invalid JSON: $error');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.invalidResponse,
+        message: 'The route planner returned an unreadable response.',
+      );
+    }
+
+    final List rawOptions;
+    String? reason;
+    String? message;
+    if (decoded is List) {
+      rawOptions = decoded;
+    } else if (decoded is Map<String, dynamic> &&
+        decoded['options'] is List &&
+        (decoded['status'] == null || decoded['status'] == 'ok')) {
+      rawOptions = decoded['options'] as List;
+      reason = decoded['reason'] is String ? decoded['reason'] as String : null;
+      message = decoded['message'] is String
+          ? decoded['message'] as String
+          : null;
+    } else {
+      debugPrint('Transit planner API returned an invalid response shape');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.invalidResponse,
+        message: 'The route planner returned an unexpected response.',
+      );
+    }
+
+    try {
       return TransitPlanResult(
         options: rawOptions
             .map(
@@ -567,11 +728,12 @@ class TransitPlannerService {
         reason: reason,
         message: message,
       );
-    } catch (error) {
-      debugPrint(
-        'Transit planner API unavailable (${error.runtimeType}); using fallback routes.',
+    } on TypeError catch (error) {
+      debugPrint('Transit planner API response could not be parsed: $error');
+      return const TransitPlanResult(
+        failure: TransitPlanFailure.invalidResponse,
+        message: 'The route planner returned an unexpected response.',
       );
-      return null;
     }
   }
 

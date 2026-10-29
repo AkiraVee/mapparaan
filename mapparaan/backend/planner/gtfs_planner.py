@@ -33,6 +33,8 @@ WALK_DETOUR = 1.3             # straight-line -> street distance
 TRANSFER_WALK_M = 300         # max walk between two stops when transferring
 ACCESS_RADII_M = (600, 1000, 1500)   # walk from origin/dest to first stop
 WALK_ONLY_MAX_M = 1200        # offer a walk-only option below this distance
+PARTIAL_PROGRESS_MIN_M = 100  # avoid partial transit legs that barely advance
+NEXT_SERVICE_MAX_WAIT_S = 2 * 60 * 60
 ROAD_DETOUR = 1.3             # straight-line stop distance -> road distance (fares)
 MIN_WAIT_ROAD_S = 300         # feed headways for jeep/bus are ~1 min (synthetic)
 MIN_WAIT_RAIL_S = 120
@@ -370,46 +372,66 @@ class Planner:
         }
 
     # ── service filtering ────────────────────────────────────────────────────
-    def trip_wait_s(self, trip, when):
-        """Estimated wait (s) if the trip can be boarded at `when`, else None."""
+    def trip_wait_s(self, trip, when, max_wait_s=None):
+        """Estimated wait (s) for an active window, or its next window if allowed."""
         when = to_manila(when)
         cal = self.calendar.get(trip["service_id"])
-        service_date = when.strftime("%Y%m%d")
-        exception = self.calendar_exceptions.get(trip["service_id"], {}).get(service_date)
-        if exception == "2":
-            return None
-        if exception == "1":
-            service_active = True
-        elif cal:
-            if service_date < cal["start_date"] or service_date > cal["end_date"]:
-                return None
-            day = ["monday", "tuesday", "wednesday", "thursday", "friday",
-                   "saturday", "sunday"][when.weekday()]
-            service_active = cal[day] == "1"
-        else:
-            # Without a calendar, do not invent a rail schedule.
-            service_active = trip["mode"] not in RAIL_MODES
-        if not service_active:
-            return None
+        local_secs = when.hour * 3600 + when.minute * 60 + when.second
+        candidates = [(when.date(), local_secs)]
+        if trip["freq"] and any(end > 86400 for _, end, _ in trip["freq"]):
+            previous_date = when.date() - datetime.timedelta(days=1)
+            candidates.append((previous_date, local_secs + 86400))
 
-        secs = when.hour * 3600 + when.minute * 60 + when.second
-        headway = None
-        window_end = None
-        for start, end, hw in trip["freq"]:
-            if start <= secs < end:
-                headway = hw
-                window_end = end
-                break
-        if trip["freq"] and headway is None:
-            return None
-        if not trip["freq"] and trip["mode"] in RAIL_MODES:
-            return None
+        for service_day, service_secs in candidates:
+            service_date = service_day.strftime("%Y%m%d")
+            exception = self.calendar_exceptions.get(trip["service_id"], {}).get(service_date)
+            if exception == "2":
+                continue
+            if exception == "1":
+                service_active = True
+            elif cal:
+                if service_date < cal["start_date"] or service_date > cal["end_date"]:
+                    continue
+                day = ["monday", "tuesday", "wednesday", "thursday", "friday",
+                       "saturday", "sunday"][service_day.weekday()]
+                service_active = cal[day] == "1"
+            else:
+                # Without a calendar, do not invent a rail schedule.
+                service_active = trip["mode"] not in RAIL_MODES
+            if not service_active:
+                continue
 
-        floor = MIN_WAIT_RAIL_S if trip["mode"] in RAIL_MODES else MIN_WAIT_ROAD_S
-        wait = max(headway / 2 if headway else floor, floor)
-        if window_end is not None and secs + wait >= window_end:
-            return None
-        return wait
+            headway = None
+            window_end = None
+            future_start = None
+            floor = MIN_WAIT_RAIL_S if trip["mode"] in RAIL_MODES else MIN_WAIT_ROAD_S
+            for start, end, hw in trip["freq"]:
+                if start <= service_secs < end:
+                    headway = hw
+                    window_end = end
+                    break
+                if max_wait_s is not None and service_secs < start:
+                    if future_start is None or start < future_start[0]:
+                        future_start = (start, end, hw)
+            if trip["freq"] and headway is None:
+                if future_start is None:
+                    continue
+                start, window_end, headway = future_start
+                estimated_boarding_wait = max(headway / 2, floor)
+                wait = start - service_secs + estimated_boarding_wait
+                if wait > max_wait_s:
+                    continue
+                if start + estimated_boarding_wait >= window_end:
+                    continue
+                return wait
+            if not trip["freq"] and trip["mode"] in RAIL_MODES:
+                continue
+
+            wait = max(headway / 2 if headway else floor, floor)
+            if window_end is not None and service_secs + wait >= window_end:
+                continue
+            return wait
+        return None
 
     # ── search ───────────────────────────────────────────────────────────────
     def _search(self, origin, dest, pref, when, avoid_modes=None):
@@ -440,7 +462,7 @@ class Planner:
 
         start_access = access(origin)
         end_access = dict(access(dest))
-        if not start_access or not end_access:
+        if not start_access:
             return None
 
         # Node numbering
@@ -454,7 +476,7 @@ class Planner:
         START, END = -2, -1
         labels, node_labels, heap = [], defaultdict(list), []
 
-        def relax(node, cost, elapsed, previous, wait_s=None):
+        def relax(node, cost, elapsed, previous, wait_s=None, next_service=False):
             current = node_labels[node]
             if any(
                 labels[index]["active"]
@@ -474,6 +496,7 @@ class Planner:
                 "elapsed": elapsed,
                 "previous": previous,
                 "wait_s": wait_s,
+                "next_service": next_service,
                 "active": True,
             })
             current.append(index)
@@ -486,10 +509,16 @@ class Planner:
         def board_from(stop, label_index):
             label = labels[label_index]
             for ti, pos in boardings.get(stop, ()):
-                wait_s = self.trip_wait_s(
-                    self.trips[ti],
-                    when + datetime.timedelta(seconds=label["elapsed"]),
-                )
+                board_time = when + datetime.timedelta(seconds=label["elapsed"])
+                wait_s = self.trip_wait_s(self.trips[ti], board_time)
+                next_service = False
+                if wait_s is None:
+                    wait_s = self.trip_wait_s(
+                        self.trips[ti],
+                        board_time,
+                        max_wait_s=NEXT_SERVICE_MAX_WAIT_S,
+                    )
+                    next_service = wait_s is not None
                 if wait_s is None:
                     continue
                 board_fare = self._search_cost(self.trips[ti]["mode"])[0]
@@ -497,9 +526,13 @@ class Planner:
                       label["cost"] + wait_s + transfer_pen + peso_w * board_fare,
                       label["elapsed"] + wait_s,
                       label_index,
-                      wait_s=wait_s)
+                      wait_s=wait_s,
+                      next_service=next_service)
 
         end_label = None
+        partial_label = None
+        partial_remaining_m = None
+        origin_to_dest_m = hav_m(origin[0], origin[1], dest[0], dest[1])
         while heap:
             _, label_index = heapq.heappop(heap)
             label = labels[label_index]
@@ -512,6 +545,27 @@ class Planner:
             if node >= wb:  # walked to a stop: must board
                 board_from(node - wb, label_index)
             elif node < ns:  # alighted at a stop
+                if end_label is None:
+                    stop_distance = hav_m(
+                        self.stop_lat[node],
+                        self.stop_lon[node],
+                        dest[0],
+                        dest[1],
+                    )
+                    if stop_distance + PARTIAL_PROGRESS_MIN_M < origin_to_dest_m:
+                        candidate = (
+                            stop_distance,
+                            elapsed,
+                            label_index,
+                        )
+                        current_best = (
+                            partial_remaining_m,
+                            labels[partial_label]["elapsed"],
+                            partial_label,
+                        ) if partial_label is not None else None
+                        if current_best is None or candidate < current_best:
+                            partial_label = label_index
+                            partial_remaining_m = stop_distance
                 if node in end_access:
                     walk_s = self.walk_secs(end_access[node])
                     relax(
@@ -550,11 +604,12 @@ class Planner:
                         label_index,
                     )
 
-        if end_label is None:
+        terminal_label = end_label if end_label is not None else partial_label
+        if terminal_label is None:
             return None
 
         path_labels = []
-        current = end_label
+        current = terminal_label
         while current is not None:
             path_labels.append(current)
             current = labels[current]["previous"]
@@ -565,7 +620,21 @@ class Planner:
             for index in path_labels
             if labels[index]["wait_s"] is not None
         }
-        return self._build_option(path, origin, dest, ridx_trip, ridx_pos, waits, wb)
+        legs = self._build_option(
+            path,
+            origin,
+            dest,
+            ridx_trip,
+            ridx_pos,
+            waits,
+            wb,
+        )
+        is_next_service = any(labels[index]["next_service"] for index in path_labels)
+        return (
+            legs,
+            None if end_label is not None else partial_remaining_m,
+            is_next_service,
+        )
 
     def _build_option(self, path, origin, dest, ridx_trip, ridx_pos, waits, wb):
         ns = self.n_stops
@@ -660,9 +729,16 @@ class Planner:
         titles = {"fastest": "Fastest route", "cheapest": "Cheapest route",
                   "fewest_transfers": "Fewest transfers"}
         for pref in ("fastest", "cheapest", "fewest_transfers"):
-            legs = self._search(origin, dest, pref, when, avoid_modes=avoid_modes)
-            if not legs:
+            search_result = self._search(
+                origin,
+                dest,
+                pref,
+                when,
+                avoid_modes=avoid_modes,
+            )
+            if not search_result:
                 continue
+            legs, remaining_distance_m, is_next_service = search_result
             # Keep one result for each preference even when the same physical
             # route wins multiple cost functions. The client uses the
             # preference label to let commuters switch between route goals.
@@ -671,6 +747,30 @@ class Planner:
                 continue
             seen.add(key)
             opt = self._summarise(pref, legs)
+            if is_next_service:
+                opt["is_next_service"] = True
+                opt["next_service_message"] = (
+                    "No transit is scheduled at the selected time. This route "
+                    "uses the next GTFS service window within 2 hours; waiting "
+                    "time is estimated from frequency data."
+                )
+                opt["title"] = f"Next service: {titles[pref]}"
+            if remaining_distance_m is not None:
+                end_stop = next(
+                    (leg["to"] for leg in reversed(legs) if leg["type"] == "ride"),
+                    "the last served stop",
+                )
+                opt["is_partial"] = True
+                opt["remaining_distance_m"] = round(remaining_distance_m)
+                opt["partial_message"] = (
+                    f"This verified transit segment ends at {end_stop}. "
+                    f"The destination is about {remaining_distance_m / 1000:.1f} km "
+                    "away in a straight line; no complete transit itinerary was found."
+                )
+                label = f"Next service: {titles[pref]}" if is_next_service else titles[pref]
+                opt["title"] = f"{label} (partial)"
+                options.append(opt)
+                continue
             # A paid ride that is not faster than the free walk is never worth offering.
             if walk_eta is not None and opt["eta_minutes"] >= walk_eta:
                 continue

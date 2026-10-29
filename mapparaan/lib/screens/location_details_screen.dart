@@ -74,6 +74,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
   /// Set when the server answered but found no transit route.
   bool _noRouteFound = false;
+  String? _noRouteMessage;
 
   /// Set when the server answered with an error (it is up, but could not plan).
   String? _serverErrorMessage;
@@ -172,6 +173,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _serviceAreaMessage = null;
       _serverErrorMessage = null;
       _noRouteFound = false;
+      _noRouteMessage = null;
     });
     _routeOrigin = origin;
 
@@ -185,33 +187,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
     if (!mounted || requestId != _routeRequestId) return;
 
-    // The server answered, but with no routes: say why instead of showing
-    // sample routes. (Sample routes are only for when the server is offline.)
-    // A planner/server error should not blank the screen. Continue through the
-    // existing cached/foot-route fallback so users still get directions while
-    // the backend is unavailable. Only genuine no-route/service-area answers
-    // should stop here with an empty result list.
-    if (result?.isServerError == true) {
-      _serverErrorMessage = result?.message ?? 'The route planner is temporarily unavailable. Showing an estimated route.';
-    }
-
-    // Some API versions return an empty options list without a reason. Treat
-    // that as an unavailable/insufficient planner response and use the same
-    // fallback route as an API error. Only an explicit service-area response
-    // should intentionally leave the result list empty.
-    if (result != null &&
-        result.options.isEmpty &&
-        !result.isServerError &&
-        result.isOutsideServiceArea) {
+    final outcome = result.outcome;
+    if (outcome == TransitPlanOutcome.error) {
       setState(() {
         _isOfflineFallback = false;
-        if (result.isOutsideServiceArea) {
-          _serviceAreaMessage =
-              result.message ??
-              'Mapparaan currently covers the City of Manila only.';
-        } else {
-          _noRouteFound = true;
-        }
+        _serverErrorMessage =
+            result.message ?? 'The route planner returned an error.';
         _routeOptions = const [];
         _selectedOption = null;
         _routePoints = [];
@@ -220,15 +201,61 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       return;
     }
 
-    if (result != null &&
-        result.options.isEmpty &&
-        !result.isServerError &&
-        !result.isOutsideServiceArea) {
-      _serverErrorMessage = 'The transit planner returned no route data. Showing an estimated route.';
+    if (outcome == TransitPlanOutcome.outsideServiceArea) {
+      setState(() {
+        _isOfflineFallback = false;
+        _serviceAreaMessage =
+            result.message ??
+            'Mapparaan currently covers the City of Manila only.';
+        _routeOptions = const [];
+        _selectedOption = null;
+        _routePoints = [];
+        _isLoadingRoute = false;
+      });
+      return;
     }
 
-    final realPlans = result?.options;
-    if (realPlans != null && realPlans.isNotEmpty) {
+    if (outcome == TransitPlanOutcome.noRoute) {
+      final walk = await WalkRouteService.fetchWalkRoute(origin, destination);
+      if (!mounted || requestId != _routeRequestId) return;
+
+      final walkingOption =
+          walk != null && walk.points.length >= 2 && walk.distanceMeters > 0
+          ? TransitPlanOption.walking(
+              from: widget.origin,
+              to: widget.resolvedPlaceName,
+              path: walk.points,
+              distanceMeters: walk.distanceMeters.round(),
+            )
+          : null;
+      final options = walkingOption == null
+          ? <TransitPlanOption>[]
+          : [walkingOption];
+      final points = walkingOption?.allPoints ?? const <LatLng>[];
+      setState(() {
+        _isOfflineFallback = false;
+        _noRouteFound = true;
+        _noRouteMessage = walkingOption == null
+            ? 'No scheduled transit route is available for this departure, and no verified walking route could be found.'
+            : 'No scheduled transit route is available for this departure. A verified street-walking route is shown; walking time is an estimate.';
+        _routeOptions = options;
+        _selectedOption = walkingOption;
+        _routePoints = points;
+        _isLoadingRoute = false;
+      });
+      if (walkingOption != null) {
+        _fitCameraToBounds(points);
+        await LastRouteService.save(
+          origin: origin,
+          destination: destination,
+          option: walkingOption,
+        );
+      }
+      return;
+    }
+
+    final realPlans = result.options;
+    if (realPlans.isNotEmpty) {
       final filteredPlans = _applyLocalRoutePreferences(realPlans);
       // Never pick the walk-only option as "Fastest" (or any tab). Walk-only
       // trips have no transit option, so fall back to the first option.
@@ -244,6 +271,29 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
       setState(() {
         _isOfflineFallback = false;
+        final transitOptions = filteredPlans
+            .where((option) => !option.isWalkOption)
+            .toList();
+        final partialOptions = transitOptions
+            .where((option) => option.isPartial)
+            .toList();
+        final allTransitPartial =
+            transitOptions.isNotEmpty &&
+            partialOptions.length == transitOptions.length;
+        final allTransitNextService =
+            transitOptions.isNotEmpty &&
+            transitOptions.every((option) => option.isNextService);
+        _noRouteFound = allTransitPartial || allTransitNextService;
+        _noRouteMessage = allTransitNextService
+            ? [
+                transitOptions.first.nextServiceMessage ??
+                    'Showing transit routes using the next scheduled service.',
+                if (allTransitPartial && partialOptions.isNotEmpty)
+                  partialOptions.first.partialMessage ?? 'The transit route is partial and does not reach the destination.',
+              ].join(' ')
+            : allTransitPartial
+            ? partialOptions.first.partialMessage ?? 'Only partial transit directions are available; no complete itinerary was found.'
+            : null;
         _routeOptions = filteredPlans;
         _selectedOption = selected;
         _routePoints = points;
@@ -969,6 +1019,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 serviceAreaMessage: _serviceAreaMessage,
                 serverErrorMessage: _serverErrorMessage,
                 noRouteFound: _noRouteFound,
+                noRouteMessage: _noRouteMessage,
                 selectedPreference: _selectedPreference,
                 passengerType: _passengerType,
                 departureTime: _departureTime,
@@ -1007,6 +1058,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final String? serviceAreaMessage;
   final String? serverErrorMessage;
   final bool noRouteFound;
+  final String? noRouteMessage;
   final RoutePreference selectedPreference;
   final PassengerType passengerType;
   final DateTime? departureTime;
@@ -1035,6 +1087,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.serviceAreaMessage,
     required this.serverErrorMessage,
     required this.noRouteFound,
+    required this.noRouteMessage,
     required this.selectedPreference,
     required this.passengerType,
     required this.departureTime,
@@ -1766,9 +1819,9 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                         text: widget.serverErrorMessage!,
                       ),
                     if (widget.noRouteFound)
-                      const _NoticeBanner(
+                      _NoticeBanner(
                         icon: Icons.alt_route,
-                        text: 'No transit route found for this trip. Try another departure time, or allow more modes.',
+                        text: widget.noRouteMessage ?? 'No transit route found for this trip. Try another departure time, or allow more modes.',
                       ),
 
                     Align(
@@ -2033,7 +2086,7 @@ class _RouteResultCard extends StatelessWidget {
           button: true,
           label:
               '${route.title}, estimated ${route.etaMinutes} minutes, '
-              '${route.fareEstimated ? 'estimated ' : ''}fare ${formatPesoPlain(effectiveFare)} pesos'
+              '${route.isWalkOption ? 'no fare' : '${route.fareEstimated ? 'estimated ' : ''}fare ${formatPesoPlain(effectiveFare)} pesos'}'
               '${hasFareRange ? ', up to ${formatPesoPlain(fareUpTo)} pesos on a modern or air-conditioned vehicle' : ''}',
           child: InkWell(
             onTap: onTap,
@@ -2121,13 +2174,26 @@ class _RouteResultCard extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
+          route.isWalkOption
+              ? '${route.etaMinutes} min • walking time estimated'
+              : '${route.etaMinutes} min • ${route.transfers} transfer${route.transfers == 1 ? '' : 's'}',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: colorScheme.onSurfaceVariant,
           ),
         ),
+        if (route.isPartial && route.partialMessage != null) ...[
+          const SizedBox(height: 5),
+          Text(
+            route.partialMessage!,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFFBF360C),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         if (route.legs.isNotEmpty) ...[
           const SizedBox(height: 6),
           Wrap(
@@ -2192,6 +2258,9 @@ class _RouteResultCard extends StatelessWidget {
                 final distance = leg.meters == null
                     ? ''
                     : ' • ${(leg.meters! / 1000).toStringAsFixed(1)} km';
+                final wait = leg.waitMinutes == null || leg.waitMinutes! <= 0
+                    ? ''
+                    : ' • wait ~${leg.waitMinutes} min';
                 final detail = leg.isWalk
                     ? 'Walk from ${leg.from} to ${leg.to}'
                     : 'Take ${leg.modeLabel ?? 'transit'}'
@@ -2207,7 +2276,7 @@ class _RouteResultCard extends StatelessWidget {
                   ),
                   title: Text(detail, style: const TextStyle(fontSize: 12)),
                   subtitle: Text(
-                    '${leg.minutes} min$distance${leg.stops == null ? '' : ' • ${leg.stops} stops'}',
+                    '${leg.minutes} min$wait$distance${leg.stops == null ? '' : ' • ${leg.stops} stops'}',
                     style: const TextStyle(fontSize: 11),
                   ),
                 );

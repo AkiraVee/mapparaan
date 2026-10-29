@@ -242,6 +242,31 @@ class FareTests(unittest.TestCase):
         self.assertLess(opt["fare_discounted"], opt["fare"])
         self.assertIn("estimated", opt["fare_source"].lower())
 
+    def test_partial_route_uses_a_real_ride_and_stops_before_destination(self):
+        origin = (14.600, 120.980)
+        destination = (14.680, 120.980)
+        options = self.p.plan(
+            origin,
+            destination,
+            when=WHEN,
+            avoid_modes={"bus", "lrt1", "lrt2"},
+        )
+
+        partial = [option for option in options if option.get("is_partial")]
+        self.assertTrue(partial, "a reachable transit segment should be returned")
+        option = partial[0]
+        self.assertGreater(option["remaining_distance_m"], 1500)
+        self.assertIn("straight line", option["partial_message"])
+        self.assertTrue(any(leg["type"] == "ride" for leg in option["legs"]))
+        self.assertTrue(
+            all(
+                leg["route_id"] == "PUJ1"
+                for leg in option["legs"]
+                if leg["type"] == "ride"
+            )
+        )
+        self.assertEqual(option["legs"][-1]["type"], "ride")
+
     def test_plan_rail_option_is_exact(self):
         origin, dest = (14.660, 121.000), (14.660, 121.030)
         options = self.p.plan(origin, dest, when=WHEN)

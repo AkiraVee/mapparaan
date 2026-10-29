@@ -31,6 +31,21 @@ estimate based on the feed's service days and headway windows; it does not
 model exact vehicle departures, live closures, or real-time alerts. Verify
 current operating hours before traveling.
 
+If the API responds successfully but no supported service is available for the
+selected time, the app reports that no transit route was found rather than
+showing an offline warning or inventing a transit route. If a scheduled transit
+segment is available but does not reach the destination, the API can return a
+labeled partial route using its real stops and fare data; the remaining
+distance is a straight-line estimate, not walking directions. For an empty
+transit result, the app can show a street-routed walking option when the
+pedestrian router returns a verified path, with walking time marked estimated.
+When the estimated wait for the next GTFS service is within two hours, the
+planner can also show that transit option with the wait clearly identified.
+A previous service day is considered after midnight only when the GTFS
+frequency window explicitly extends beyond 24:00. The current feed has no such
+after-midnight frequency windows, so it cannot support verified transit
+recommendations after midnight.
+
 The app does not track public-transport vehicles, provide live vehicle ETAs,
 or account for live traffic. Fares are estimates; the feed does not distinguish
 traditional and modern jeepneys or ordinary and air-conditioned buses, so some

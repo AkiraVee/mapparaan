@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mapparaan/services/ai_assistant_service.dart';
 import 'package:mapparaan/services/commuter_preference_service.dart';
@@ -7,6 +11,28 @@ import 'package:mapparaan/services/route_planner_service.dart';
 import 'package:mapparaan/services/transit_planner_service.dart';
 
 void main() {
+  void useMockClient(http.Client client) {
+    TransitPlannerService.clientOverride?.close();
+    TransitPlannerService.clientOverride = client;
+    addTearDown(() {
+      if (identical(TransitPlannerService.clientOverride, client)) {
+        TransitPlannerService.clientOverride = null;
+        client.close();
+      }
+    });
+  }
+
+  Future<TransitPlanResult> requestPlan({
+    Duration timeout = const Duration(seconds: 1),
+  }) {
+    return TransitPlannerService.planTransitResult(
+      origin: const LatLng(14.6042, 120.9822),
+      destination: const LatLng(14.5636, 120.9950),
+      departureTime: DateTime(2026, 10, 30, 23),
+      timeout: timeout,
+    );
+  }
+
   group('PassengerTypeExt', () {
     test('apiValue matches backend expected identifiers', () {
       expect(PassengerType.general.apiValue, 'general');
@@ -101,6 +127,63 @@ void main() {
       expect(option.effectiveFare(PassengerType.senior), 28);
       expect(option.effectiveFare(PassengerType.pwd), 28);
     });
+
+    test('preserves partial-route metadata from the planner', () {
+      final option = TransitPlanOption.fromJson({
+        'preference': 'fastest',
+        'title': 'Fastest route (partial)',
+        'summary': 'Jeepney PUJ2137 (20 min)',
+        'eta_minutes': 24,
+        'fare': 15,
+        'fare_discounted': 12,
+        'transfers': 0,
+        'modes': ['jeepney'],
+        'is_partial': true,
+        'remaining_distance_m': 2400,
+        'is_next_service': true,
+        'next_service_message': 'No transit is scheduled at the selected time. This route uses the next GTFS service window within 2 hours.',
+        'partial_message': 'This verified transit segment ends at Stop A. The destination is about 2.4 km away in a straight line.',
+        'legs': [
+          {
+            'type': 'ride',
+            'mode': 'jeepney',
+            'route_id': 'PUJ2137',
+            'from': 'Stop B',
+            'to': 'Stop A',
+            'minutes': 20,
+            'fare': 15,
+            'path': [
+              [14.60, 120.98],
+              [14.62, 120.98],
+            ],
+          },
+        ],
+      });
+
+      expect(option.isPartial, isTrue);
+      expect(option.remainingDistanceM, 2400);
+      expect(option.isNextService, isTrue);
+      expect(option.nextServiceMessage, contains('within 2 hours'));
+      expect(option.partialMessage, contains('straight line'));
+      expect(option.legs.single.routeId, 'PUJ2137');
+    });
+  });
+
+  test('walking-only alternatives preserve verified path and zero fare', () {
+    final path = [const LatLng(14.60, 120.98), const LatLng(14.61, 120.99)];
+    final option = TransitPlanOption.walking(
+      from: 'Origin',
+      to: 'Destination',
+      path: path,
+      distanceMeters: 1200,
+    );
+
+    expect(option.isWalkOption, isTrue);
+    expect(option.etaMinutes, 17);
+    expect(option.fare, 0);
+    expect(option.fareEstimated, isFalse);
+    expect(option.legs.single.path, path);
+    expect(option.legs.single.meters, 1200);
   });
 
   test('unknown transit modes use the selected app accent color', () {
@@ -170,7 +253,96 @@ void main() {
 
       expect(TransitPlannerService.effectiveBaseUrl, 'http://10.0.2.2:8080');
     });
+  });
 
+  group('TransitPlannerService response outcomes', () {
+    test('distinguishes an empty successful result from offline', () async {
+      useMockClient(
+        MockClient(
+          (_) async =>
+              http.Response(json.encode({'status': 'ok', 'options': []}), 200),
+        ),
+      );
+
+      final result = await requestPlan();
+
+      expect(result.outcome, TransitPlanOutcome.noRoute);
+      expect(result.isConnectivityFailure, isFalse);
+    });
+
+    test('classifies a successful outside-area response separately', () async {
+      useMockClient(
+        MockClient(
+          (_) async => http.Response(
+            json.encode({
+              'status': 'ok',
+              'reason': outsideServiceAreaReason,
+              'options': [],
+            }),
+            200,
+          ),
+        ),
+      );
+
+      final result = await requestPlan();
+
+      expect(result.outcome, TransitPlanOutcome.outsideServiceArea);
+    });
+
+    test(
+      'classifies HTTP errors as server errors, not connectivity failures',
+      () async {
+        useMockClient(
+          MockClient((_) async => http.Response('unavailable', 503)),
+        );
+
+        final result = await requestPlan();
+
+        expect(result.outcome, TransitPlanOutcome.error);
+        expect(result.isServerError, isTrue);
+        expect(result.isConnectivityFailure, isFalse);
+      },
+    );
+
+    test('classifies a network exception as offline', () async {
+      useMockClient(
+        MockClient((_) => throw http.ClientException('connection refused')),
+      );
+
+      final result = await requestPlan();
+
+      expect(result.outcome, TransitPlanOutcome.offline);
+    });
+
+    test('classifies an unexpected response body as an API error', () async {
+      useMockClient(MockClient((_) async => http.Response('{not-json', 200)));
+
+      final result = await requestPlan();
+
+      expect(result.outcome, TransitPlanOutcome.error);
+      expect(result.isConnectivityFailure, isFalse);
+    });
+
+    test(
+      'does not treat a 200 error envelope as an empty route result',
+      () async {
+        useMockClient(
+          MockClient(
+            (_) async => http.Response(
+              json.encode({'status': 'error', 'options': []}),
+              200,
+            ),
+          ),
+        );
+
+        final result = await requestPlan();
+
+        expect(result.outcome, TransitPlanOutcome.error);
+      },
+    );
+  });
+
+  group('TransitPlannerService base URL', () {
     test('keeps localhost on non-Android platforms', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);

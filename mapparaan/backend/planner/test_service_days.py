@@ -13,6 +13,7 @@ import os
 import sys
 import unittest
 from collections import defaultdict
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gtfs_planner import Planner, RAIL_MODES  # noqa: E402
@@ -70,6 +71,23 @@ class ServiceDayTests(unittest.TestCase):
                         f"{trip['mode']} should be closed at {when:%H:%M}",
                     )
 
+    def test_early_friday_trip_uses_next_real_rail_window_with_wait(self):
+        options = self.p.plan(
+            self.stop["Blumentritt LRT"],
+            self.stop["Vito Cruz LRT"],
+            when=at(4, 3, 20),
+        )
+
+        transit_options = [option for option in options if option["modes"]]
+        self.assertTrue(transit_options)
+        for option in transit_options:
+            self.assertTrue(option["is_next_service"])
+            self.assertIn("within 2 hours", option["next_service_message"])
+            self.assertIn("lrt1", option["modes"])
+            ride = next(leg for leg in option["legs"] if leg["type"] == "ride")
+            self.assertGreaterEqual(ride["wait_minutes"], 100)
+            self.assertLessEqual(ride["wait_minutes"], 120)
+
     def test_road_routes_remain_available_after_lrt_closes(self):
         when = at(1, 22, 15)
         options = self.p.plan(
@@ -84,6 +102,32 @@ class ServiceDayTests(unittest.TestCase):
             any(set(option["modes"]) & {"jeepney", "bus"} for option in options)
         )
 
+    def test_friday_2305_has_no_service_from_weekend_only_late_window(self):
+        options = self.p.plan(
+            (14.6097, 120.9894),
+            self.stop["Vito Cruz LRT"],
+            when=at(4, 23, 5),
+        )
+        self.assertEqual(options, [])
+
+    def test_saturday_2305_returns_partial_from_the_active_gtfs_jeepney(self):
+        options = self.p.plan(
+            self.stop["A F. Torres, Manila"],
+            (14.6161, 120.9500),
+            when=at(5, 23, 5),
+        )
+
+        self.assertTrue(options)
+        self.assertTrue(all(option.get("is_partial") for option in options))
+        for option in options:
+            ride_legs = [leg for leg in option["legs"] if leg["type"] == "ride"]
+            self.assertTrue(ride_legs)
+            self.assertEqual(
+                {leg["route_id"] for leg in ride_legs},
+                {"LTFRB_PUJ2137"},
+            )
+            self.assertGreater(option["remaining_distance_m"], 1500)
+
     def test_transfer_arrival_time_is_used_for_lrt_boarding(self):
         options = self.p.plan(
             (14.6097, 120.9894),
@@ -95,6 +139,55 @@ class ServiceDayTests(unittest.TestCase):
             all(not (set(option["modes"]) & RAIL_MODES) for option in options),
             "do not recommend rail when the first transfer would arrive after closing",
         )
+
+    def test_previous_service_day_can_cover_after_midnight_frequency(self):
+        service_id = "TEST_MONDAY_OVERNIGHT"
+        calendar = {
+            "service_id": service_id,
+            "monday": "1",
+            "tuesday": "0",
+            "wednesday": "0",
+            "thursday": "0",
+            "friday": "0",
+            "saturday": "0",
+            "sunday": "0",
+            "start_date": "20200101",
+            "end_date": "20351231",
+        }
+        trip = {
+            "service_id": service_id,
+            "mode": "jeepney",
+            "freq": [(23 * 3600, 26 * 3600, 600)],
+        }
+        with patch.dict(self.p.calendar, {service_id: calendar}):
+            self.assertEqual(self.p.trip_wait_s(trip, at(1, 0, 30)), 300)
+
+    def test_after_midnight_does_not_use_inactive_previous_service_day(self):
+        service_id = "TEST_TUESDAY_ONLY"
+        calendar = {
+            "service_id": service_id,
+            "monday": "0",
+            "tuesday": "1",
+            "wednesday": "0",
+            "thursday": "0",
+            "friday": "0",
+            "saturday": "0",
+            "sunday": "0",
+            "start_date": "20200101",
+            "end_date": "20351231",
+        }
+        trip = {
+            "service_id": service_id,
+            "mode": "jeepney",
+            "freq": [(23 * 3600, 26 * 3600, 600)],
+        }
+        with patch.dict(self.p.calendar, {service_id: calendar}):
+            self.assertIsNone(self.p.trip_wait_s(trip, at(1, 0, 30)))
+
+    def test_current_data_does_not_invent_service_after_midnight(self):
+        after_midnight = at(1, 0, 30)
+        for trip in self.p.trips:
+            self.assertIsNone(self.p.trip_wait_s(trip, after_midnight))
 
 
 if __name__ == "__main__":
