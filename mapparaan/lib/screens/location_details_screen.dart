@@ -416,21 +416,45 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
   Future<void> _pickDepartureTime() async {
     final now = DateTime.now();
-    final picked = await showTimePicker(
+    final today = DateUtils.dateOnly(now);
+    final selectedDate = DateUtils.dateOnly(_departureTime ?? now);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: selectedDate.isBefore(today) ? today : selectedDate,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      helpText: 'Choose travel date',
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_departureTime ?? now),
       helpText: 'Choose departure time',
     );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _departureTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        picked.hour,
-        picked.minute,
+    if (pickedTime == null || !mounted) return;
+    final departure = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+    if (departure.isBefore(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a departure time in the future.')),
       );
+      return;
+    }
+    setState(() {
+      _departureTime = departure;
     });
+    _refreshRoute();
+  }
+
+  void _leaveNow() {
+    if (_departureTime != null) {
+      setState(() => _departureTime = null);
+    }
     _refreshRoute();
   }
 
@@ -961,6 +985,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 onOptionSelected: _selectOption,
                 onReportProblem: _reportProblem,
                 onDepartureTimeSelected: _pickDepartureTime,
+                onLeaveNow: _leaveNow,
                 onAvoidModeChanged: _toggleAvoidMode,
               ),
             ],
@@ -998,6 +1023,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
   final ValueChanged<TransitPlanOption> onOptionSelected;
   final VoidCallback onReportProblem;
   final VoidCallback onDepartureTimeSelected;
+  final VoidCallback onLeaveNow;
   final void Function(String mode, bool selected) onAvoidModeChanged;
 
   const _PlaceDetailsSheet({
@@ -1025,6 +1051,7 @@ class _PlaceDetailsSheet extends StatefulWidget {
     required this.onOptionSelected,
     required this.onReportProblem,
     required this.onDepartureTimeSelected,
+    required this.onLeaveNow,
     required this.onAvoidModeChanged,
   });
 
@@ -1559,6 +1586,56 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
+                        if (widget.departureTime == null)
+                          FilledButton.icon(
+                            onPressed: widget.onLeaveNow,
+                            icon: const Icon(Icons.bolt, size: 18),
+                            label: const Text('Leave now'),
+                          )
+                        else
+                          OutlinedButton.icon(
+                            onPressed: widget.onLeaveNow,
+                            icon: const Icon(Icons.bolt, size: 18),
+                            label: const Text('Leave now'),
+                          ),
+                        if (widget.departureTime == null)
+                          OutlinedButton.icon(
+                            onPressed: widget.onDepartureTimeSelected,
+                            icon: const Icon(Icons.schedule, size: 18),
+                            label: const Text('Schedule departure'),
+                          )
+                        else
+                          FilledButton.tonalIcon(
+                            onPressed: widget.onDepartureTimeSelected,
+                            icon: const Icon(Icons.schedule, size: 18),
+                            label: const Text('Change schedule'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.departureTime == null
+                          ? 'Planning from current Manila time'
+                          : '${MaterialLocalizations.of(context).formatMediumDate(widget.departureTime!)} · '
+                                '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(widget.departureTime!))}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Based on historical static schedules, not live service alerts. Verify current hours.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
                         OutlinedButton.icon(
                           onPressed: _showBudgetCalculator,
                           icon: const Icon(Icons.calculate_outlined, size: 17),
@@ -1618,15 +1695,6 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: widget.onDepartureTimeSelected,
-                      icon: const Icon(Icons.schedule, size: 17),
-                      label: Text(
-                        widget.departureTime == null
-                            ? 'Leave now'
-                            : 'Depart at ${widget.departureTime!.hour.toString().padLeft(2, '0')}:${widget.departureTime!.minute.toString().padLeft(2, '0')}',
-                      ),
-                    ),
                     const SizedBox(height: 4),
                     Align(
                       alignment: Alignment.centerLeft,

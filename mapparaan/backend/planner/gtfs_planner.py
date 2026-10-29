@@ -4,8 +4,9 @@ Lightweight multimodal transit planner for Metro Manila, built directly on the
 patched Sakay GTFS feed (data/gtfs) and Mapparaan's fare config
 (data/reference). Standard library only.
 
-It is NOT a timetable router: the feed models jeepneys/buses as always-running
-headway services, so a trip is "board whenever one comes, ride N stops".
+It is not an exact-timetable router: the feed uses service calendars and
+headway windows, so the planner estimates whether a trip can be boarded and
+how long to wait before riding its stop sequence.
 
 Preferences
   fastest   - minimise total time
@@ -130,6 +131,13 @@ class Planner:
         self._init_fares()
 
         self.calendar = {c["service_id"]: c for c in read_csv(os.path.join(gtfs, "calendar.txt"))}
+        calendar_dates_path = os.path.join(gtfs, "calendar_dates.txt")
+        self.calendar_exceptions = defaultdict(dict)
+        if os.path.isfile(calendar_dates_path):
+            for exception in read_csv(calendar_dates_path):
+                self.calendar_exceptions[exception["service_id"]][
+                    exception["date"]
+                ] = exception["exception_type"]
         trips = read_csv(os.path.join(gtfs, "trips.txt"))
         freq = {}
         for f in read_csv(os.path.join(gtfs, "frequencies.txt")):
@@ -363,23 +371,45 @@ class Planner:
 
     # ── service filtering ────────────────────────────────────────────────────
     def trip_wait_s(self, trip, when):
-        """Average wait (s) for this trip at `when`, or None if not running."""
+        """Estimated wait (s) if the trip can be boarded at `when`, else None."""
+        when = to_manila(when)
         cal = self.calendar.get(trip["service_id"])
-        if cal:
+        service_date = when.strftime("%Y%m%d")
+        exception = self.calendar_exceptions.get(trip["service_id"], {}).get(service_date)
+        if exception == "2":
+            return None
+        if exception == "1":
+            service_active = True
+        elif cal:
+            if service_date < cal["start_date"] or service_date > cal["end_date"]:
+                return None
             day = ["monday", "tuesday", "wednesday", "thursday", "friday",
                    "saturday", "sunday"][when.weekday()]
-            if cal[day] != "1":
-                return None
-        secs = when.hour * 3600 + when.minute * 60
+            service_active = cal[day] == "1"
+        else:
+            # Without a calendar, do not invent a rail schedule.
+            service_active = trip["mode"] not in RAIL_MODES
+        if not service_active:
+            return None
+
+        secs = when.hour * 3600 + when.minute * 60 + when.second
         headway = None
+        window_end = None
         for start, end, hw in trip["freq"]:
             if start <= secs < end:
                 headway = hw
+                window_end = end
                 break
         if trip["freq"] and headway is None:
             return None
+        if not trip["freq"] and trip["mode"] in RAIL_MODES:
+            return None
+
         floor = MIN_WAIT_RAIL_S if trip["mode"] in RAIL_MODES else MIN_WAIT_ROAD_S
-        return max(headway / 2 if headway else floor, floor)
+        wait = max(headway / 2 if headway else floor, floor)
+        if window_end is not None and secs + wait >= window_end:
+            return None
+        return wait
 
     # ── search ───────────────────────────────────────────────────────────────
     def _search(self, origin, dest, pref, when, avoid_modes=None):
@@ -387,16 +417,13 @@ class Planner:
         transfer_pen, peso_w = PREFS[pref]
         ns = self.n_stops
 
-        # runnable trips + node numbering for riding states
-        waits, offset, ridx_trip, ridx_pos = {}, {}, [], []
+        # Trip availability is checked when each boarding is reached; a route may
+        # cross a service-window boundary while walking or transferring.
+        offset, ridx_trip, ridx_pos = {}, [], []
         boardings = defaultdict(list)
         for ti, t in enumerate(self.trips):
             if t["mode"].lower() in avoid_modes:
                 continue
-            w = self.trip_wait_s(t, when)
-            if w is None:
-                continue
-            waits[ti] = w
             offset[ti] = len(ridx_trip)
             for pos in range(len(t["stops"])):
                 ridx_trip.append(ti)
@@ -425,58 +452,119 @@ class Planner:
         # the whole city", and ending only after a ride guarantees a transit leg.
         wb = ns + len(ridx_trip)
         START, END = -2, -1
-        best, prev, heap = {}, {}, []
+        labels, node_labels, heap = [], defaultdict(list), []
 
-        def relax(node, cost, frm):
-            if cost < best.get(node, float("inf")):
-                best[node] = cost
-                prev[node] = frm
-                heapq.heappush(heap, (cost, node))
+        def relax(node, cost, elapsed, previous, wait_s=None):
+            current = node_labels[node]
+            if any(
+                labels[index]["active"]
+                and labels[index]["cost"] <= cost
+                and labels[index]["elapsed"] <= elapsed
+                for index in current
+            ):
+                return
+            for index in current:
+                label = labels[index]
+                if label["active"] and cost <= label["cost"] and elapsed <= label["elapsed"]:
+                    label["active"] = False
+            index = len(labels)
+            labels.append({
+                "node": node,
+                "cost": cost,
+                "elapsed": elapsed,
+                "previous": previous,
+                "wait_s": wait_s,
+                "active": True,
+            })
+            current.append(index)
+            heapq.heappush(heap, (cost, index))
 
         for s, d in start_access:
-            relax(wb + s, self.walk_secs(d) * WALK_WEIGHT, START)
+            walk_s = self.walk_secs(d)
+            relax(wb + s, walk_s * WALK_WEIGHT, walk_s, None)
 
-        def board_from(stop, cost, frm):
+        def board_from(stop, label_index):
+            label = labels[label_index]
             for ti, pos in boardings.get(stop, ()):
+                wait_s = self.trip_wait_s(
+                    self.trips[ti],
+                    when + datetime.timedelta(seconds=label["elapsed"]),
+                )
+                if wait_s is None:
+                    continue
                 board_fare = self._search_cost(self.trips[ti]["mode"])[0]
                 relax(ns + offset[ti] + pos,
-                      cost + waits[ti] + transfer_pen + peso_w * board_fare, frm)
+                      label["cost"] + wait_s + transfer_pen + peso_w * board_fare,
+                      label["elapsed"] + wait_s,
+                      label_index,
+                      wait_s=wait_s)
 
+        end_label = None
         while heap:
-            cost, node = heapq.heappop(heap)
-            if cost > best.get(node, float("inf")):
+            _, label_index = heapq.heappop(heap)
+            label = labels[label_index]
+            if not label["active"]:
                 continue
+            node, cost, elapsed = label["node"], label["cost"], label["elapsed"]
             if node == END:
+                end_label = label_index
                 break
             if node >= wb:  # walked to a stop: must board
-                board_from(node - wb, cost, node)
+                board_from(node - wb, label_index)
             elif node < ns:  # alighted at a stop
                 if node in end_access:
-                    relax(END, cost + self.walk_secs(end_access[node]) * WALK_WEIGHT, node)
+                    walk_s = self.walk_secs(end_access[node])
+                    relax(
+                        END,
+                        cost + walk_s * WALK_WEIGHT,
+                        elapsed + walk_s,
+                        label_index,
+                    )
                 for j, d in self.walk_neighbours(node):
-                    relax(wb + j, cost + self.walk_secs(d) * WALK_WEIGHT, node)
-                board_from(node, cost, node)
+                    walk_s = self.walk_secs(d)
+                    relax(
+                        wb + j,
+                        cost + walk_s * WALK_WEIGHT,
+                        elapsed + walk_s,
+                        label_index,
+                    )
+                board_from(node, label_index)
             else:  # riding
                 r = node - ns
                 ti, pos = ridx_trip[r], ridx_pos[r]
                 t = self.trips[ti]
-                came_from = prev[node]
+                previous = label["previous"]
+                came_from = labels[previous]["node"]
                 boarded_here = came_from < ns or came_from >= wb
                 if not boarded_here:  # no point getting off where we got on
-                    relax(t["stops"][pos], cost, node)  # alight
+                    relax(t["stops"][pos], cost, elapsed, label_index)  # alight
                 if pos + 1 < len(t["stops"]):
                     km = (t["cum_m"][pos + 1] - t["cum_m"][pos]) * ROAD_DETOUR / 1000
                     _, per_km, per_stop = self._search_cost(t["mode"])
                     hop_fare = per_stop if per_stop is not None else per_km * km
-                    relax(node + 1, cost + t["hops"][pos] + peso_w * hop_fare, node)
+                    hop_s = t["hops"][pos]
+                    relax(
+                        node + 1,
+                        cost + hop_s + peso_w * hop_fare,
+                        elapsed + hop_s,
+                        label_index,
+                    )
 
-        if END not in best:
+        if end_label is None:
             return None
 
-        path = [END]
-        while path[-1] != START:
-            path.append(prev[path[-1]])
-        path.reverse()
+        path_labels = []
+        current = end_label
+        while current is not None:
+            path_labels.append(current)
+            current = labels[current]["previous"]
+        path_labels.reverse()
+        path = [START] + [labels[index]["node"] for index in path_labels]
+        waits = {
+            ridx_trip[labels[index]["node"] - ns]: labels[index]["wait_s"]
+            for index in path_labels
+            if labels[index]["wait_s"] is not None
+        }
         return self._build_option(path, origin, dest, ridx_trip, ridx_pos, waits, wb)
 
     def _build_option(self, path, origin, dest, ridx_trip, ridx_pos, waits, wb):

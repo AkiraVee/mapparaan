@@ -317,7 +317,11 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {
                     "status": "ok",
                     "passenger": passenger,
-                    "data_notice": "Static GTFS and fare estimates; verify before travel.",
+                    "data_notice": (
+                        "Routes use circa 2013-15 static GTFS schedules and estimated fares; "
+                        "live service alerts and current holiday exceptions are unavailable. "
+                        "Verify current operator hours before travel."
+                    ),
                     "options": options,
                 })
             except Exception as error:
