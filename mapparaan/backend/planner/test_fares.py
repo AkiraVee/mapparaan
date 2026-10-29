@@ -43,6 +43,7 @@ def build_feed(root):
     os.makedirs(gtfs)
     os.makedirs(ref)
     shutil.copy(os.path.join(DATA_DIR, "reference", "fare_config.json"), ref)
+    shutil.copy(os.path.join(DATA_DIR, "reference", "service_schedules.json"), ref)
 
     stops, trips, routes, times, freqs, modes = [], [], [], [], [], []
 

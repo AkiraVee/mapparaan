@@ -117,6 +117,9 @@ class Planner:
 
         with open(os.path.join(ref, "fare_config.json"), encoding="utf-8") as f:
             self.fares = json.load(f)
+        with open(os.path.join(ref, "service_schedules.json"), encoding="utf-8") as f:
+            self.service_schedules = json.load(f)
+        self.holiday_dates = set(self.service_schedules.get("holiday_dates", ()))
         self.modes_by_route = {
             r["route_id"]: r["mode"]
             for r in read_csv(os.path.join(ref, "route_modes.csv"))
@@ -444,6 +447,63 @@ class Planner:
             return wait
         return None
 
+    def _service_day_type(self, when):
+        when = to_manila(when)
+        return (
+            "weekend_and_holidays"
+            if when.weekday() >= 5 or when.date().isoformat() in self.holiday_dates
+            else "weekday"
+        )
+
+    @staticmethod
+    def _clock_seconds(clock):
+        hour, minute = (int(part) for part in clock.split(":"))
+        return hour * 3600 + minute * 60
+
+    def _rail_boarding_allowed(self, mode, station, next_station, when, wait_s=0):
+        """Check published LRT hours at the estimated boarding time and station."""
+        mode = mode.lower()
+        when = to_manila(when) + datetime.timedelta(seconds=wait_s)
+        local_seconds = when.hour * 3600 + when.minute * 60 + when.second
+        day_type = self._service_day_type(when)
+        line = self.service_schedules["lines"].get(mode)
+        if not line:
+            return False
+
+        if mode == "lrt1":
+            order = {
+                name: index
+                for index, name in enumerate(line["station_order_south_to_north"])
+            }
+            station_index = order.get(station)
+            next_index = order.get(next_station)
+            if station_index is None or next_index is None or station_index == next_index:
+                return False
+            direction = "northbound" if next_index > station_index else "southbound"
+            timetable = line["directions"][direction]
+            first = self._clock_seconds(timetable["first_train"][day_type])
+            last = self._clock_seconds(timetable["last_train"][day_type])
+            return first <= local_seconds <= last
+
+        if mode == "lrt2":
+            order = {
+                name: index
+                for index, name in enumerate(line["direction_order_west_to_east"])
+            }
+            station_index = order.get(station)
+            next_index = order.get(next_station)
+            if station_index is None or next_index is None or station_index == next_index:
+                return False
+            direction = "eastbound" if next_index > station_index else "westbound"
+            last_train = line["station_last_train"].get(station, {}).get(direction)
+            if last_train is None:
+                return False
+            opening = self._clock_seconds(line["all_stations_open"])
+            closing = self._clock_seconds(last_train)
+            return opening <= local_seconds <= closing
+
+        return True
+
     # ── search ───────────────────────────────────────────────────────────────
     def _search(
         self,
@@ -543,6 +603,15 @@ class Planner:
                     )
                     next_service = wait_s is not None
                 if wait_s is None:
+                    continue
+                trip = self.trips[ti]
+                if trip["mode"].lower() in LRT_MODES and not self._rail_boarding_allowed(
+                    trip["mode"],
+                    self.stop_name[trip["stops"][pos]],
+                    self.stop_name[trip["stops"][pos + 1]],
+                    board_time,
+                    wait_s,
+                ):
                     continue
                 board_fare = self._search_cost(self.trips[ti]["mode"])[0]
                 relax(ns + offset[ti] + pos,
@@ -737,12 +806,24 @@ class Planner:
         of mode names (e.g. {"jeepney"}) whose routes are left out of the search."""
         when = to_manila(when)
         avoid_modes = {str(m).strip().lower() for m in (avoid_modes or ()) if str(m).strip()}
-        available_lrt_modes = {
-            trip["mode"].lower()
-            for trip in self.trips
-            if trip["mode"].lower() in LRT_MODES
-            and self.trip_wait_s(trip, when) is not None
-        }
+        available_lrt_modes = set()
+        for trip in self.trips:
+            mode = trip["mode"].lower()
+            if mode not in LRT_MODES:
+                continue
+            wait_s = self.trip_wait_s(trip, when)
+            if wait_s is None:
+                continue
+            for pos in range(len(trip["stops"]) - 1):
+                if self._rail_boarding_allowed(
+                    mode,
+                    self.stop_name[trip["stops"][pos]],
+                    self.stop_name[trip["stops"][pos + 1]],
+                    when,
+                    wait_s,
+                ):
+                    available_lrt_modes.add(mode)
+                    break
         avoid_modes |= LRT_MODES - available_lrt_modes
         # Both the regular and the discounted fare are always returned; the
         # client picks which one to show based on the passenger type.

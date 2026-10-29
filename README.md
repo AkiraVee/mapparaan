@@ -20,12 +20,21 @@ Sakay.ph / DOTC GTFS feed (circa 2013–15), filtered to Manila City. User
 location can be current, and walking route geometry is requested from OSRM,
 but transit suggestions do not account for live traffic or service alerts.
 
-LRT-1 and LRT-2 are excluded from recommendations when the supplied GTFS does
-not show them as boardable at the selected departure time. They are not brought
-back as a later-service or transfer leg. This is an estimate based on the
-historical feed, not confirmation of current operator hours. The current feed
-has no frequency windows extending past midnight, so it cannot verify
-after-midnight service based on the previous service day.
+LRT-1 and LRT-2 are excluded from recommendations when either the operating-
+hours configuration or GTFS does not show them as boardable at the estimated
+boarding time. A closed line is not brought back as a later-service or transfer
+leg. The current feed has no frequency windows extending past midnight, so it
+cannot verify after-midnight rail service based on the previous service day.
+Operator hours are kept separately in
+[`mapparaan/data/reference/service_schedules.json`](mapparaan/data/reference/service_schedules.json).
+LRT-1 terminal hours are from an official LRMC schedule effective March 26,
+2025. The official LRTA LRT-2 station-closing graphic has no visible
+publication/effective date, so those station-specific cutoffs are recorded as
+undated and should be confirmed before travel. LRT-1 source times are terminal
+departures; intermediate station cutoffs are conservatively estimated with
+GTFS service windows. No Philippine holiday calendar is bundled; add verified
+holiday dates to the schedule configuration for the weekend/holiday LRT-1
+schedule to be selected on weekday holidays.
 
 If the API is reachable but finds no supported route, the app distinguishes
 that result from an API or connectivity failure. It can return verified
@@ -49,13 +58,13 @@ clearly labeled sample fallback routes.
 | Walking/driving route geometry via OSRM | Implemented; public demo service and not traffic-aware |
 | Transit planner API and schedule-aware GTFS route search | Implemented; local backend changes require deployment to affect Render |
 | Fastest, cheapest, fewest-transfer, and supported-mode alternatives | Implemented from available route data |
-| LRT-1/LRT-2 availability filtering | Implemented against the historical GTFS; not a current operator timetable |
+| LRT-1/LRT-2 availability filtering | Uses GTFS plus separate operator-hours config; LRT-2 source graphic is undated |
 | Empty-result, API-error, and connectivity state handling | Implemented |
 | Estimated fares and student, senior, and PWD discounts | Implemented; source data may need current verification |
 | Saved places, trip history, preferences, and memory-photo sharing | Implemented; account-backed features require Supabase configuration |
 | Basic natural-language query parsing | Implemented as a lightweight parser; not a full chatbot/NLU system |
 | Live transit vehicle locations, live service alerts, and traffic-aware transit ETAs | Not available |
-| Current verified operating schedules and broader-than-Manila transit coverage | Not available |
+| Current verified LRT-2 publication date, holiday calendar, and broader-than-Manila transit coverage | Not available |
 | Detailed road geometry for most jeepney and bus routes | Not available; many legs use stop-to-stop lines |
 
 ## Tech stack

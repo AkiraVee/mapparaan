@@ -41,7 +41,8 @@ def read(path):
 
 # 1. fare config -------------------------------------------------------------
 try:
-    cfg = json.load(open(os.path.join(DATA, "reference", "fare_config.json"), encoding="utf-8"))
+    with open(os.path.join(DATA, "reference", "fare_config.json"), encoding="utf-8") as f:
+        cfg = json.load(f)
     modes = cfg.get("modes", {})
     placeholder = str(cfg.get("_note", "")).strip().upper().startswith("PLACEHOLDER")
     record("fare_config.json is not the placeholder", not placeholder,
@@ -53,8 +54,15 @@ try:
     for rail in ("lrt1", "lrt2"):
         record(f"{rail} has a station fare table", modes.get(rail, {}).get("type") == "station_matrix",
                f"{rail} has no station_matrix in fare_config.json")
+    schedule_path = os.path.join(DATA, "reference", "service_schedules.json")
+    with open(schedule_path, encoding="utf-8") as f:
+        schedules = json.load(f)
+    lines = schedules.get("lines", {})
+    record("service_schedules.json contains LRT-1 and LRT-2",
+           all(line in lines for line in ("lrt1", "lrt2")),
+           "Add both LRT schedules to data/reference/service_schedules.json.")
 except (OSError, ValueError) as e:
-    record("fare_config.json can be read", False, str(e))
+    record("planner fare and service schedule configs can be read", False, str(e))
 
 # 2. data ---------------------------------------------------------------------
 try:

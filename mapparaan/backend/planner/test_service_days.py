@@ -61,6 +61,99 @@ class ServiceDayTests(unittest.TestCase):
                 fastest = next(o for o in options if o["preference"] == "fastest")
                 self.assertIn("lrt1", fastest["modes"], f"{a} -> {b} at {hour:02d}:{minute:02d} on Sunday")
 
+    def test_lrt1_terminal_hours_follow_weekday_and_weekend_schedule(self):
+        checks = (
+            ("Vito Cruz LRT", "Quirino Ave LRT", at(1, 4, 29), False),
+            ("Vito Cruz LRT", "Quirino Ave LRT", at(1, 4, 30), True),
+            ("Vito Cruz LRT", "Quirino Ave LRT", at(1, 22, 30), True),
+            ("Vito Cruz LRT", "Quirino Ave LRT", at(1, 22, 31), False),
+            ("Quirino Ave LRT", "Vito Cruz LRT", at(5, 4, 59), False),
+            ("Quirino Ave LRT", "Vito Cruz LRT", at(5, 5, 0), True),
+            ("Quirino Ave LRT", "Vito Cruz LRT", at(5, 21, 45), True),
+            ("Quirino Ave LRT", "Vito Cruz LRT", at(5, 21, 46), False),
+        )
+        for station, next_station, when, expected in checks:
+            with self.subTest(station=station, when=when):
+                self.assertEqual(
+                    self.p._rail_boarding_allowed(
+                        "lrt1", station, next_station, when
+                    ),
+                    expected,
+                )
+
+    def test_lrt1_configured_holiday_uses_weekend_hours(self):
+        holiday = "2026-10-20"
+        with patch.object(self.p, "holiday_dates", {holiday}):
+            self.assertFalse(
+                self.p._rail_boarding_allowed(
+                    "lrt1", "Vito Cruz LRT", "Quirino Ave LRT",
+                    datetime.datetime(2026, 10, 20, 4, 59, tzinfo=TZ),
+                )
+            )
+            self.assertTrue(
+                self.p._rail_boarding_allowed(
+                    "lrt1", "Vito Cruz LRT", "Quirino Ave LRT",
+                    datetime.datetime(2026, 10, 20, 5, 0, tzinfo=TZ),
+                )
+            )
+
+    def test_lrt2_opening_and_station_direction_closing_times(self):
+        checks = (
+            ("Recto LRT", "Legarda LRT", at(1, 4, 49), False),
+            ("Recto LRT", "Legarda LRT", at(1, 4, 50), True),
+            ("Recto LRT", "Legarda LRT", at(1, 21, 25), True),
+            ("Recto LRT", "Legarda LRT", at(1, 21, 26), False),
+            ("Legarda LRT", "Recto LRT", at(1, 21, 19), True),
+            ("Legarda LRT", "Recto LRT", at(1, 21, 20), False),
+            ("Katipunan LRT", "Santolan LRT", at(1, 21, 43), True),
+            ("Katipunan LRT", "Santolan LRT", at(1, 21, 44), False),
+            ("Antipolo LRT", "Marikina-Pasig LRT", at(1, 20, 55), True),
+            ("Antipolo LRT", "Marikina-Pasig LRT", at(1, 20, 56), False),
+            ("Recto LRT", "Legarda LRT", at(1, 0, 30), False),
+        )
+        for station, next_station, when, expected in checks:
+            with self.subTest(station=station, next_station=next_station, when=when):
+                self.assertEqual(
+                    self.p._rail_boarding_allowed(
+                        "lrt2", station, next_station, when
+                    ),
+                    expected,
+                )
+
+    def test_lrt2_schedule_source_is_marked_official_but_undated(self):
+        source = self.p.service_schedules["lines"]["lrt2"]["source"]
+        self.assertEqual(source["operator"], "Light Rail Transit Authority (LRTA)")
+        self.assertIsNone(source["publication_date"])
+        self.assertIsNone(source["effective_date"])
+        self.assertEqual(source["schedule_status"], "official_source_date_unverified")
+
+    def test_lrt2_daytime_route_remains_and_closing_blocks_rail_but_not_road_modes(self):
+        recto = self.stop["Recto LRT"]
+        v_mapa = self.stop["V. Mapa LRT"]
+        daytime = self.p.plan(recto, v_mapa, when=at(1, 12, 0))
+        self.assertTrue(any("lrt2" in option["modes"] for option in daytime))
+
+        at_station_cutoff = self.p.plan(recto, v_mapa, when=at(1, 21, 24))
+        self.assertTrue(at_station_cutoff)
+        self.assertTrue(
+            all("lrt2" not in option["modes"] for option in at_station_cutoff)
+        )
+        self.assertTrue(
+            any(set(option["modes"]) & {"bus", "jeepney"} for option in at_station_cutoff)
+        )
+
+    def test_2305_pm_route_keeps_verified_road_options_without_lrt(self):
+        options = self.p.plan(
+            self.stop["Recto LRT"],
+            self.stop["V. Mapa LRT"],
+            when=at(1, 23, 5),
+        )
+        self.assertTrue(options)
+        self.assertTrue(all(not (set(option["modes"]) & LRT_MODES) for option in options))
+        self.assertTrue(
+            any(set(option["modes"]) & {"bus", "jeepney"} for option in options)
+        )
+
     def test_lrt_is_not_boardable_outside_its_feed_frequency_window(self):
         for hour, minute in ((4, 59), (22, 0)):
             when = at(1, hour, minute)

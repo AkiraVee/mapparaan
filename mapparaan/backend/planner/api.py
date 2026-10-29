@@ -52,6 +52,7 @@ def resolve_data_dir(data_dir=None):
     required = (
         os.path.join(resolved, "gtfs", "stops.txt"),
         os.path.join(resolved, "reference", "fare_config.json"),
+        os.path.join(resolved, "reference", "service_schedules.json"),
         os.path.join(resolved, "reference", "route_modes.csv"),
     )
     if not all(os.path.isfile(path) for path in required):
@@ -319,7 +320,9 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                     "passenger": passenger,
                     "data_notice": (
                         "Routes use circa 2013-15 static GTFS schedules and estimated fares; "
-                        "live service alerts and current holiday exceptions are unavailable. "
+                        "LRT-1 terminal hours are based on LRMC's 2025-03-26 schedule; "
+                        "the official LRTA station-closing graphic has no verified publication "
+                        "date. No Philippine holiday calendar or live service alerts are included. "
                         "Verify current operator hours before travel."
                     ),
                     "options": options,

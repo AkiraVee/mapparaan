@@ -93,6 +93,10 @@ void main() {
       expect(find.text('Leave now'), findsOneWidget);
       expect(find.text('Schedule departure'), findsOneWidget);
       expect(find.text('Planning from current Manila time'), findsOneWidget);
+      expect(
+        find.textContaining('The LRT-2 hours source is undated'),
+        findsOneWidget,
+      );
       final exception = tester.takeException();
       expect(exception, isNull, reason: 'Viewport: $size');
 

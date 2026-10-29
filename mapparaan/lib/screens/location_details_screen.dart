@@ -1677,7 +1677,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                       ),
                     ),
                     Text(
-                      'Based on historical static schedules, not live service alerts. Verify current hours.',
+                      'Based on static GTFS and operator schedules, not live alerts. The LRT-2 hours source is undated; verify current service.',
                       style: TextStyle(
                         fontSize: 11,
                         color: colorScheme.onSurfaceVariant,

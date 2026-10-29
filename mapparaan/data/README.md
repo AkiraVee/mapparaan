@@ -102,6 +102,23 @@ Mode comes from LTFRB's route codes: `PUJ` = jeepney (561 here), `PUB` = bus (36
 
 Every mode has a `verified` flag: `true` only when checked against an official fare source (see its `source`).
 
+**reference/service_schedules.json**
+
+Operating-hour data is kept separately from fares. LRT-1 terminal departure
+times use the LRMC schedule effective 2025-03-26. The LRT-2 station/direction
+closing times are transcribed from an official LRTA graphic, but the graphic's
+publication/effective date is not visible; the configuration records that
+limitation instead of claiming the schedule is current. The LRT-2 04:50 time
+is station opening, not proof that trains are already boardable; GTFS service
+availability is still required.
+
+LRT-1's published times are terminal departures only. The planner uses them as
+conservative directional cutoffs alongside GTFS's station service windows;
+intermediate-station last-train times are not provided by the source image.
+The holiday-date list is intentionally empty until verified Philippine
+holiday dates are added. Update `holiday_dates` from an official calendar so
+weekday holidays use the weekend/holiday LRT-1 schedule.
+
 | modes | what they hold | status |
 |---|---|---|
 | `jeepney`, `modern_jeepney`, `bus`, `aircon_bus` | road fares: `base_fare` covers `base_km`, then `per_km` beyond it. Student / senior / PWD fares use `discounted_base_fare` and `discounted_per_km` the same way. Rounded to the nearest P0.25 | verified, LTFRB fare guides effective 2026-09-28 |

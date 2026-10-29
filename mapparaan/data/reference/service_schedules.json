@@ -1,0 +1,138 @@
+{
+  "timezone": "Asia/Manila",
+  "holiday_dates": [],
+  "holiday_dates_note": "No verified Philippine holiday calendar is bundled. Add ISO dates here when sourced from an official proclamation; weekends use the weekend_and_holidays schedule.",
+  "lines": {
+    "lrt1": {
+      "source": {
+        "operator": "Light Rail Manila Corporation (LRMC)",
+        "url": "https://lrmc.ph/",
+        "effective_date": "2025-03-26",
+        "publication_date": null,
+        "schedule_status": "official_schedule_image_effective_date_known",
+        "notes": "Based on the official LRT-1 Train Service Hours image supplied for this project. The image gives first/last train departures at the line terminals, not station-specific times for the Manila stops. Terminal times are applied conservatively as line-direction cutoffs together with GTFS boarding windows."
+      },
+      "station_order_south_to_north": [
+        "Vito Cruz LRT",
+        "Quirino Ave LRT",
+        "Pedro Gil LRT",
+        "UN Ave LRT",
+        "Central Terminal LRT",
+        "Carriedo LRT",
+        "Doroteo Jose LRT",
+        "Bambang LRT",
+        "Tayuman LRT",
+        "Blumentritt LRT",
+        "Abad Santos LRT",
+        "R. Papa LRT"
+      ],
+      "directions": {
+        "northbound": {
+          "from_terminal": "Dr. Santos Station",
+          "toward_terminal": "Fernando Poe Jr. Station",
+          "first_train": {
+            "weekday": "04:30",
+            "weekend_and_holidays": "05:00"
+          },
+          "last_train": {
+            "weekday": "22:30",
+            "weekend_and_holidays": "21:30"
+          }
+        },
+        "southbound": {
+          "from_terminal": "Fernando Poe Jr. Station",
+          "toward_terminal": "Dr. Santos Station",
+          "first_train": {
+            "weekday": "04:30",
+            "weekend_and_holidays": "05:00"
+          },
+          "last_train": {
+            "weekday": "22:45",
+            "weekend_and_holidays": "21:45"
+          }
+        }
+      }
+    },
+    "lrt2": {
+      "source": {
+        "operator": "Light Rail Transit Authority (LRTA)",
+        "url": "https://www.lrta.gov.ph/",
+        "effective_date": null,
+        "publication_date": null,
+        "schedule_status": "official_source_date_unverified",
+        "notes": "Station closing-time graphic supplied for this project and confirmed by the project owner as sourced from the official LRTA website. No publication or effective date is visible in the image; do not treat these times as a verified current timetable. LRTA's 2026-10-29 operations report says operations commenced at 05:00 on that date; it does not verify this graphic's station closing times or 04:50 station-opening time.",
+        "corroborating_source": "https://www.lrta.gov.ph/train-operations-report-2026-10-29/"
+      },
+      "all_stations_open": "04:50",
+      "direction_order_west_to_east": [
+        "Recto LRT",
+        "Legarda LRT",
+        "Pureza LRT",
+        "V. Mapa LRT",
+        "J. Ruiz LRT",
+        "Gilmore LRT",
+        "Betty Go-Belmonte LRT",
+        "Cubao LRT",
+        "Anonas LRT",
+        "Katipunan LRT",
+        "Santolan LRT",
+        "Marikina-Pasig LRT",
+        "Antipolo LRT"
+      ],
+      "station_last_train": {
+        "Recto LRT": {
+          "eastbound": "21:25",
+          "westbound": null
+        },
+        "Legarda LRT": {
+          "eastbound": "21:27",
+          "westbound": "21:19"
+        },
+        "Pureza LRT": {
+          "eastbound": "21:29",
+          "westbound": "21:17"
+        },
+        "V. Mapa LRT": {
+          "eastbound": "21:31",
+          "westbound": "21:15"
+        },
+        "J. Ruiz LRT": {
+          "eastbound": "21:33",
+          "westbound": "21:13"
+        },
+        "Gilmore LRT": {
+          "eastbound": "21:35",
+          "westbound": "21:11"
+        },
+        "Betty Go-Belmonte LRT": {
+          "eastbound": "21:37",
+          "westbound": "21:09"
+        },
+        "Cubao LRT": {
+          "eastbound": "21:39",
+          "westbound": "21:07"
+        },
+        "Anonas LRT": {
+          "eastbound": "21:41",
+          "westbound": "21:05"
+        },
+        "Katipunan LRT": {
+          "eastbound": "21:43",
+          "westbound": "21:03"
+        },
+        "Santolan LRT": {
+          "eastbound": "21:45",
+          "westbound": "21:01"
+        },
+        "Marikina-Pasig LRT": {
+          "eastbound": "21:48",
+          "westbound": "20:58"
+        },
+        "Antipolo LRT": {
+          "eastbound": null,
+          "westbound": "20:55"
+        }
+      }
+    }
+  }
+}
