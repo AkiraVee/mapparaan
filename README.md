@@ -56,9 +56,9 @@ clearly labeled sample fallback routes.
 | --- | --- |
 | Interactive map, place search, current-location controls, and place details | Implemented |
 | Walking/driving route geometry via OSRM | Implemented; public demo service and not traffic-aware |
-| Transit planner API and schedule-aware GTFS route search | Implemented; local backend changes require deployment to affect Render |
+| Transit planner API and schedule-aware GTFS route search | Implemented and deployed on Render |
 | Fastest, cheapest, fewest-transfer, and supported-mode alternatives | Implemented from available route data |
-| LRT-1/LRT-2 availability filtering | Uses GTFS plus separate operator-hours config; LRT-2 source graphic is undated |
+| LRT-1/LRT-2 availability filtering | Deployed and confirmed in app; uses GTFS plus separate operator-hours config |
 | Empty-result, API-error, and connectivity state handling | Implemented |
 | Estimated fares and student, senior, and PWD discounts | Implemented; source data may need current verification |
 | Saved places, trip history, preferences, and memory-photo sharing | Implemented; account-backed features require Supabase configuration |
@@ -66,6 +66,10 @@ clearly labeled sample fallback routes.
 | Live transit vehicle locations, live service alerts, and traffic-aware transit ETAs | Not available |
 | Current verified LRT-2 publication date, holiday calendar, and broader-than-Manila transit coverage | Not available |
 | Detailed road geometry for most jeepney and bus routes | Not available; many legs use stop-to-stop lines |
+
+The LRT operating-hours update was deployed to the hosted planner and confirmed
+working in the app on 2026-10-30. LRT-2's official source graphic still has no
+visible publication/effective date; see the schedule-data caveats above.
 
 ## Tech stack
 
@@ -173,10 +177,17 @@ GitHub-connected Render service:
    the hosted API. A healthy `/health` response alone does not confirm that a
    particular code change has deployed.
 
-When diagnosing a mismatch, check which API host the app is configured to use
-and test that same host. A cold start can delay a request, but it does not
-indicate that new backend code has been deployed. Do not expose the
-unauthenticated planner publicly without suitable abuse controls.
+The current Render service is connected to the repository's `main` branch.
+After a deployment, test both a late-night route (for example, 11:05 PM) and a
+daytime route: closed LRT lines should be absent at night, while eligible LRT
+service should remain available during its configured hours. The app owner
+confirmed the operating-hours update working in the app on 2026-10-30.
+
+The free Render instance may sleep when idle, delaying its first request by
+around 50 seconds or more. A cold start affects response time, not which code
+version is deployed. When diagnosing a mismatch, check which API host the app
+uses and test that same host. Do not expose the unauthenticated planner
+publicly without suitable abuse controls.
 
 ## API
 
