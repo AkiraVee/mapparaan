@@ -145,7 +145,6 @@ mapparaan/
 │   │   ├── circle_icon_button.dart
 │   │   ├── mapparaan_drawer.dart
 │   │   ├── mapparaan_tile_layer.dart
-│   │   ├── memory_pin_marker.dart
 │   │   └── photo_sharing_dialog.dart
 │   ├── constants.dart
 │   └── main.dart
