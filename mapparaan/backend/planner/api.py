@@ -11,9 +11,8 @@ Endpoint:
   POST /plan with JSON fields: from, to, passenger, when, and avoid
 
 Service area:
-  The data covers the City of Manila only. If the origin or destination is more
-  than the planner's maximum walk to a stop (see SERVICE_MARGIN_M) outside the
-  boundary in <data>/references/manila_boundary.geojson, /plan answers 200 with
+  Both route endpoints must be inside the City of Manila boundary in
+  <data>/reference/manila_boundary.geojson. Otherwise /plan answers 200 with
       {"status": "ok", "options": [], "reason": "outside_service_area", "message": "..."}
   so the app can tell that apart from "no route found" (options empty, no reason).
 """
@@ -32,15 +31,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gtfs_planner import Planner
 
-try:
-    from gtfs_planner import ACCESS_RADII_M
-    SERVICE_MARGIN_M = max(ACCESS_RADII_M)  # farthest the planner walks to a first stop
-except ImportError:
-    SERVICE_MARGIN_M = 1500
-
 # Global planner instance loaded once at startup
 _PLANNER = None
-# Outer ring(s) of the City of Manila boundary, or None if the file is missing
+# Manila polygons as [polygon][ring][coordinate][longitude, latitude].
 _AREA = None
 
 
@@ -54,6 +47,7 @@ def resolve_data_dir(data_dir=None):
         os.path.join(resolved, "reference", "fare_config.json"),
         os.path.join(resolved, "reference", "service_schedules.json"),
         os.path.join(resolved, "reference", "route_modes.csv"),
+        os.path.join(resolved, "reference", "manila_boundary.geojson"),
     )
     if not all(os.path.isfile(path) for path in required):
         raise FileNotFoundError(
@@ -63,50 +57,81 @@ def resolve_data_dir(data_dir=None):
 
 
 def load_service_area(data_dir):
-    """Reads manila_boundary.geojson from <data_dir>/references (or reference)."""
+    """Reads the required Manila polygon from <data_dir>/reference(s)."""
     for folder in ("references", "reference"):
         path = os.path.join(data_dir, folder, "manila_boundary.geojson")
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 gj = json.load(f)
-            geom = gj["features"][0]["geometry"] if "features" in gj else gj["geometry"]
-            polys = [geom["coordinates"]] if geom["type"] == "Polygon" else geom["coordinates"]
-            return [p[0] for p in polys]
-    return None
+            geometries = (
+                [feature["geometry"] for feature in gj["features"]]
+                if gj.get("type") == "FeatureCollection"
+                else [gj["geometry"]]
+                if gj.get("type") == "Feature"
+                else [gj]
+            )
+            polygons = []
+            for geometry in geometries:
+                if geometry["type"] == "Polygon":
+                    polygons.append(geometry["coordinates"])
+                elif geometry["type"] == "MultiPolygon":
+                    polygons.extend(geometry["coordinates"])
+                else:
+                    raise ValueError("Unsupported Manila boundary geometry.")
+            if not polygons or any(
+                not polygon or len(polygon[0]) < 4 for polygon in polygons
+            ):
+                raise ValueError("Manila boundary contains an invalid polygon.")
+            return polygons
+    raise FileNotFoundError("Required Manila boundary GeoJSON was not found.")
+
+
+def _point_on_ring(lon, lat, ring):
+    epsilon = 1e-10
+    for a, b in zip(ring, ring[1:] + ring[:1]):
+        cross = (lat - a[1]) * (b[0] - a[0]) - (lon - a[0]) * (b[1] - a[1])
+        if abs(cross) > epsilon:
+            continue
+        if (
+            min(a[0], b[0]) - epsilon <= lon <= max(a[0], b[0]) + epsilon
+            and min(a[1], b[1]) - epsilon <= lat <= max(a[1], b[1]) + epsilon
+        ):
+            return True
+    return False
 
 
 def _in_ring(lon, lat, ring):
+    if _point_on_ring(lon, lat, ring):
+        return True
     inside, j = False, len(ring) - 1
     for i in range(len(ring)):
         xi, yi = ring[i][0], ring[i][1]
         xj, yj = ring[j][0], ring[j][1]
-        if (yi > lat) != (yj > lat) and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+        if (
+            (yi > lat) != (yj > lat)
+            and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi
+        ):
             inside = not inside
         j = i
     return inside
 
 
-def _dist_to_ring_m(lon, lat, ring):
-    best, kx, ky = 1e12, 111320.0 * math.cos(math.radians(lat)), 111320.0
-    for p, q in zip(ring, ring[1:] + ring[:1]):
-        ax, ay = (p[0] - lon) * kx, (p[1] - lat) * ky
-        bx, by = (q[0] - lon) * kx, (q[1] - lat) * ky
-        dx, dy = bx - ax, by - ay
-        seg = dx * dx + dy * dy
-        t = 0.0 if seg == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg))
-        best = min(best, math.hypot(ax + t * dx, ay + t * dy))
-    return best
-
-
 def in_service_area(point):
-    """True if point (lat, lon) is inside Manila or within walking reach of it.
-    With no boundary file loaded nothing is blocked."""
-    if _AREA is None:
-        return True
+    """True only when point (lat, lon) lies within the loaded city polygon."""
+    if not _AREA:
+        return False
     lat, lon = point
-    if any(_in_ring(lon, lat, r) for r in _AREA):
+    for polygon in _AREA:
+        rings = [ring for ring in polygon if len(ring) >= 4]
+        if not rings or not _in_ring(lon, lat, rings[0]):
+            continue
+        if any(
+            _in_ring(lon, lat, hole) and not _point_on_ring(lon, lat, hole)
+            for hole in rings[1:]
+        ):
+            continue
         return True
-    return min(_dist_to_ring_m(lon, lat, r) for r in _AREA) <= SERVICE_MARGIN_M
+    return False
 
 
 def parse_coords(val):
@@ -288,8 +313,7 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 })
                 return
 
-            # Data covers the City of Manila only: say so instead of returning a
-            # bare empty list the app would mistake for "no route found".
+            # Keep outside-boundary requests distinct from missing transit routes.
             if not (in_service_area(origin) and in_service_area(destination)):
                 print("[PLAN] Request outside service area.")
                 self._send_json(200, {
@@ -297,7 +321,10 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                     "passenger": passenger,
                     "options": [],
                     "reason": "outside_service_area",
-                    "message": "Mapparaan currently covers the City of Manila only.",
+                    "message": (
+                        "Both route locations must be inside the City of Manila "
+                        "administrative boundary."
+                    ),
                 })
                 return
 
@@ -368,8 +395,7 @@ def run_server(host="127.0.0.1", port=8080, data_dir=None):
     for warning in _PLANNER.warnings:
         print(f"[WARNING] {warning}")
     _AREA = load_service_area(resolved_dir)
-    print("Service area: City of Manila boundary loaded." if _AREA else
-          "Service area: manila_boundary.geojson not found, not restricting requests.")
+    print("Service area: strict City of Manila boundary loaded.")
     print("-" * 64)
     print(f"Server listening on http://{host}:{port}/")
     print(f"Local health check: http://localhost:{port}/health")

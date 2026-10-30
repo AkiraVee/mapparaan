@@ -120,6 +120,17 @@ The Flutter planner sends route requests as JSON `POST /plan` requests so
 coordinates are not placed in request URLs. Older `GET /plan` requests remain
 supported for compatibility, but should not be used in new clients.
 
+The location picker supports map pins for pickup and destination. Pin
+coordinates are checked against the City of Manila boundary polygon in
+`data/reference/manila_boundary.geojson` in both Flutter and the API; points
+outside the polygon are not selectable or routable. Reverse geocoding may add
+an address label, but routing uses the confirmed coordinates and does not
+depend on an address being found. This lookup, like place search, uses
+Nominatim. Transit planning uses the available static GTFS data, not live
+vehicle locations. Fare and travel-time values may be estimates; when the
+planner is offline, the app does not invent transit routes and shows only a
+street-walking alternative if one can be retrieved.
+
 Memory photos are selected at up to 1600 pixels per side and recompressed to
 JPEG with `flutter_image_compress` (including orientation correction and EXIF
 removal). The app retries at lower quality and dimensions until the result is

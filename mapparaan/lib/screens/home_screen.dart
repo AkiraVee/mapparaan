@@ -315,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _selectPlace(
     PlaceResult place, {
+    PlaceResult? origin,
     RoutePreference? preference,
     PassengerType? passengerType,
   }) async {
@@ -325,7 +326,8 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute<void>(
         builder: (_) => LocationDetailsScreen(
           place: place,
-          userLocation: _userLocation,
+          userLocation: origin?.coordinates ?? _userLocation,
+          origin: origin?.name ?? 'Current location',
           initialPreference: preference ?? _homePreference,
           passengerType: passengerType ?? PassengerType.general,
           localPreferences: _localPreferences,
@@ -649,6 +651,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _selectPlace(
       selection.place,
+      origin: selection.origin,
       preference: selection.resolution?.preference,
       passengerType: selection.resolution?.passengerType,
     );

@@ -548,8 +548,8 @@ class TransitPlanResult {
   }
 }
 
-/// Service that coordinates with the backend transit planner API,
-/// falling back to local mocked calculations if the server is unreachable.
+/// Service that coordinates with the backend transit planner API and reports
+/// connectivity or response failures to the route-planning screen.
 class TransitPlannerService {
   TransitPlannerService._();
 
@@ -737,7 +737,7 @@ class TransitPlannerService {
     }
   }
 
-  /// Builds fallback options using RoutePlannerService when API is offline
+  /// Builds rough sample options for explicit offline-estimate contexts only.
   static List<TransitPlanOption> getFallbackOptions({
     required LatLng destination,
     required LatLng? userLocation,

@@ -18,6 +18,7 @@ class PlaceResult {
 }
 
 typedef PlaceSearch = Future<List<PlaceResult>> Function(String query);
+typedef PlaceReverseGeocode = Future<PlaceResult?> Function(LatLng coordinates);
 
 class PlaceSearchService {
   // Important: Nominatim requires a proper User-Agent
@@ -78,5 +79,42 @@ class PlaceSearchService {
         coordinates: LatLng(latitude, longitude),
       );
     }).toList();
+  }
+
+  static Future<PlaceResult?> reverseGeocode(LatLng coordinates) async {
+    final url = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+      'lat': coordinates.latitude.toString(),
+      'lon': coordinates.longitude.toString(),
+      'format': 'jsonv2',
+      'addressdetails': '1',
+      'zoom': '18',
+    });
+
+    final response = await http
+        .get(url, headers: {'User-Agent': _userAgent})
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw http.ClientException(
+        'Reverse geocoding returned HTTP ${response.statusCode}.',
+        url,
+      );
+    }
+
+    final decoded = json.decode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Reverse geocoding returned an invalid response.',
+      );
+    }
+    final displayName = decoded['display_name'];
+    if (displayName is! String || displayName.trim().isEmpty) return null;
+
+    final parts = displayName.split(', ');
+    return PlaceResult(
+      name: parts.first,
+      subtitle: parts.length > 1 ? parts.skip(1).join(', ') : '',
+      coordinates: coordinates,
+    );
   }
 }

@@ -74,6 +74,7 @@ flutter:
   
   assets:
     - .env
+    - data/reference/manila_boundary.geojson
   # Runtime configuration is loaded when the app starts. Keep secrets out of
   # the Flutter asset bundle; use .env.example as the setup template.
 

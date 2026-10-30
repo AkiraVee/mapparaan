@@ -311,100 +311,46 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _fitCameraToBounds(points);
       _snapWalkLegs(selected);
     } else {
-      final cached = await LastRouteService.load();
-      if (!mounted || requestId != _routeRequestId) return;
-      final cacheMatches =
-          cached != null &&
-          const Distance().as(
-                LengthUnit.Meter,
-                cached.destination,
-                destination,
-              ) <
-              100;
+      final geometry = await RoutePlannerService.fetchRoute(
+        origin: origin,
+        destination: destination,
+        profile: 'foot',
+      );
 
-      if (cacheMatches) {
-        final cachedOption = cached.option;
-        final cachedPoints = cachedOption.allPoints.isNotEmpty
-            ? cachedOption.allPoints
-            : [cached.origin, cached.destination];
-        final cachedFallbackOptions = TransitPlannerService.getFallbackOptions(
-          destination: destination,
-          userLocation: cached.origin,
-          preference: _selectedPreference,
-          passengerType: _passengerType,
-          avoidModes: _avoidModes,
-          fallbackPath: cachedPoints,
-        );
-        final offlineOptions = cachedFallbackOptions.isNotEmpty
-            ? cachedFallbackOptions
-            : [cachedOption];
-        final filteredOptions = _applyLocalRoutePreferences(offlineOptions);
-        final selected =
-            TransitPlanOption.pickForPreference(
-              filteredOptions,
-              _selectedPreference,
-            ) ??
-            filteredOptions.first;
-        final selectedPoints = selected.allPoints.isNotEmpty
-            ? selected.allPoints
-            : cachedPoints;
-        setState(() {
-          _isOfflineFallback = true;
-          _routeOptions = filteredOptions;
-          _selectedOption = selected;
-          _routePoints = selectedPoints;
-          _isLoadingRoute = false;
-        });
-        _fitCameraToBounds(selectedPoints);
-      } else {
-        final geometry = await RoutePlannerService.fetchRoute(
+      if (!mounted || requestId != _routeRequestId) return;
+
+      final walkingOption =
+          geometry != null &&
+              geometry.points.length >= 2 &&
+              geometry.distanceMeters > 0
+          ? TransitPlanOption.walking(
+              from: widget.origin,
+              to: widget.resolvedPlaceName,
+              path: geometry.points,
+              distanceMeters: geometry.distanceMeters.round(),
+            )
+          : null;
+      final points = walkingOption?.allPoints ?? const <LatLng>[];
+      setState(() {
+        _isOfflineFallback = true;
+        _noRouteFound = true;
+        _noRouteMessage = walkingOption == null
+            ? 'The transit planner is offline, and no verified walking route could be found. Transit recommendations are unavailable until the planner reconnects.'
+            : 'The transit planner is offline. Only a street-walking alternative is shown; no transit route or schedule could be verified.';
+        _routeOptions = walkingOption == null ? const [] : [walkingOption];
+        _selectedOption = walkingOption;
+        _routePoints = points;
+        _isLoadingRoute = false;
+      });
+
+      if (walkingOption != null) {
+        await LastRouteService.save(
           origin: origin,
           destination: destination,
-          profile: 'foot',
+          option: walkingOption,
         );
-
         if (!mounted || requestId != _routeRequestId) return;
-
-        final fallbackPoints = (geometry != null && geometry.points.isNotEmpty)
-            ? geometry.points
-            : [origin, destination];
-
-        final fallbackOptions = TransitPlannerService.getFallbackOptions(
-          destination: destination,
-          userLocation: origin,
-          preference: _selectedPreference,
-          passengerType: _passengerType,
-          avoidModes: _avoidModes,
-          fallbackPath: fallbackPoints,
-        );
-
-        final filteredOptions = _applyLocalRoutePreferences(fallbackOptions);
-        final selected = filteredOptions.isNotEmpty
-            ? TransitPlanOption.pickForPreference(
-                    filteredOptions,
-                    _selectedPreference,
-                  ) ??
-                  filteredOptions.first
-            : null;
-
-        setState(() {
-          _isOfflineFallback = true;
-          _routeOptions = filteredOptions;
-          _selectedOption = selected;
-          _routePoints = fallbackPoints;
-          _isLoadingRoute = false;
-        });
-
-        if (selected != null) {
-          await LastRouteService.save(
-            origin: origin,
-            destination: destination,
-            option: selected,
-          );
-          if (!mounted || requestId != _routeRequestId) return;
-        }
-
-        _fitCameraToBounds(fallbackPoints);
+        _fitCameraToBounds(points);
       }
     }
 
@@ -1786,18 +1732,20 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: const Color(0xFFFFE0B2)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.info_outline,
                               size: 14,
                               color: Color(0xFFE65100),
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Server offline: these are rough distance-based samples, not real routes. Start backend/planner/api.py for real routes.',
-                                style: TextStyle(
+                                widget.selectedOption?.isWalkOption == true
+                                    ? 'Transit planner offline: showing a street-based walking alternative only.'
+                                    : 'Transit planner offline: no verified transit recommendation is available. Reconnect to load routes.',
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: Color(0xFFBF360C),
                                 ),

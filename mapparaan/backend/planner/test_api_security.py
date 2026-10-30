@@ -44,7 +44,13 @@ class TransitApiSecurityTests(unittest.TestCase):
         previous_planner = api._PLANNER
         previous_area = api._AREA
         api._PLANNER = _Planner()
-        api._AREA = None
+        api._AREA = [[[
+            [120.9, 14.5],
+            [121.1, 14.5],
+            [121.1, 14.7],
+            [120.9, 14.7],
+            [120.9, 14.5],
+        ]]]
         server = HTTPServer(("127.0.0.1", 0), api.TransitApiHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         logs = io.StringIO()

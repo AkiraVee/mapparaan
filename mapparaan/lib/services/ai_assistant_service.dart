@@ -48,7 +48,9 @@ class AiQueryResolution {
     if (lower.contains('student') || lower.contains('estudyante')) {
       return PassengerType.student;
     }
-    if (lower.contains('senior') || lower.contains('elderly') || lower.contains('matanda')) {
+    if (lower.contains('senior') ||
+        lower.contains('elderly') ||
+        lower.contains('matanda')) {
       return PassengerType.senior;
     }
     if (lower.contains('pwd') || lower.contains('disab')) {
@@ -74,12 +76,10 @@ class AiQueryResolution {
 
 class SearchSelection {
   final PlaceResult place;
+  final PlaceResult? origin;
   final AiQueryResolution? resolution;
 
-  const SearchSelection({
-    required this.place,
-    this.resolution,
-  });
+  const SearchSelection({required this.place, this.origin, this.resolution});
 }
 
 class AiAssistantService {
@@ -108,7 +108,10 @@ class AiAssistantService {
     String cleanQuery = query;
     if (preference != null) {
       cleanQuery = cleanQuery
-          .replaceFirst(RegExp(RegExp.escape(preference), caseSensitive: false), '')
+          .replaceFirst(
+            RegExp(RegExp.escape(preference), caseSensitive: false),
+            '',
+          )
           .trim();
     }
 
@@ -117,57 +120,57 @@ class AiAssistantService {
 
     // Insert this right before the existing `fromMatch` block
     final toFromMatch = RegExp(
-    r'\bto\s+(.+?)\s+\b(?:from|coming from|galing)\b\s+(.+)$',
-    caseSensitive: false,
+      r'\bto\s+(.+?)\s+\b(?:from|coming from|galing)\b\s+(.+)$',
+      caseSensitive: false,
     ).firstMatch(cleanQuery);
 
     if (toFromMatch != null) {
-    destination = toFromMatch.group(1)?.trim();
-    origin = toFromMatch.group(2)?.trim();
+      destination = toFromMatch.group(1)?.trim();
+      origin = toFromMatch.group(2)?.trim();
     } else {
-  // Keep your existing `fromMatch` logic here...
+      // Keep your existing `fromMatch` logic here...
 
-    final fromMatch = RegExp(
-      r'\bfrom\s+(.+?)\s+\bto\b\s+(.+)$',
-      caseSensitive: false,
-    ).firstMatch(cleanQuery);
-    if (fromMatch != null) {
-      origin = fromMatch.group(1)?.trim();
-      destination = fromMatch.group(2)?.trim();
-    } else {
-      final toMatch = RegExp(
-        r'\bto\s+(.+)$',
+      final fromMatch = RegExp(
+        r'\bfrom\s+(.+?)\s+\bto\b\s+(.+)$',
         caseSensitive: false,
       ).firstMatch(cleanQuery);
-      if (toMatch != null) {
-        final beforeTo = cleanQuery.substring(0, toMatch.start).trim();
-        final afterTo = toMatch.group(1)?.trim();
-        if (beforeTo.isNotEmpty && beforeTo != 'to') {
-          origin = beforeTo;
-        }
-        destination = afterTo;
-      }
-
-      if (destination == null) {
-        final destinationMatch = RegExp(
-          r'\b(?:find|search|look for|goto|go to|punta sa|para sa|travel to)\s+(.+)$',
+      if (fromMatch != null) {
+        origin = fromMatch.group(1)?.trim();
+        destination = fromMatch.group(2)?.trim();
+      } else {
+        final toMatch = RegExp(
+          r'\bto\s+(.+)$',
           caseSensitive: false,
         ).firstMatch(cleanQuery);
-        if (destinationMatch != null) {
-          destination = destinationMatch.group(1)?.trim();
+        if (toMatch != null) {
+          final beforeTo = cleanQuery.substring(0, toMatch.start).trim();
+          final afterTo = toMatch.group(1)?.trim();
+          if (beforeTo.isNotEmpty && beforeTo != 'to') {
+            origin = beforeTo;
+          }
+          destination = afterTo;
+        }
+
+        if (destination == null) {
+          final destinationMatch = RegExp(
+            r'\b(?:find|search|look for|goto|go to|punta sa|para sa|travel to)\s+(.+)$',
+            caseSensitive: false,
+          ).firstMatch(cleanQuery);
+          if (destinationMatch != null) {
+            destination = destinationMatch.group(1)?.trim();
+          }
+        }
+
+        if (destination == null) {
+          final simpleMatch = RegExp(
+            r'\b(?:going to|to)\s+(.+)$',
+            caseSensitive: false,
+          ).firstMatch(cleanQuery);
+          if (simpleMatch != null) {
+            destination = simpleMatch.group(1)?.trim();
+          }
         }
       }
-
-      if (destination == null) {
-        final simpleMatch = RegExp(
-          r'\b(?:going to|to)\s+(.+)$',
-          caseSensitive: false,
-        ).firstMatch(cleanQuery);
-        if (simpleMatch != null) {
-          destination = simpleMatch.group(1)?.trim();
-         }
-        }
-     }
     }
 
     if (destination == null && origin == null) {
