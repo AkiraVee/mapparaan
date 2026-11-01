@@ -156,34 +156,64 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<AuthState>? _authSubscription;
+  String? _activeUserId;
 
   @override
   void initState() {
     super.initState();
     if (!supabaseReady) return;
-    AuthService.isLoggedIn.value = supabase.auth.currentSession != null;
+    final initialSession = supabase.auth.currentSession;
+    _activeUserId = initialSession?.user.id;
+    AuthService.isLoggedIn.value = initialSession != null;
     AuthService.isGuest.value = false;
-    _loadMemoryPins();
-    _loadSharedMemoryPhotos();
+    if (initialSession != null) {
+      _loadAccountData(loadPreferences: false);
+    } else {
+      _clearAccountData();
+    }
+
     _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
       AuthService.isLoggedIn.value = state.session != null;
       if (state.session != null) AuthService.isGuest.value = false;
       if (state.event == AuthChangeEvent.signedOut) {
-        CommuterPreferencesService.current.value = const CommuterPreferences();
-        MemoryPinService.pins.value = [];
-        MemoryPinService.loadStatus.value = MemoryPinLoadStatus.idle;
-        FriendSharingService.clearSharedPhotos();
+        _activeUserId = null;
+        _clearAccountData();
         return;
       }
-      if (state.session != null) {
-        _loadUserPreferences();
-        if (state.event == AuthChangeEvent.initialSession ||
-            state.event == AuthChangeEvent.signedIn) {
-          _loadMemoryPins();
-          _loadSharedMemoryPhotos();
+
+      final sessionUserId = state.session?.user.id;
+      if (state.event == AuthChangeEvent.initialSession) {
+        if (sessionUserId == null) {
+          _activeUserId = null;
+          _clearAccountData();
+        } else if (sessionUserId != _activeUserId) {
+          _activeUserId = sessionUserId;
+          _clearAccountData();
+          _loadAccountData();
         }
+        return;
+      }
+
+      if (sessionUserId != null &&
+          (state.event == AuthChangeEvent.signedIn ||
+              sessionUserId != _activeUserId)) {
+        if (sessionUserId != _activeUserId) _clearAccountData();
+        _activeUserId = sessionUserId;
+        _loadAccountData();
       }
     });
+  }
+
+  void _loadAccountData({bool loadPreferences = true}) {
+    if (loadPreferences) _loadUserPreferences();
+    _loadMemoryPins();
+    _loadSharedMemoryPhotos();
+  }
+
+  void _clearAccountData() {
+    CommuterPreferencesService.clearForAuthChange();
+    MemoryPinService.clearForAuthChange();
+    FriendSharingService.clearSharedPhotos();
   }
 
   Future<void> _loadUserPreferences() async {
@@ -215,13 +245,15 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _loadSharedMemoryPhotos() async {
-    if (supabase.auth.currentUser == null) {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
       FriendSharingService.clearSharedPhotos();
       return;
     }
     try {
       await FriendSharingService.refreshSharedPhotos();
     } catch (error, stackTrace) {
+      if (supabase.auth.currentUser?.id != userId) return;
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,

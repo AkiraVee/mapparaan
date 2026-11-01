@@ -31,40 +31,43 @@ rebuild the app.
 
 ## Supabase database setup
 
-The old dashboard "Master SQL Script" dropped all application tables before
-recreating them. Do not run that destructive version against production.
+The destructive dashboard "Master SQL Script" drops application tables before
+recreating them. Do not run it against a project containing data.
 
-Use `supabase/master_schema.sql` as the replacement setup script for a new
-project. It does not drop application tables or user rows, can be rerun, enables
-owner-scoped table policies, makes `memory-photos` private with owner-folder
-policies and upload limits, and adds the `image_path` column and saved-place ID
-default required by the app. It removes the duplicate `public.users.email`
-column; the canonical email remains in `auth.users`.
+This checkout does not contain `supabase/master_schema.sql` or the original
+`20261026_friend_memory_sharing.sql` migration referenced by older setup notes.
+It is therefore not a complete fresh-project database setup, and the missing
+schema/migration must be recovered from a trusted source before provisioning a
+new project. Do not recreate missing historical migrations from memory.
 
-Alternatively, for a database already initialized with the original schema,
-apply the incremental migrations in `supabase/migrations` in filename order.
-The October 23 migration also removes the duplicate `public.users.email`
-column and adds restrictive owner-boundary policies and photo upload limits.
-It validates preference, place-name, duration, and fare constraints, so the
-migration will stop rather than silently accept legacy rows that violate them.
-Review the target project's existing policies and dependencies, take a backup,
-and apply the scripts to the correct Supabase project. These SQL files are
-not applied from the Flutter client; this workspace cannot verify or change
-the live project's settings.
+For an existing project, compare its migration history and current policies
+with the checked-in SQL before applying any migration. Back up the database
+first. SQL files are not applied by the Flutter app, and this workspace cannot
+verify or change the live project's migration history or settings.
+
+The two unversioned SQL files in `supabase/migrations` are legacy-policy
+cleanup scripts only; they are not schema setup or ordered migrations. The
+versioned private-photo migrations replace the old public-read and broad
+upload policies with owner-scoped policies.
 
 ### Friend-only memory photo sharing
 
-The friend-sharing feature is a separate incremental change. For an existing
-project, first apply the 20261022 and 20261023 migrations if they have not
-already been applied, then apply
-`supabase/migrations/20261026_friend_memory_sharing.sql` once. For a new
-project, run `supabase/master_schema.sql` first, then migrations 20261026 and
-20261027 in order. Do not replace or edit migrations already applied to a
-database.
+The checked-in migrations include private-photo hardening (20261022/20261023),
+shared-photo location support (20261027), and normalization/validation of
+sharing records (20261028). The 20261027 and 20261028 migrations depend on the
+friend-sharing schema and RPCs from the missing 20261026 migration. Do not
+apply them to a project unless its migration history confirms those
+prerequisites are present.
 
-If the sharing migration 20261026 has already been applied, apply only
-`supabase/migrations/20261027_friend_shared_photo_locations.sql` next before
-using this updated app. It does not modify or replace the earlier migration.
+The pending `supabase/migrations/20261029_shared_memory_storage_reads.sql`
+allows accepted recipients to read only explicitly shared image objects.
+Apply it only after confirming the deployed
+`public.can_read_shared_memory_photo(text)` function and earlier sharing
+schema exist. It replaces the restrictive all-command owner boundary with
+separate command policies: reads allow the owner or a selected recipient;
+uploads and deletes remain owner-only; Storage updates remain blocked. The
+migration fails with an explicit error if the helper function is missing.
+Never edit or re-run historical migrations already applied to a database.
 
 The migration adds normalized friendships, hashed single-use invite codes
 (24-hour expiry, maximum five invites created per account per 24 hours), and
@@ -83,6 +86,8 @@ The Storage bucket remains private and friends can request a signed image URL
 only while the friendship and that exact photo grant remain active. Friend URLs
 expire after two minutes, but cannot recall an image already downloaded or
 copied. Photo contents themselves may reveal more than the saved location.
+Owner photo URLs expire after ten minutes and are refreshed when the app loads
+the owner's photo list.
 Friend invite codes are bearer secrets: share them privately. Acceptance
 requires a signed-in account and an explicit action. Removing a friend deletes
 their photo grants, and re-adding them does not restore those grants. Verify
@@ -93,15 +98,23 @@ Before treating sharing as verified, use test accounts A, B, and C to check:
 
 - B cannot see A's photos before accepting A's invite, and cannot see any
   unshared photo after accepting.
-- After A shares one photo with B only, B can see that image and broad area;
-  C and other signed-in users cannot. The friend-facing response must not
-  contain the pin geometry, address, or place name.
+- After A shares one photo with B only, B can see that image and its saved
+  location details; C and other signed-in users cannot receive the image or
+  location.
 - B cannot upload to or delete from A's Storage folder. A can still manage
   A's own photos.
 - Removing B revokes future access and removes the grant. An already issued
   signed URL may remain usable for up to two minutes.
 - An invite cannot be accepted by its creator, accepted twice, or accepted
   after expiry.
+
+Password brute-force defenses are configured in the Supabase project, not by
+Flutter client-side throttling. Verify the project's Auth rate limits and
+configure CAPTCHA/abuse protection where available. Do not treat a client-side
+lockout as a security boundary. The bundled Supabase anon/publishable key and
+map-provider keys are public client configuration; never put a `service_role`
+or other privileged key in `.env`, and restrict provider keys in their
+respective dashboards.
 
 Run the transit planner locally from this directory with
 `python backend/planner/api.py --host 127.0.0.1 --port 8080`. The app's default

@@ -41,14 +41,15 @@ class TripHistoryService {
     }
   }
 
-  static Future<List<TripHistoryEntry>> load() => fetchTripHistory();
+  static Future<List<TripHistoryEntry>> load({int? limit}) =>
+      fetchTripHistory(limit: limit);
 
-  static Future<List<TripHistoryEntry>> fetchTripHistory() async {
+  static Future<List<TripHistoryEntry>> fetchTripHistory({int? limit}) async {
     final client = _clientOrNull;
     final userId = client?.auth.currentUser?.id;
     if (userId == null) return [];
 
-    final List<dynamic> response = await client!
+    final query = client!
         .from('trip_history')
         .select(
           'id, origin_name, dest_name, preference, duration_minutes, '
@@ -56,6 +57,9 @@ class TripHistoryService {
         )
         .eq('user_id', userId)
         .order('created_at', ascending: false);
+    final List<dynamic> response = limit == null
+        ? await query
+        : await query.limit(limit);
 
     return response.map((row) {
       return TripHistoryEntry(

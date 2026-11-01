@@ -46,6 +46,7 @@ class FriendSharingService {
   static const int inviteValidityHours = 24;
   static final ValueNotifier<List<SharedMemoryPhoto>> sharedPhotos =
       ValueNotifier([]);
+  static int _sharedPhotoLoadGeneration = 0;
 
   static SupabaseClient get _client {
     try {
@@ -139,20 +140,39 @@ class FriendSharingService {
   }
 
   static Future<List<SharedMemoryPhoto>> refreshSharedPhotos() async {
-    final photos = await listSharedPhotos();
-    sharedPhotos.value = photos;
-    return photos;
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      clearSharedPhotos();
+      return [];
+    }
+
+    final generation = ++_sharedPhotoLoadGeneration;
+    final photos = await _listSharedPhotos(userId);
+    if (generation == _sharedPhotoLoadGeneration &&
+        _client.auth.currentUser?.id == userId) {
+      sharedPhotos.value = photos;
+      return photos;
+    }
+    return [];
+  }
+
+  static bool _isCurrentUser(String userId) {
+    return _client.auth.currentUser?.id == userId;
   }
 
   static void clearSharedPhotos() {
+    _sharedPhotoLoadGeneration++;
     sharedPhotos.value = [];
   }
 
-  static Future<List<SharedMemoryPhoto>> listSharedPhotos() async {
-    _requireSignedIn();
+  static Future<List<SharedMemoryPhoto>> _listSharedPhotos(
+    String expectedUserId,
+  ) async {
+    if (!_isCurrentUser(expectedUserId)) return [];
     final result =
         await _client.rpc('list_shared_memory_photos_with_location') as List;
-    return Future.wait(
+    if (!_isCurrentUser(expectedUserId)) return [];
+    final photos = await Future.wait(
       result.map((item) async {
         final row = item as Map;
         final ownerId = row['owner_id'] as String;
@@ -178,6 +198,9 @@ class FriendSharingService {
           ownerId,
           imagePath,
         );
+        if (!_isCurrentUser(expectedUserId)) {
+          throw StateError('Account changed while loading shared photos.');
+        }
         return SharedMemoryPhoto(
           photoId: row['photo_id'] as String,
           ownerId: ownerId,
@@ -190,5 +213,7 @@ class FriendSharingService {
         );
       }),
     );
+    if (!_isCurrentUser(expectedUserId)) return [];
+    return photos;
   }
 }

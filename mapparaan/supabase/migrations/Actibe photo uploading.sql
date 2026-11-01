@@ -1,11 +1,8 @@
--- Allow logged-in users to upload memory photos
-CREATE POLICY "Users can upload memory photos" 
-ON storage.objects FOR INSERT 
-TO authenticated 
-WITH CHECK (bucket_id = 'memory-photos');
+-- Legacy policy cleanup only. Do not use this as a setup migration.
+-- The old policies allowed public reads and uploads outside owner folders.
+BEGIN;
 
--- Allow anyone to view memory photos
-CREATE POLICY "Anyone can view memory photos" 
-ON storage.objects FOR SELECT 
-TO public 
-USING (bucket_id = 'memory-photos');
+DROP POLICY IF EXISTS "Users can upload memory photos" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view memory photos" ON storage.objects;
+
+COMMIT;

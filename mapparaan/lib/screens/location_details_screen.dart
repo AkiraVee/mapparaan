@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
-import '../services/memory_photo_compression_service.dart';
-import '../services/memory_pin_service.dart';
+import '../services/memory_photo_upload_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
@@ -20,13 +17,11 @@ import '../services/last_route_service.dart';
 import '../services/commuter_preference_service.dart';
 import '../services/saved_commute_service.dart';
 import '../services/local_ui_preferences_service.dart';
-import '../services/friend_sharing_service.dart';
 import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 import '../services/auth_service.dart';
-import '../widgets/photo_sharing_dialog.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
@@ -1069,98 +1064,20 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
     setState(() => _isUploadingMemory = true);
 
     try {
-      final source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take a photo'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-            ],
-          ),
+      final outcome = await MemoryPhotoUploadService.upload(
+        context,
+        PlaceResult(
+          name: widget.placeName,
+          subtitle: widget.address,
+          coordinates: widget.coordinates,
         ),
       );
-      if (source == null || !mounted) return;
-
-      final pickedFile = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: MemoryPhotoCompressionService.maxDimension.toDouble(),
-        maxHeight: MemoryPhotoCompressionService.maxDimension.toDouble(),
-        imageQuality: 100,
-      );
-      if (pickedFile == null || !mounted) return;
-
-      final originalBytes = await pickedFile.readAsBytes();
-      final imageBytes = await MemoryPhotoCompressionService.compress(
-        originalBytes,
-      );
-
-      List<CommuterFriend> friends = [];
-      String? friendLoadMessage;
-      try {
-        friends = await FriendSharingService.listFriends();
-      } catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            context: ErrorDescription('while loading photo sharing options'),
-          ),
-        );
-        friendLoadMessage = 'Accepted friends could not be loaded. This photo can only be kept private right now.';
-      }
-      if (!mounted) return;
-
-      final sharing = await showDialog<PhotoShareSelection>(
-        context: context,
-        builder: (_) => PhotoSharingDialog(
-          friends: friends,
-          informationMessage: friendLoadMessage,
-        ),
-      );
-      if (sharing == null || !mounted) return;
-
-      final pinId = await MemoryPinService.addPin(
-        placeName: widget.placeName,
-        address: widget.address,
-        coordinates: widget.coordinates,
-        fileName: 'memory-${const Uuid().v4()}.jpg',
-        contentType: 'image/jpeg',
-        imageBytes: imageBytes,
-      );
-
-      var sharingFailed = false;
-      if (sharing.friendIds.isNotEmpty) {
-        try {
-          await FriendSharingService.setPhotoShares(
-            photoId: pinId,
-            friendIds: sharing.friendIds,
-          );
-        } catch (error, stackTrace) {
-          sharingFailed = true;
-          FlutterError.reportError(
-            FlutterErrorDetails(
-              exception: error,
-              stack: stackTrace,
-              context: ErrorDescription('while sharing a memory photo'),
-            ),
-          );
-        }
-      }
-
+      if (!mounted || outcome == null) return;
       if (mounted) {
         _showMemoryPhotoMessage(
-          sharingFailed
+          outcome == MemoryPhotoUploadOutcome.privateSharingFailed
               ? 'Photo uploaded privately. Sharing failed; you can try again from your profile.'
-              : sharing.friendIds.isEmpty
+              : outcome == MemoryPhotoUploadOutcome.private
               ? 'Memory photo compressed and uploaded privately.'
               : 'Memory photo shared with your selected friends.',
         );
@@ -1558,7 +1475,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                             label: Text(
                               _isUploadingMemory
                                   ? 'Uploading photo...'
-                                  : 'Add Memory Photo',
+                                  : 'Add photo to this place',
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: primary,

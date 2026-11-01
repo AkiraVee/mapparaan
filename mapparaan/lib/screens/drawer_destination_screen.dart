@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'friends_screen.dart';
+import 'memories_screen.dart';
 import '../services/commuter_preference_service.dart';
 import '../services/local_ui_preferences_service.dart';
 
@@ -17,6 +18,7 @@ import '../widgets/photo_sharing_dialog.dart';
 
 enum DrawerDestination {
   profile,
+  memories,
   savedPlaces,
   tripHistory,
   friends,
@@ -47,6 +49,10 @@ class DrawerDestinationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final (title, icon) = switch (destination) {
       DrawerDestination.profile => ('My Profile', Icons.person_outline),
+      DrawerDestination.memories => (
+        'My Memories',
+        Icons.photo_library_outlined,
+      ),
       DrawerDestination.savedPlaces => ('Saved Places', Icons.bookmark_border),
       DrawerDestination.tripHistory => ('Trip History', Icons.history),
       DrawerDestination.friends => ('Friends', Icons.people_outline),
@@ -66,6 +72,10 @@ class DrawerDestinationScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: switch (destination) {
             DrawerDestination.profile => _ProfilePage(icon: icon),
+            DrawerDestination.memories => const _AccountRequiredPage(
+              feature: 'your memories',
+              child: MemoriesScreen(),
+            ),
             DrawerDestination.savedPlaces => const _AccountRequiredPage(
               feature: 'saved places',
               child: _SavedPlacesPage(),
@@ -296,77 +306,35 @@ class _ProfilePage extends StatelessWidget {
 
               ValueListenableBuilder<List<MemoryPin>>(
                 valueListenable: MemoryPinService.pins,
-                builder: (context, pins, _) {
-                  return FutureBuilder(
-                    future: Future.wait([
-                      SavedPlacesService.load(),
-                      TripHistoryService.load(),
-                    ]),
-                    builder: (context, snapshot) {
-                      final savedCount =
-                          (snapshot.data?[0] as List?)?.length ?? 0;
-                      final tripCount =
-                          (snapshot.data?[1] as List?)?.length ?? 0;
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _StatItem(
-                              icon: Icons.photo_library_outlined,
-                              value: '${pins.length}',
-                              label: 'Memories',
-                            ),
-                            Container(
-                              height: 30,
-                              width: 1,
-                              color: Colors.grey.withValues(alpha: 0.3),
-                            ),
-                            _StatItem(
-                              icon: Icons.bookmark_border,
-                              value: '$savedCount',
-                              label: 'Saved Places',
-                            ),
-                            Container(
-                              height: 30,
-                              width: 1,
-                              color: Colors.grey.withValues(alpha: 0.3),
-                            ),
-                            _StatItem(
-                              icon: Icons.directions_transit_outlined,
-                              value: '$tripCount',
-                              label: 'Trips Taken',
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
+                builder: (context, pins, _) => _ProfileStats(pins: pins),
               ),
 
               const SizedBox(height: 28),
+
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Open My Memories'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const DrawerDestinationScreen(
+                          destination: DrawerDestination.memories,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Uploaded Location Memories',
+                    'Recent Memories',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   ValueListenableBuilder<List<MemoryPin>>(
@@ -464,7 +432,7 @@ class _ProfilePage extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Visit a place and tap "Add Memory Photo" on the location details screen to save pictures here.',
+                                'Add a memory from My Memories, or add a photo directly from a place on the map.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
@@ -483,6 +451,9 @@ class _ProfilePage extends StatelessWidget {
                         albumsMap.putIfAbsent(pin.placeName, () => []).add(pin);
                       }
                       final albumsList = albumsMap.values.toList();
+                      final previewAlbums = albumsList.length > 4
+                          ? albumsList.sublist(0, 4)
+                          : albumsList;
 
                       return Column(
                         children: [
@@ -513,9 +484,11 @@ class _ProfilePage extends StatelessWidget {
                                   mainAxisSpacing: 12,
                                   childAspectRatio: 0.85,
                                 ),
-                            itemCount: albumsList.length,
+                            itemCount: previewAlbums.length,
                             itemBuilder: (context, index) {
-                              return _MemoryAlbumCard(album: albumsList[index]);
+                              return _MemoryAlbumCard(
+                                album: previewAlbums[index],
+                              );
                             },
                           ),
                         ],
@@ -584,6 +557,116 @@ class _StatItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ProfileStats extends StatefulWidget {
+  final List<MemoryPin> pins;
+
+  const _ProfileStats({required this.pins});
+
+  @override
+  State<_ProfileStats> createState() => _ProfileStatsState();
+}
+
+class _ProfileStatsState extends State<_ProfileStats> {
+  late String? _userId;
+  late Future<(int, int)> _counts;
+
+  @override
+  void initState() {
+    super.initState();
+    _userId = AuthService.currentUser?.id;
+    _counts = _loadCounts();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileStats oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final userId = AuthService.currentUser?.id;
+    if (userId != _userId) {
+      _userId = userId;
+      _counts = _loadCounts();
+    }
+  }
+
+  Future<(int, int)> _loadCounts() async {
+    final results = await Future.wait([
+      SavedPlacesService.load(),
+      TripHistoryService.load(),
+    ]);
+    return (
+      (results[0] as List<SavedPlace>).length,
+      (results[1] as List<TripHistoryEntry>).length,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<(int, int)>(
+      future: _counts,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: const Text('Profile stats could not be loaded.'),
+              trailing: TextButton(
+                onPressed: () => setState(() => _counts = _loadCounts()),
+                child: const Text('Retry'),
+              ),
+            ),
+          );
+        }
+
+        final savedCount = snapshot.data?.$1;
+        final tripCount = snapshot.data?.$2;
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _StatItem(
+                icon: Icons.photo_library_outlined,
+                value: '${widget.pins.length}',
+                label: 'Memories',
+              ),
+              Container(
+                height: 30,
+                width: 1,
+                color: Colors.grey.withValues(alpha: 0.3),
+              ),
+              _StatItem(
+                icon: Icons.bookmark_border,
+                value: savedCount?.toString() ?? '—',
+                label: 'Saved Places',
+              ),
+              Container(
+                height: 30,
+                width: 1,
+                color: Colors.grey.withValues(alpha: 0.3),
+              ),
+              _StatItem(
+                icon: Icons.directions_transit_outlined,
+                value: tripCount?.toString() ?? '—',
+                label: 'Trips Taken',
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
