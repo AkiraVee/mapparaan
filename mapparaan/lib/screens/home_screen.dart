@@ -365,6 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
     List<SavedCommute> commutes,
   ) async {
     final labelController = TextEditingController(text: commute.label);
+    final formKey = GlobalKey<FormState>();
     var preference = commute.preference;
     var passengerType = commute.passengerType;
     final updated = await showDialog<SavedCommute>(
@@ -373,78 +374,86 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, setEditorState) => AlertDialog(
           title: const Text('Edit saved commute'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${commute.originName} → ${commute.destinationName}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: labelController,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Shortcut name'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<RoutePreference>(
-                  initialValue: preference,
-                  decoration: const InputDecoration(
-                    labelText: 'Route preference',
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${commute.originName} → ${commute.destinationName}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: RoutePreference.fastest,
-                      child: Text('Fastest'),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: labelController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Shortcut name',
                     ),
-                    DropdownMenuItem(
-                      value: RoutePreference.cheapest,
-                      child: Text('Cheapest'),
-                    ),
-                    DropdownMenuItem(
-                      value: RoutePreference.fewestTransfers,
-                      child: Text('Fewest transfers'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setEditorState(() => preference = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<PassengerType>(
-                  initialValue: passengerType,
-                  decoration: const InputDecoration(
-                    labelText: 'Passenger type',
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter a name for this shortcut.'
+                        : null,
                   ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: PassengerType.general,
-                      child: Text('Regular'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<RoutePreference>(
+                    initialValue: preference,
+                    decoration: const InputDecoration(
+                      labelText: 'Route preference',
                     ),
-                    DropdownMenuItem(
-                      value: PassengerType.student,
-                      child: Text('Student'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: RoutePreference.fastest,
+                        child: Text('Fastest'),
+                      ),
+                      DropdownMenuItem(
+                        value: RoutePreference.cheapest,
+                        child: Text('Cheapest'),
+                      ),
+                      DropdownMenuItem(
+                        value: RoutePreference.fewestTransfers,
+                        child: Text('Fewest transfers'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setEditorState(() => preference = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<PassengerType>(
+                    initialValue: passengerType,
+                    decoration: const InputDecoration(
+                      labelText: 'Passenger type',
                     ),
-                    DropdownMenuItem(
-                      value: PassengerType.senior,
-                      child: Text('Senior'),
-                    ),
-                    DropdownMenuItem(
-                      value: PassengerType.pwd,
-                      child: Text('PWD'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setEditorState(() => passengerType = value);
-                    }
-                  },
-                ),
-              ],
+                    items: const [
+                      DropdownMenuItem(
+                        value: PassengerType.general,
+                        child: Text('Regular'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.student,
+                        child: Text('Student'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.senior,
+                        child: Text('Senior'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.pwd,
+                        child: Text('PWD'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setEditorState(() => passengerType = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -454,8 +463,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             FilledButton(
               onPressed: () {
+                if (!formKey.currentState!.validate()) return;
                 final label = labelController.text.trim();
-                if (label.isEmpty) return;
                 Navigator.pop(
                   dialogContext,
                   SavedCommute(
@@ -621,9 +630,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       (item) => item.id == commute.id,
                                     );
                                     if (mounted) {
-                                      setState(
-                                        () => _savedCommutes = commutes,
-                                      );
+                                      setState(() => _savedCommutes = commutes);
                                     }
                                     if (dialogContext.mounted) {
                                       setDialogState(() {});

@@ -574,11 +574,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           content: Text(added ? 'Saved place' : 'Removed from saved places'),
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while saving a place'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Could not save place: $error')));
+        ).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save this place. Please try again.'),
+          ),
+        );
       }
     }
   }
@@ -590,10 +601,19 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           text: '${widget.resolvedPlaceName} — ${widget.resolvedSubtitle}',
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while sharing a place'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share place: $error')),
+          const SnackBar(
+            content: Text('Could not share this place. Please try again.'),
+          ),
         );
       }
     }
@@ -669,10 +689,19 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           subject: 'Mapparaan commute invite',
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while sharing a commute invite'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share invite: $error')),
+          const SnackBar(
+            content: Text('Could not share the invite. Please try again.'),
+          ),
         );
       }
     }
@@ -690,14 +719,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     final labelController = TextEditingController(
       text: '${widget.origin} → ${widget.resolvedPlaceName}',
     );
+    final formKey = GlobalKey<FormState>();
     final label = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Save commute'),
-        content: TextField(
-          controller: labelController,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Shortcut name'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: labelController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Shortcut name'),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Enter a name for this shortcut.'
+                : null,
+          ),
         ),
         actions: [
           TextButton(
@@ -705,7 +742,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, labelController.text),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(dialogContext, labelController.text);
+            },
             child: const Text('Save'),
           ),
         ],
@@ -714,22 +754,43 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     labelController.dispose();
     if (!mounted || label == null || label.trim().isEmpty) return;
 
-    await SavedCommuteService.save(
-      SavedCommute(
-        id: '${origin.latitude},${origin.longitude}|${widget.resolvedDestination.latitude},${widget.resolvedDestination.longitude}',
-        label: label.trim(),
-        originName: widget.origin,
-        origin: origin,
-        destinationName: widget.resolvedPlaceName,
-        destination: widget.resolvedDestination,
-        preference: _selectedPreference,
-        passengerType: _passengerType,
-      ),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Commute shortcut saved on this device.')),
+    try {
+      await SavedCommuteService.save(
+        SavedCommute(
+          id: '${origin.latitude},${origin.longitude}|${widget.resolvedDestination.latitude},${widget.resolvedDestination.longitude}',
+          label: label.trim(),
+          originName: widget.origin,
+          origin: origin,
+          destinationName: widget.resolvedPlaceName,
+          destination: widget.resolvedDestination,
+          preference: _selectedPreference,
+          passengerType: _passengerType,
+        ),
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Commute shortcut saved on this device.'),
+          ),
+        );
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while saving a commute shortcut'),
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not save this commute. Please check your device storage and try again.',
+            ),
+          ),
+        );
+      }
     }
   }
 
