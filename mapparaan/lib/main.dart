@@ -110,10 +110,16 @@ class MyApp extends StatelessWidget {
               valueListenable: LocalUiPreferencesService.current,
               builder: (context, localPreferences, child) {
                 final filter = localPreferences.colorVisionFilter;
-                if (filter == ColorVisionFilter.none) return child!;
-                return ColorFiltered(
-                  colorFilter: ColorFilter.matrix(filter.matrix),
-                  child: child,
+                final appChild = child!;
+                final content = filter == ColorVisionFilter.none
+                    ? appChild
+                    : ColorFiltered(
+                        colorFilter: ColorFilter.matrix(filter.matrix),
+                        child: appChild,
+                      );
+                return MediaQuery.withClampedTextScaling(
+                  minScaleFactor: localPreferences.seniorMode ? 1.15 : 1,
+                  child: content,
                 );
               },
               child: child,
@@ -125,6 +131,8 @@ class MyApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xFFF7F9F8),
             cardColor: Colors.white,
             colorScheme: lightColorScheme,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
@@ -133,6 +141,8 @@ class MyApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xFF121212),
             cardColor: const Color(0xFF1E1E1E),
             colorScheme: darkColorScheme,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
             useMaterial3: true,
           ),
           themeMode: switch (preferences.themeMode) {

@@ -359,6 +359,100 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _loadSavedCommutes();
   }
 
+  Future<void> _manageSavedCommutes() async {
+    var commutes = List<SavedCommute>.of(_savedCommutes);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Saved commutes'),
+          content: SizedBox(
+            width: 420,
+            child: commutes.isEmpty
+                ? const Text('No saved commutes yet.')
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final commute in commutes)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.route_outlined),
+                          title: Text(commute.label),
+                          subtitle: Text(
+                            '${commute.originName} → ${commute.destinationName}',
+                          ),
+                          onTap: () {
+                            Navigator.pop(dialogContext);
+                            _openSavedCommute(commute);
+                          },
+                          trailing: IconButton(
+                            tooltip: 'Remove ${commute.label}',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (confirmContext) => AlertDialog(
+                                  title: const Text('Remove saved commute?'),
+                                  content: Text(
+                                    'Remove "${commute.label}" from this device?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(confirmContext, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () =>
+                                          Navigator.pop(confirmContext, true),
+                                      child: const Text('Remove'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed != true) return;
+                              try {
+                                await SavedCommuteService.delete(commute.id);
+                                commutes = commutes
+                                    .where((item) => item.id != commute.id)
+                                    .toList();
+                                if (mounted) {
+                                  setState(() => _savedCommutes = commutes);
+                                }
+                                if (dialogContext.mounted) {
+                                  setDialogState(() {});
+                                }
+                              } catch (error, stackTrace) {
+                                FlutterError.reportError(
+                                  FlutterErrorDetails(
+                                    exception: error,
+                                    stack: stackTrace,
+                                    context: ErrorDescription(
+                                      'while removing a saved commute',
+                                    ),
+                                  ),
+                                );
+                                _showMessage(
+                                  'Could not remove this commute. Please try again.',
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showLocalTools() async {
     var sheetPreferences = _localPreferences;
     await showModalBottomSheet<void>(
@@ -1278,7 +1372,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       children: [
-                        const MapparaanTileLayer(),
+                        MapparaanTileLayer(
+                          dataSaver: _localPreferences.dataSaver,
+                        ),
                         if (_userLocation != null)
                           MarkerLayer(
                             markers: [
@@ -1478,6 +1574,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
+                            tooltip: 'Manage saved commutes',
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: _manageSavedCommutes,
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
                             tooltip: 'Refresh saved commutes',
                             icon: const Icon(Icons.refresh, size: 18),
                             onPressed: _loadSavedCommutes,
@@ -1487,7 +1589,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: _savedCommutes.take(3).map((commute) {
+                          children: _savedCommutes.map((commute) {
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ActionChip(
@@ -1497,6 +1599,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           }).toList(),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Tap a shortcut to check its route again.',
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                     ],

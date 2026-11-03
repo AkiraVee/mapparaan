@@ -35,8 +35,13 @@ enum MapTint {
 /// Use it as a child of `FlutterMap` instead of a plain `TileLayer`.
 class MapparaanTileLayer extends StatelessWidget {
   final MapTint tint;
+  final bool dataSaver;
 
-  const MapparaanTileLayer({super.key, this.tint = MapTint.teal});
+  const MapparaanTileLayer({
+    super.key,
+    this.tint = MapTint.teal,
+    this.dataSaver = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -46,11 +51,11 @@ class MapparaanTileLayer extends StatelessWidget {
         final layer = TileLayer(
           urlTemplate: AppConstants.mapTileUrl,
           userAgentPackageName: AppConstants.appPackageName,
-          maxZoom: AppConstants.maxZoom,
+          maxZoom: dataSaver ? 16 : AppConstants.maxZoom,
           tileProvider: CancellableNetworkTileProvider(),
           tileDisplay: const TileDisplay.instantaneous(),
-          panBuffer: 2,
-          keepBuffer: 4,
+          panBuffer: dataSaver ? 0 : 2,
+          keepBuffer: dataSaver ? 1 : 4,
         );
         final overlay = preferences.highContrastMap
             ? const Color(0x22FFFFFF)

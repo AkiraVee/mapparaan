@@ -33,6 +33,29 @@ class SharedMemoryPhoto {
   });
 }
 
+List<List<SharedMemoryPhoto>> groupSharedMemoryPhotosByOwnerAndLocation(
+  List<SharedMemoryPhoto> photos,
+) {
+  final groups = <(String, String, String), List<SharedMemoryPhoto>>{};
+  for (final photo in photos) {
+    final key = (
+      photo.ownerId,
+      photo.coordinates.latitude.toStringAsFixed(6),
+      photo.coordinates.longitude.toStringAsFixed(6),
+    );
+    groups.putIfAbsent(key, () => []).add(photo);
+  }
+
+  final albums = groups.values.toList();
+  for (final album in albums) {
+    album.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+  albums.sort(
+    (a, b) => b.last.createdAt.compareTo(a.last.createdAt),
+  );
+  return albums;
+}
+
 class MemoryPhotoShare {
   final String friendId;
   final String friendName;
