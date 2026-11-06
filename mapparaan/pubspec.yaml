@@ -75,8 +75,8 @@ flutter:
   assets:
     - .env
     - data/reference/manila_boundary.geojson
-  # Runtime configuration is loaded when the app starts. Keep secrets out of
-  # the Flutter asset bundle; use .env.example as the setup template.
+  # Runtime configuration is loaded at startup. Keep privileged secrets out
+  # of the Flutter asset bundle; use .env.example as the setup template.
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

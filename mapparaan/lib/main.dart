@@ -20,8 +20,6 @@ bool supabaseReady = false;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load client configuration before initializing Supabase. A missing local
-  // file is handled below so tests and a first launch can show a useful error.
   String? configurationError;
   try {
     await dotenv.load(fileName: '.env');

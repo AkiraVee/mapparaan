@@ -6,15 +6,14 @@ A new Flutter project.
 
 Copy `.env.example` to `.env` and set the project URL and client keys before
 running the app. The `.env` file is ignored by Git and included as a Flutter
-asset because `flutter_dotenv` loads it at startup. That means every value in
-it is extractable from a distributed app.
+asset because `flutter_dotenv` loads it at startup. Values in a distributed
+Flutter app are extractable.
 
-Values included in a Flutter app are extractable from the built app. Supabase's
-publishable/anon key is a public client key, not a server secret; protect user
-data with database Row Level Security and Storage policies. CARTO keys are
-also visible to clients and should be restricted by provider-side domain,
-quota, and allowed API settings. Never put a Supabase `service_role` key or
-another privileged secret in `.env`.
+Supabase's publishable/anon key is a public client key; protect user data with
+database Row Level Security and Storage policies. CARTO keys are also visible
+to clients and should be restricted by provider-side domain, quota, and
+allowed API settings. Never put a Supabase `service_role` key or another
+privileged secret in `.env`.
 
 Release builds require HTTPS URLs for Supabase and the transit API. The
 localhost transit URL is a development fallback only. Route planning sends
@@ -111,10 +110,9 @@ Before treating sharing as verified, use test accounts A, B, and C to check:
 Password brute-force defenses are configured in the Supabase project, not by
 Flutter client-side throttling. Verify the project's Auth rate limits and
 configure CAPTCHA/abuse protection where available. Do not treat a client-side
-lockout as a security boundary. The bundled Supabase anon/publishable key and
-map-provider keys are public client configuration; never put a `service_role`
-or other privileged key in `.env`, and restrict provider keys in their
-respective dashboards.
+lockout as a security boundary. The bundled Supabase anon/publishable key and map-provider keys are public
+client configuration; never put a `service_role` or other privileged key in
+`.env`, and restrict provider keys in their respective dashboards.
 
 Run the transit planner locally from this directory with
 `python backend/planner/api.py --host 127.0.0.1 --port 8080`. The app's default
