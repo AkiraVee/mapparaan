@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
-import '../services/memory_photo_compression_service.dart';
-import '../services/memory_pin_service.dart';
+import '../services/memory_photo_upload_service.dart';
 import '../services/place_search_service.dart';
 import '../services/route_planner_service.dart';
 import '../services/saved_places_service.dart';
@@ -20,13 +17,11 @@ import '../services/last_route_service.dart';
 import '../services/commuter_preference_service.dart';
 import '../services/saved_commute_service.dart';
 import '../services/local_ui_preferences_service.dart';
-import '../services/friend_sharing_service.dart';
 import 'auth_screen.dart';
 import '../widgets/circle_icon_button.dart';
 import '../widgets/mapparaan_drawer.dart';
 import '../widgets/mapparaan_tile_layer.dart';
 import '../services/auth_service.dart';
-import '../widgets/photo_sharing_dialog.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final PlaceResult? place;
@@ -577,11 +572,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           content: Text(added ? 'Saved place' : 'Removed from saved places'),
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while saving a place'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Could not save place: $error')));
+        ).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save this place. Please try again.'),
+          ),
+        );
       }
     }
   }
@@ -593,10 +599,19 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           text: '${widget.resolvedPlaceName} — ${widget.resolvedSubtitle}',
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while sharing a place'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share place: $error')),
+          const SnackBar(
+            content: Text('Could not share this place. Please try again.'),
+          ),
         );
       }
     }
@@ -672,10 +687,19 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           subject: 'Mapparaan commute invite',
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while sharing a commute invite'),
+        ),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share invite: $error')),
+          const SnackBar(
+            content: Text('Could not share the invite. Please try again.'),
+          ),
         );
       }
     }
@@ -693,14 +717,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     final labelController = TextEditingController(
       text: '${widget.origin} → ${widget.resolvedPlaceName}',
     );
+    final formKey = GlobalKey<FormState>();
     final label = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Save commute'),
-        content: TextField(
-          controller: labelController,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Shortcut name'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: labelController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Shortcut name'),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Enter a name for this shortcut.'
+                : null,
+          ),
         ),
         actions: [
           TextButton(
@@ -708,7 +740,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, labelController.text),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(dialogContext, labelController.text);
+            },
             child: const Text('Save'),
           ),
         ],
@@ -717,22 +752,43 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     labelController.dispose();
     if (!mounted || label == null || label.trim().isEmpty) return;
 
-    await SavedCommuteService.save(
-      SavedCommute(
-        id: '${origin.latitude},${origin.longitude}|${widget.resolvedDestination.latitude},${widget.resolvedDestination.longitude}',
-        label: label.trim(),
-        originName: widget.origin,
-        origin: origin,
-        destinationName: widget.resolvedPlaceName,
-        destination: widget.resolvedDestination,
-        preference: _selectedPreference,
-        passengerType: _passengerType,
-      ),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Commute shortcut saved on this device.')),
+    try {
+      await SavedCommuteService.save(
+        SavedCommute(
+          id: '${origin.latitude},${origin.longitude}|${widget.resolvedDestination.latitude},${widget.resolvedDestination.longitude}',
+          label: label.trim(),
+          originName: widget.origin,
+          origin: origin,
+          destinationName: widget.resolvedPlaceName,
+          destination: widget.resolvedDestination,
+          preference: _selectedPreference,
+          passengerType: _passengerType,
+        ),
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Commute shortcut saved on this device.'),
+          ),
+        );
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while saving a commute shortcut'),
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not save this commute. Please check your device storage and try again.',
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -1067,98 +1123,20 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
     setState(() => _isUploadingMemory = true);
 
     try {
-      final source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take a photo'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-            ],
-          ),
+      final outcome = await MemoryPhotoUploadService.upload(
+        context,
+        PlaceResult(
+          name: widget.placeName,
+          subtitle: widget.address,
+          coordinates: widget.coordinates,
         ),
       );
-      if (source == null || !mounted) return;
-
-      final pickedFile = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: MemoryPhotoCompressionService.maxDimension.toDouble(),
-        maxHeight: MemoryPhotoCompressionService.maxDimension.toDouble(),
-        imageQuality: 100,
-      );
-      if (pickedFile == null || !mounted) return;
-
-      final originalBytes = await pickedFile.readAsBytes();
-      final imageBytes = await MemoryPhotoCompressionService.compress(
-        originalBytes,
-      );
-
-      List<CommuterFriend> friends = [];
-      String? friendLoadMessage;
-      try {
-        friends = await FriendSharingService.listFriends();
-      } catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            context: ErrorDescription('while loading photo sharing options'),
-          ),
-        );
-        friendLoadMessage = 'Accepted friends could not be loaded. This photo can only be kept private right now.';
-      }
-      if (!mounted) return;
-
-      final sharing = await showDialog<PhotoShareSelection>(
-        context: context,
-        builder: (_) => PhotoSharingDialog(
-          friends: friends,
-          informationMessage: friendLoadMessage,
-        ),
-      );
-      if (sharing == null || !mounted) return;
-
-      final pinId = await MemoryPinService.addPin(
-        placeName: widget.placeName,
-        address: widget.address,
-        coordinates: widget.coordinates,
-        fileName: 'memory-${const Uuid().v4()}.jpg',
-        contentType: 'image/jpeg',
-        imageBytes: imageBytes,
-      );
-
-      var sharingFailed = false;
-      if (sharing.friendIds.isNotEmpty) {
-        try {
-          await FriendSharingService.setPhotoShares(
-            photoId: pinId,
-            friendIds: sharing.friendIds,
-          );
-        } catch (error, stackTrace) {
-          sharingFailed = true;
-          FlutterError.reportError(
-            FlutterErrorDetails(
-              exception: error,
-              stack: stackTrace,
-              context: ErrorDescription('while sharing a memory photo'),
-            ),
-          );
-        }
-      }
-
+      if (!mounted || outcome == null) return;
       if (mounted) {
         _showMemoryPhotoMessage(
-          sharingFailed
+          outcome == MemoryPhotoUploadOutcome.privateSharingFailed
               ? 'Photo uploaded privately. Sharing failed; you can try again from your profile.'
-              : sharing.friendIds.isEmpty
+              : outcome == MemoryPhotoUploadOutcome.private
               ? 'Memory photo compressed and uploaded privately.'
               : 'Memory photo shared with your selected friends.',
         );
@@ -1556,7 +1534,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                             label: Text(
                               _isUploadingMemory
                                   ? 'Uploading photo...'
-                                  : 'Add Memory Photo',
+                                  : 'Add photo to this place',
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: primary,

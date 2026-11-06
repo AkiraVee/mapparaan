@@ -18,6 +18,7 @@ import 'map_pin_selection_screen.dart';
 
 class SearchLocationScreen extends StatefulWidget {
   final String? initialQuery;
+  final String selectionActionLabel;
   final bool showMap;
   final Future<LatLng?> Function()? locateUser;
   final PlaceSearch searchPlaces;
@@ -29,6 +30,7 @@ class SearchLocationScreen extends StatefulWidget {
   const SearchLocationScreen({
     super.key,
     this.initialQuery,
+    this.selectionActionLabel = 'Plan route',
     this.showMap = true,
     this.locateUser,
     this.searchPlaces = PlaceSearchService.search,
@@ -745,6 +747,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       final selected = _selectedPlace!;
       return _SelectedPlacePreview(
         place: selected,
+        actionLabel: widget.selectionActionLabel,
         onBack: () => setState(() => _selectedPlace = null),
         onPlanRoute: () => _selectPlace(selected),
       );
@@ -1220,11 +1223,13 @@ class _SearchDropdown extends StatelessWidget {
 
 class _SelectedPlacePreview extends StatelessWidget {
   final PlaceResult place;
+  final String actionLabel;
   final VoidCallback onBack;
   final VoidCallback onPlanRoute;
 
   const _SelectedPlacePreview({
     required this.place,
+    required this.actionLabel,
     required this.onBack,
     required this.onPlanRoute,
   });
@@ -1291,8 +1296,12 @@ class _SelectedPlacePreview extends StatelessWidget {
           const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: onPlanRoute,
-            icon: const Icon(Icons.directions),
-            label: const Text('Plan route'),
+            icon: Icon(
+              actionLabel == 'Use this place'
+                  ? Icons.check_circle_outline
+                  : Icons.directions,
+            ),
+            label: Text(actionLabel),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(52),
             ),

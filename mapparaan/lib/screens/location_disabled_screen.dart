@@ -77,10 +77,21 @@ class _LocationDisabledScreenState extends State<LocationDisabledScreen> {
           MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while enabling location access'),
+        ),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not enable location: $error')),
+        const SnackBar(
+          content: Text(
+            'Could not enable location. Check your device settings and try again.',
+          ),
+        ),
       );
     }
   }

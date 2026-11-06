@@ -174,8 +174,9 @@ mapparaan/
 │   ├── index.html
 │   └── manifest.json
 ├── .dockerignore
-├── .env
+├── .env (local, ignored)
 ├── .env.example
+├── .dart-defines.example.json (unused alternative template)
 ├── .flutter-plugins-dependencies
 ├── .gitignore
 ├── .metadata

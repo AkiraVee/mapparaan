@@ -1,6 +1,7 @@
--- Restrict public bucket listing on memory-photos
-CREATE POLICY "Restrict bucket listing" 
-ON storage.objects 
-FOR SELECT 
-TO public 
-USING (bucket_id = 'memory-photos' AND (auth.role() = 'authenticated' OR auth.uid() IS NOT NULL));
+-- Legacy policy cleanup only. Do not use this as a setup migration.
+-- Authenticated bucket access is enforced by the versioned owner/share policies.
+BEGIN;
+
+DROP POLICY IF EXISTS "Restrict bucket listing" ON storage.objects;
+
+COMMIT;

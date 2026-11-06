@@ -84,15 +84,23 @@ class CommuterPreferencesService {
   static final ValueNotifier<CommuterPreferences> current = ValueNotifier(
     const CommuterPreferences(),
   );
+  static int _loadGeneration = 0;
+
+  static void clearForAuthChange() {
+    _loadGeneration++;
+    current.value = const CommuterPreferences();
+  }
 
   static Future<CommuterPreferences> load() async {
     final client = _clientOrNull;
     final userId = client?.auth.currentUser?.id;
     if (userId == null) {
+      _loadGeneration++;
       current.value = const CommuterPreferences();
       return current.value;
     }
 
+    final generation = ++_loadGeneration;
     final response = await client!
         .from('user_preferences')
         .select(
@@ -117,7 +125,10 @@ class CommuterPreferencesService {
       compactUi: row['compact_ui'] as bool? ?? false,
       useMetricUnits: row['use_metric_units'] as bool? ?? true,
     );
-    current.value = preferences;
+    if (generation == _loadGeneration &&
+        _clientOrNull?.auth.currentUser?.id == userId) {
+      current.value = preferences;
+    }
     return preferences;
   }
 

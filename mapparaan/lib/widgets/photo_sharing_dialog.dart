@@ -36,6 +36,14 @@ class _PhotoSharingDialogState extends State<PhotoSharingDialog> {
   @override
   Widget build(BuildContext context) {
     final isSharing = _selectedFriendIds.isNotEmpty;
+    final isEditingShare = widget.initialFriendIds.isNotEmpty;
+    final actionLabel = switch ((isSharing, isEditingShare)) {
+      (true, true) => 'Update sharing',
+      (true, false) =>
+        'Share with ${_selectedFriendIds.length} ${_selectedFriendIds.length == 1 ? 'friend' : 'friends'}',
+      (false, true) => 'Make private',
+      (false, false) => 'Keep private',
+    };
 
     return AlertDialog(
       title: const Text('Photo privacy'),
@@ -49,14 +57,39 @@ class _PhotoSharingDialogState extends State<PhotoSharingDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'No friends are selected by default, so this photo stays private.',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Selected friends will see the saved place name and exact map pin, along with the photo.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isSharing
+                      ? Theme.of(context).colorScheme.errorContainer
+                      : Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      isSharing ? Icons.location_on : Icons.lock_outline,
+                      color: isSharing
+                          ? Theme.of(context).colorScheme.onErrorContainer
+                          : Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isSharing
+                            ? 'Sharing reveals this photo, its saved place, and the exact map pin to the selected friends. The location cannot be hidden separately.'
+                            : 'No friends are selected. This photo stays private; selecting a friend will also reveal its saved place and exact map pin.',
+                        style: TextStyle(
+                          color: isSharing
+                              ? Theme.of(context).colorScheme.onErrorContainer
+                              : Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (widget.informationMessage != null) ...[
@@ -91,7 +124,7 @@ class _PhotoSharingDialogState extends State<PhotoSharingDialog> {
               if (isSharing) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'A photo can still reveal a venue through signs, logos, or other details in the image.',
+                  'The image itself may reveal more through faces, signs, logos, or other details. Only share with people you trust.',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -109,7 +142,7 @@ class _PhotoSharingDialogState extends State<PhotoSharingDialog> {
         FilledButton(
           onPressed: () => Navigator.of(context)
               .pop(PhotoShareSelection(friendIds: _selectedFriendIds.toList())),
-          child: const Text('Continue'),
+          child: Text(actionLabel),
         ),
       ],
     );

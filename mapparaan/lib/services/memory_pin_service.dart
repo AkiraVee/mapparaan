@@ -27,6 +27,8 @@ class MemoryPin {
 enum MemoryPinLoadStatus { idle, loading, loaded, error }
 
 class MemoryPinService {
+  static const int _ownerImageUrlValiditySeconds = 600;
+
   static SupabaseClient? get _clientOrNull {
     try {
       return Supabase.instance.client;
@@ -39,30 +41,50 @@ class MemoryPinService {
   static final ValueNotifier<MemoryPinLoadStatus> loadStatus = ValueNotifier(
     MemoryPinLoadStatus.idle,
   );
+  static int _loadGeneration = 0;
 
   static Future<void> loadMemoryPins() async {
+    final generation = ++_loadGeneration;
+    final userId = _clientOrNull?.auth.currentUser?.id;
+    if (userId == null) {
+      pins.value = [];
+      loadStatus.value = MemoryPinLoadStatus.loaded;
+      return;
+    }
+
     loadStatus.value = MemoryPinLoadStatus.loading;
     try {
-      await _loadMemoryPins();
-      loadStatus.value = MemoryPinLoadStatus.loaded;
+      await _loadMemoryPins(userId, generation);
+      if (_isCurrentLoad(userId, generation)) {
+        loadStatus.value = MemoryPinLoadStatus.loaded;
+      }
     } catch (_) {
-      loadStatus.value = MemoryPinLoadStatus.error;
+      if (_isCurrentLoad(userId, generation)) {
+        loadStatus.value = MemoryPinLoadStatus.error;
+      }
       rethrow;
     }
   }
 
-  static Future<void> _loadMemoryPins() async {
+  static bool _isCurrentLoad(String userId, int generation) {
+    return generation == _loadGeneration &&
+        _clientOrNull?.auth.currentUser?.id == userId;
+  }
+
+  static void clearForAuthChange() {
+    _loadGeneration++;
+    pins.value = [];
+    loadStatus.value = MemoryPinLoadStatus.idle;
+  }
+
+  static Future<void> _loadMemoryPins(String userId, int generation) async {
     final client = _clientOrNull;
-    final userId = client?.auth.currentUser?.id;
-    if (userId == null) {
-      pins.value = [];
-      return;
-    }
+    if (client == null || !_isCurrentLoad(userId, generation)) return;
 
     late final List<dynamic> response;
     var includesImagePath = true;
     try {
-      response = await client!
+      response = await client
           .from('memory_pins')
           .select('id, place_name, address, geom, image_url, image_path')
           .eq('user_id', userId);
@@ -74,7 +96,7 @@ class MemoryPinService {
                   error.message.contains('schema cache')));
       if (!missingImagePath) rethrow;
       includesImagePath = false;
-      response = await client!
+      response = await client
           .from('memory_pins')
           .select('id, place_name, address, geom, image_url')
           .eq('user_id', userId);
@@ -115,7 +137,9 @@ class MemoryPinService {
       }),
     );
 
-    pins.value = loadedPins;
+    if (_isCurrentLoad(userId, generation)) {
+      pins.value = loadedPins;
+    }
   }
 
   static Future<String> addPin({
@@ -205,7 +229,9 @@ class MemoryPinService {
       imagePath: filePath,
     );
 
-    pins.value = [...pins.value, newPin];
+    if (client.auth.currentUser?.id == userId) {
+      pins.value = [...pins.value, newPin];
+    }
     return pinId;
   }
 
@@ -278,7 +304,7 @@ class MemoryPinService {
     }
     return client.storage
         .from('memory-photos')
-        .createSignedUrl(imagePath, 3600);
+        .createSignedUrl(imagePath, _ownerImageUrlValiditySeconds);
   }
 
   static String? _pathFromLegacyPublicUrl(String? imageUrl) {

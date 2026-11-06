@@ -84,6 +84,12 @@ class MapparaanDrawer extends StatelessWidget {
                         _openDestination(context, DrawerDestination.profile),
                   ),
                   _MenuItem(
+                    icon: Icons.photo_library_outlined,
+                    label: 'My Memories',
+                    onTap: () =>
+                        _openDestination(context, DrawerDestination.memories),
+                  ),
+                  _MenuItem(
                     icon: Icons.bookmark_border,
                     label: 'Saved Places',
                     onTap: () => _openDestination(

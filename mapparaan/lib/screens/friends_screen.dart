@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/friend_sharing_service.dart';
+import '../services/local_ui_preferences_service.dart';
+import '../widgets/mapparaan_tile_layer.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -290,38 +293,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
               if (data.photos.isEmpty)
                 const Text('No friends have shared photos with you.')
               else
-                ...data.photos.map(
-                  (photo) => Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AspectRatio(
-                          aspectRatio: 16 / 10,
-                          child: Image.network(
-                            photo.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const Center(
-                              child: Text(
-                                'Photo unavailable. Refresh to request a new private link.',
-                              ),
-                            ),
-                          ),
-                        ),
-                        ListTile(
-                          title: Text(photo.placeName),
-                          subtitle: Text(
-                            [
-                              if (photo.address?.isNotEmpty == true)
-                                photo.address!,
-                              'Shared by ${photo.ownerName}',
-                            ].join(' · '),
-                          ),
-                          leading: const Icon(Icons.location_on_outlined),
-                        ),
-                      ],
-                    ),
-                  ),
+                ...groupSharedMemoryPhotosByOwnerAndLocation(data.photos).map(
+                  _buildSharedPhotoAlbum,
                 ),
             ],
           ),
@@ -329,6 +302,276 @@ class _FriendsScreenState extends State<FriendsScreen> {
       },
     );
   }
+
+  Widget _buildSharedPhotoAlbum(List<SharedMemoryPhoto> album) {
+    final cover = album.last;
+    return ValueListenableBuilder<LocalUiPreferences>(
+      valueListenable: LocalUiPreferencesService.current,
+      builder: (context, preferences, _) => Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _showSharedPhotoAlbum(album),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (preferences.dataSaver)
+                      ColoredBox(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.data_saver_off_outlined, size: 32),
+                              SizedBox(height: 8),
+                              Text('Open album to load photos'),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Image.network(
+                        cover.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const Center(
+                          child: Text(
+                            'Photo unavailable. Refresh to request a new private link.',
+                          ),
+                        ),
+                      ),
+                    if (album.length > 1)
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.photo_library_outlined,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${album.length} photos',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              ListTile(
+                title: Text(cover.placeName),
+                subtitle: Text(
+                  [
+                    if (cover.address?.isNotEmpty == true) cover.address!,
+                    'Shared by ${cover.ownerName}',
+                    'Last shared ${MaterialLocalizations.of(context).formatMediumDate(cover.createdAt.toLocal())}',
+                  ].join(' · '),
+                ),
+                leading: const Icon(Icons.location_on_outlined),
+                trailing: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSharedPhotoAlbum(List<SharedMemoryPhoto> album) async {
+    var currentIndex = 0;
+    var showMap = false;
+    var allowMapInDataSaver =
+        !LocalUiPreferencesService.current.value.dataSaver;
+    final pageController = PageController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final photo = album[currentIndex];
+          return AlertDialog(
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    photo.placeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (album.length > 1)
+                  Text(
+                    '${currentIndex + 1} / ${album.length}',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 10,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        PageView.builder(
+                          controller: pageController,
+                          itemCount: album.length,
+                          onPageChanged: (index) =>
+                              setDialogState(() => currentIndex = index),
+                          itemBuilder: (context, index) => Image.network(
+                            album[index].imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Text(
+                                'Photo unavailable. Refresh to request a new private link.',
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (album.length > 1) ...[
+                          if (currentIndex > 0)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton.filled(
+                                tooltip: 'Previous photo',
+                                onPressed: () => pageController.previousPage(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeInOut,
+                                ),
+                                icon: const Icon(Icons.chevron_left),
+                              ),
+                            ),
+                          if (currentIndex < album.length - 1)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton.filled(
+                                tooltip: 'Next photo',
+                                onPressed: () => pageController.nextPage(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeInOut,
+                                ),
+                                icon: const Icon(Icons.chevron_right),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (photo.address?.isNotEmpty == true) ...[
+                    const SizedBox(height: 12),
+                    Text(photo.address!),
+                  ],
+                  const SizedBox(height: 8),
+                  Text('Shared by ${photo.ownerName}'),
+                  Text(
+                    'Shared on ${MaterialLocalizations.of(context).formatMediumDate(photo.createdAt.toLocal())} at ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(photo.createdAt.toLocal()))}',
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => setDialogState(() {
+                      showMap = !showMap;
+                    }),
+                    icon: Icon(
+                      showMap ? Icons.map_outlined : Icons.location_on_outlined,
+                    ),
+                    label: Text(showMap ? 'Hide album map' : 'Show album map'),
+                  ),
+                  if (showMap && !allowMapInDataSaver) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Data-saver mode is on. Loading this map uses mobile data.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setDialogState(() => allowMapInDataSaver = true),
+                      child: const Text('Load map anyway'),
+                    ),
+                  ],
+                  if (showMap && allowMapInDataSaver) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 160,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: FlutterMap(
+                          options: MapOptions(
+                            initialCenter: photo.coordinates,
+                            initialZoom: 15,
+                            interactionOptions: const InteractionOptions(
+                              flags: InteractiveFlag.all &
+                                  ~InteractiveFlag.rotate,
+                            ),
+                          ),
+                          children: [
+                            const MapparaanTileLayer(),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: photo.coordinates,
+                                  width: 40,
+                                  height: 40,
+                                  child: Icon(
+                                    Icons.location_on,
+                                    color: Theme.of(context).colorScheme.error,
+                                    size: 36,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    pageController.dispose();
+  }
+
 }
 
 class _FriendsPageData {

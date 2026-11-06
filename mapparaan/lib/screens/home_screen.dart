@@ -359,6 +359,337 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _loadSavedCommutes();
   }
 
+  Future<void> _editSavedCommute(
+    SavedCommute commute,
+    void Function(void Function()) setDialogState,
+    List<SavedCommute> commutes,
+  ) async {
+    final labelController = TextEditingController(text: commute.label);
+    final formKey = GlobalKey<FormState>();
+    var preference = commute.preference;
+    var passengerType = commute.passengerType;
+    final updated = await showDialog<SavedCommute>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setEditorState) => AlertDialog(
+          title: const Text('Edit saved commute'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${commute.originName} → ${commute.destinationName}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: labelController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Shortcut name',
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter a name for this shortcut.'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<RoutePreference>(
+                    initialValue: preference,
+                    decoration: const InputDecoration(
+                      labelText: 'Route preference',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: RoutePreference.fastest,
+                        child: Text('Fastest'),
+                      ),
+                      DropdownMenuItem(
+                        value: RoutePreference.cheapest,
+                        child: Text('Cheapest'),
+                      ),
+                      DropdownMenuItem(
+                        value: RoutePreference.fewestTransfers,
+                        child: Text('Fewest transfers'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setEditorState(() => preference = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<PassengerType>(
+                    initialValue: passengerType,
+                    decoration: const InputDecoration(
+                      labelText: 'Passenger type',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: PassengerType.general,
+                        child: Text('Regular'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.student,
+                        child: Text('Student'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.senior,
+                        child: Text('Senior'),
+                      ),
+                      DropdownMenuItem(
+                        value: PassengerType.pwd,
+                        child: Text('PWD'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setEditorState(() => passengerType = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final label = labelController.text.trim();
+                Navigator.pop(
+                  dialogContext,
+                  SavedCommute(
+                    id: commute.id,
+                    label: label,
+                    originName: commute.originName,
+                    origin: commute.origin,
+                    destinationName: commute.destinationName,
+                    destination: commute.destination,
+                    preference: preference,
+                    passengerType: passengerType,
+                  ),
+                );
+              },
+              child: const Text('Save changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+    labelController.dispose();
+    if (updated == null) return;
+
+    try {
+      await SavedCommuteService.save(updated);
+      final updatedCommutes = [
+        updated,
+        ...commutes.where((item) => item.id != updated.id),
+      ];
+      commutes
+        ..clear()
+        ..addAll(updatedCommutes);
+      if (mounted) setState(() => _savedCommutes = updatedCommutes);
+      setDialogState(() {});
+      _showMessage('Saved commute updated.');
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while editing a saved commute'),
+        ),
+      );
+      _showMessage('Could not update this commute. Please try again.');
+    }
+  }
+
+  Future<void> _saveReturnCommute(
+    SavedCommute commute,
+    void Function(void Function()) setDialogState,
+    List<SavedCommute> commutes,
+  ) async {
+    final returnCommute = SavedCommute(
+      id: '${commute.destination.latitude},${commute.destination.longitude}|${commute.origin.latitude},${commute.origin.longitude}',
+      label: '${commute.destinationName} → ${commute.originName}',
+      originName: commute.destinationName,
+      origin: commute.destination,
+      destinationName: commute.originName,
+      destination: commute.origin,
+      preference: commute.preference,
+      passengerType: commute.passengerType,
+    );
+    try {
+      await SavedCommuteService.save(returnCommute);
+      final updatedCommutes = [
+        returnCommute,
+        ...commutes.where((item) => item.id != returnCommute.id),
+      ].take(8).toList();
+      commutes
+        ..clear()
+        ..addAll(updatedCommutes);
+      if (mounted) setState(() => _savedCommutes = updatedCommutes);
+      setDialogState(() {});
+      _showMessage('Return commute saved.');
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while saving a return commute'),
+        ),
+      );
+      _showMessage('Could not save the return commute. Please try again.');
+    }
+  }
+
+  Future<void> _manageSavedCommutes() async {
+    var commutes = List<SavedCommute>.of(_savedCommutes);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Saved commutes'),
+          content: SizedBox(
+            width: 420,
+            child: commutes.isEmpty
+                ? const Text('No saved commutes yet.')
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final commute in commutes)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.route_outlined),
+                          title: Text(commute.label),
+                          subtitle: Text(
+                            '${commute.originName} → ${commute.destinationName}',
+                          ),
+                          onTap: () {
+                            Navigator.pop(dialogContext);
+                            _openSavedCommute(commute);
+                          },
+                          trailing: PopupMenuButton<String>(
+                            tooltip: 'Manage ${commute.label}',
+                            onSelected: (action) async {
+                              switch (action) {
+                                case 'edit':
+                                  await _editSavedCommute(
+                                    commute,
+                                    setDialogState,
+                                    commutes,
+                                  );
+                                case 'return':
+                                  await _saveReturnCommute(
+                                    commute,
+                                    setDialogState,
+                                    commutes,
+                                  );
+                                case 'remove':
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (confirmContext) => AlertDialog(
+                                      title: const Text(
+                                        'Remove saved commute?',
+                                      ),
+                                      content: Text(
+                                        'Remove "${commute.label}" from this device?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                            confirmContext,
+                                            false,
+                                          ),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(
+                                            confirmContext,
+                                            true,
+                                          ),
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed != true) return;
+                                  try {
+                                    await SavedCommuteService.delete(
+                                      commute.id,
+                                    );
+                                    commutes.removeWhere(
+                                      (item) => item.id == commute.id,
+                                    );
+                                    if (mounted) {
+                                      setState(() => _savedCommutes = commutes);
+                                    }
+                                    if (dialogContext.mounted) {
+                                      setDialogState(() {});
+                                    }
+                                  } catch (error, stackTrace) {
+                                    FlutterError.reportError(
+                                      FlutterErrorDetails(
+                                        exception: error,
+                                        stack: stackTrace,
+                                        context: ErrorDescription(
+                                          'while removing a saved commute',
+                                        ),
+                                      ),
+                                    );
+                                    _showMessage(
+                                      'Could not remove this commute. Please try again.',
+                                    );
+                                  }
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: ListTile(
+                                  leading: Icon(Icons.edit_outlined),
+                                  title: Text('Edit shortcut'),
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'return',
+                                child: ListTile(
+                                  leading: Icon(Icons.swap_horiz),
+                                  title: Text('Save return trip'),
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'remove',
+                                child: ListTile(
+                                  leading: Icon(Icons.delete_outline),
+                                  title: Text('Remove'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showLocalTools() async {
     var sheetPreferences = _localPreferences;
     await showModalBottomSheet<void>(
@@ -1278,7 +1609,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       children: [
-                        const MapparaanTileLayer(),
+                        MapparaanTileLayer(
+                          dataSaver: _localPreferences.dataSaver,
+                        ),
                         if (_userLocation != null)
                           MarkerLayer(
                             markers: [
@@ -1478,6 +1811,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
+                            tooltip: 'Manage saved commutes',
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: _manageSavedCommutes,
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
                             tooltip: 'Refresh saved commutes',
                             icon: const Icon(Icons.refresh, size: 18),
                             onPressed: _loadSavedCommutes,
@@ -1487,7 +1826,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: _savedCommutes.take(3).map((commute) {
+                          children: _savedCommutes.map((commute) {
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ActionChip(
@@ -1497,6 +1836,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             );
                           }).toList(),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Tap a shortcut to check its route again.',
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                     ],
