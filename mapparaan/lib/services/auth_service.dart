@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../legal/legal_documents.dart';
+
 class AuthService {
   static SupabaseClient? get _clientOrNull {
     try {
@@ -27,8 +29,16 @@ class AuthService {
   static Future<bool> createAccount(
     String name,
     String email,
-    String password,
-  ) async {
+    String password, {
+    required bool termsAccepted,
+    required bool privacyAcknowledged,
+  }) async {
+    if (!termsAccepted || !privacyAcknowledged) {
+      throw StateError(
+        'Review and acknowledge both documents before creating an account.',
+      );
+    }
+
     final client = _clientOrNull;
     if (client == null) {
       throw StateError(
@@ -38,7 +48,13 @@ class AuthService {
     final response = await client.auth.signUp(
       email: email,
       password: password,
-      data: {'full_name': name},
+      data: {
+        'full_name': name,
+        'terms_acknowledged': true,
+        'terms_version': LegalDocuments.termsVersion,
+        'privacy_notice_acknowledged': true,
+        'privacy_notice_version': LegalDocuments.privacyVersion,
+      },
     );
 
     if (response.user != null && response.session != null) {

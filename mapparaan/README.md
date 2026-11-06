@@ -68,6 +68,29 @@ uploads and deletes remain owner-only; Storage updates remain blocked. The
 migration fails with an explicit error if the helper function is missing.
 Never edit or re-run historical migrations already applied to a database.
 
+### Terms and privacy acknowledgements
+
+The registration flow requires users to open and review both notices before
+enabling the account-creation button. The current notice versions are declared
+in `lib/legal/legal_documents.dart` and must match
+`supabase/migrations/20261107_terms_privacy_acknowledgements.sql`. The migration
+records acknowledgements on the server and blocks account-data access until
+both current versions are recorded. Do not apply it until the missing trusted
+friend-sharing schema/migration has been recovered and the migration's target
+tables and function signatures have been checked against the live project.
+The migration replaces the known invite, friendship, and memory-sharing RPCs
+with versions that enforce the current acknowledgement gate; it requires the
+base friend-sharing tables and functions to exist, including `friend_invites`.
+This checkout still lacks the historical base friend-sharing migration, so a
+fresh database cannot be provisioned from these files alone.
+
+Before release, replace the privacy/contact placeholders in the notice with
+verified controller and contact details, retention/deletion procedures, and
+provider processing information. The document is a project draft, not legal
+advice. Client-supplied acknowledgement metadata is an assertion, not
+cryptographic proof of a user's UI actions; the backend enforces that current
+version records exist before allowing account-data access.
+
 The migration adds normalized friendships, hashed single-use invite codes
 (24-hour expiry, maximum five invites created per account per 24 hours), and
 per-photo/per-recipient grants. Existing photos stay private. Migration 20261027
