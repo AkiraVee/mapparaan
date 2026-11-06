@@ -62,8 +62,8 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
 
   Future<void> _chooseFromSearch({String? initialQuery}) async {
     final selection = await Navigator.of(context).push<SearchSelection>(
-      MaterialPageRoute(
-        builder: (_) => SearchLocationScreen(
+      SearchLocationScreen.route(
+        screen: SearchLocationScreen(
           initialQuery: initialQuery,
           selectionActionLabel: 'Use this place',
           showMap: true,

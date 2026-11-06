@@ -26,6 +26,7 @@ class SearchLocationScreen extends StatefulWidget {
   final PlaceReverseGeocode reverseGeocode;
   final Future<ManilaBoundary> Function() loadManilaBoundary;
   final Future<List<SavedPlace>> Function() loadSavedPlaces;
+  final ValueNotifier<double>? routeDragOffset;
 
   const SearchLocationScreen({
     super.key,
@@ -38,13 +39,64 @@ class SearchLocationScreen extends StatefulWidget {
     this.reverseGeocode = PlaceSearchService.reverseGeocode,
     this.loadManilaBoundary = ManilaBoundaryService.load,
     this.loadSavedPlaces = SavedPlacesService.fetchSavedPlaces,
+    this.routeDragOffset,
   });
+
+  static Route<SearchSelection> route({required SearchLocationScreen screen}) {
+    final routeDragOffset = ValueNotifier<double>(0);
+    final routedScreen = screen._withRouteDragOffset(routeDragOffset);
+    return PageRouteBuilder<SearchSelection>(
+      pageBuilder: (context, animation, secondaryAnimation) => routedScreen,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return AnimatedBuilder(
+          animation: Listenable.merge([curvedAnimation, routeDragOffset]),
+          child: child,
+          builder: (context, child) {
+            final dragOffset = routeDragOffset.value;
+            final routeOffset =
+                (1 - curvedAnimation.value) *
+                    (MediaQuery.sizeOf(context).height - dragOffset) +
+                dragOffset;
+            return Transform.translate(
+              key: const ValueKey('search-route-transition'),
+              offset: Offset(0, routeOffset),
+              child: child,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  SearchLocationScreen _withRouteDragOffset(ValueNotifier<double> offset) {
+    return SearchLocationScreen(
+      key: key,
+      initialQuery: initialQuery,
+      selectionActionLabel: selectionActionLabel,
+      showMap: showMap,
+      locateUser: locateUser,
+      searchPlaces: searchPlaces,
+      searchNearbyCategory: searchNearbyCategory,
+      reverseGeocode: reverseGeocode,
+      loadManilaBoundary: loadManilaBoundary,
+      loadSavedPlaces: loadSavedPlaces,
+      routeDragOffset: offset,
+    );
+  }
 
   @override
   State<SearchLocationScreen> createState() => _SearchLocationScreenState();
 }
 
-class _SearchLocationScreenState extends State<SearchLocationScreen> {
+class _SearchLocationScreenState extends State<SearchLocationScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _topSearchController = TextEditingController();
   final FocusNode _topSearchFocusNode = FocusNode();
   final MapController _mapController = MapController();
@@ -75,6 +127,15 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   Timer? _debounce;
   String? _selectedCategory;
   int _searchGeneration = 0;
+  double _dismissDragOffset = 0;
+  late final ValueNotifier<double> _routeDragOffset =
+      widget.routeDragOffset ?? ValueNotifier<double>(0);
+  late final AnimationController _dismissSnapBackController =
+      AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 180),
+      )..addListener(_updateSnapBack);
+  double _snapBackStartOffset = 0;
 
   static const _quickChips = [
     'Mall',
@@ -452,6 +513,38 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _onSearchChanged(_topSearchController.text);
   }
 
+  void _updateDismissDrag(DragUpdateDetails details) {
+    _dismissSnapBackController.stop();
+    _dismissDragOffset = (_dismissDragOffset + details.delta.dy).clamp(
+      0,
+      MediaQuery.sizeOf(context).height,
+    );
+    _routeDragOffset.value = _dismissDragOffset;
+  }
+
+  void _updateSnapBack() {
+    _dismissDragOffset =
+        _snapBackStartOffset * (1 - _dismissSnapBackController.value);
+    _routeDragOffset.value = _dismissDragOffset;
+  }
+
+  void _endDismissDrag(DragEndDetails details) {
+    final downwardVelocity = details.primaryVelocity ?? 0;
+    if (_dismissDragOffset >= 88 || downwardVelocity >= 700) {
+      _closeSearch();
+      return;
+    }
+
+    _snapBackStartOffset = _dismissDragOffset;
+    _dismissSnapBackController.forward(from: 0);
+  }
+
+  void _closeSearch() {
+    FocusScope.of(context).unfocus();
+    _debounce?.cancel();
+    Navigator.of(context).maybePop();
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -459,6 +552,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _topSearchFocusNode.dispose();
     _discoveryScrollController.dispose();
     _mapController.dispose();
+    _dismissSnapBackController.dispose();
+    _routeDragOffset.dispose();
     super.dispose();
   }
 
@@ -573,9 +668,9 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                     child: Row(
                       children: [
                         IconButton(
-                          tooltip: 'Back',
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.of(context).pop(),
+                          tooltip: 'Close search',
+                          icon: const Icon(Icons.close),
+                          onPressed: _closeSearch,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -662,13 +757,32 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: Column(
                         children: [
-                          const SizedBox(height: 10),
-                          Container(
-                            width: 36,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(4),
+                          GestureDetector(
+                            key: const ValueKey('search-dismiss-handle'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _closeSearch,
+                            onVerticalDragStart: (_) =>
+                                _dismissSnapBackController.stop(),
+                            onVerticalDragUpdate: _updateDismissDrag,
+                            onVerticalDragEnd: _endDismissDrag,
+                            child: Semantics(
+                              button: true,
+                              label: 'Close search',
+                              hint: 'Swipe down or tap to close search',
+                              child: SizedBox(
+                                width: 64,
+                                height: 48,
+                                child: Center(
+                                  child: Container(
+                                    width: 36,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.outlineVariant,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           Padding(
@@ -905,10 +1019,7 @@ class _EmptySearchState extends StatelessWidget {
               ),
             ),
             if (recentPlaces.isNotEmpty)
-              TextButton(
-                onPressed: onClearRecents,
-                child: const Text('Clear'),
-              ),
+              TextButton(onPressed: onClearRecents, child: const Text('Clear')),
           ],
         ),
         if (hasRecentPlacesError)
@@ -955,19 +1066,24 @@ class _EmptySearchState extends StatelessWidget {
             ),
           )
         else
-          ...savedPlaces.take(6).map(
-            (place) => _PlaceListTile(
-              name: place.name,
-              subtitle: place.subtitle,
-              icon: Icons.bookmark_outline,
-              onTap: () => onSelectSavedPlace(place),
-            ),
-          ),
+          ...savedPlaces
+              .take(6)
+              .map(
+                (place) => _PlaceListTile(
+                  name: place.name,
+                  subtitle: place.subtitle,
+                  icon: Icons.bookmark_outline,
+                  onTap: () => onSelectSavedPlace(place),
+                ),
+              ),
       ],
     );
   }
 
-  Widget _buildNearbyCategorySection(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildNearbyCategorySection(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
     if (selectedCategory == null) return const SizedBox.shrink();
 
     return Column(

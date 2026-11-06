@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/auth_service.dart';
+import '../widgets/legal_acknowledgement_controls.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -21,6 +22,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _termsAccepted = false;
+  bool _privacyAcknowledged = false;
+  bool _showLegalValidation = false;
   String? _errorMessage;
 
   @override
@@ -41,6 +45,10 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _errorMessage = null);
+    if (!_isLogin && (!_termsAccepted || !_privacyAcknowledged)) {
+      setState(() => _showLegalValidation = true);
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -56,6 +64,8 @@ class _AuthScreenState extends State<AuthScreen> {
           _nameController.text.trim(),
           _emailController.text.trim(),
           _passwordController.text,
+          termsAccepted: _termsAccepted,
+          privacyAcknowledged: _privacyAcknowledged,
         );
       }
 
@@ -272,11 +282,36 @@ class _AuthScreenState extends State<AuthScreen> {
                         },
                       ),
                     ],
+                    if (!_isLogin) ...[
+                      const SizedBox(height: 16),
+                      LegalAcknowledgementControls(
+                        termsAccepted: _termsAccepted,
+                        privacyAcknowledged: _privacyAcknowledged,
+                        onTermsChanged: (value) => setState(() {
+                          _termsAccepted = value;
+                          _errorMessage = null;
+                        }),
+                        onPrivacyChanged: (value) => setState(() {
+                          _privacyAcknowledged = value;
+                          _errorMessage = null;
+                        }),
+                        showValidation: _showLegalValidation,
+                      ),
+                      Text(
+                        'Both acknowledgements are required to create an account.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     SizedBox(
                       height: 54,
                       child: FilledButton(
-                        onPressed: _isLoading ? null : _submit,
+                        onPressed: _isLoading ||
+                                (!_isLogin &&
+                                    (!_termsAccepted ||
+                                        !_privacyAcknowledged))
+                            ? null
+                            : _submit,
                         style: FilledButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
@@ -309,6 +344,9 @@ class _AuthScreenState extends State<AuthScreen> {
                           : () => setState(() {
                               _isLogin = !_isLogin;
                               _errorMessage = null;
+                              _termsAccepted = false;
+                              _privacyAcknowledged = false;
+                              _showLegalValidation = false;
                               _formKey.currentState?.reset();
                             }),
                       child: Text(

@@ -970,8 +970,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _goToSearchScreen([String? prefilledQuery]) async {
     final selection = await Navigator.of(context).push<SearchSelection>(
-      MaterialPageRoute(
-        builder: (context) => SearchLocationScreen(
+      SearchLocationScreen.route(
+        screen: SearchLocationScreen(
           initialQuery: prefilledQuery,
           showMap: widget.showMap,
           searchPlaces: widget.searchPlaces,
