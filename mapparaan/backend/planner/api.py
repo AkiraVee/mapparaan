@@ -27,14 +27,24 @@ import datetime
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 
-# Ensure current directory is on sys.path for direct imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure the project root is on sys.path for direct script execution.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+for candidate in (PROJECT_ROOT, os.path.dirname(os.path.abspath(__file__))):
+    if candidate not in sys.path:
+        sys.path.insert(0, candidate)
+
 from gtfs_planner import Planner
+
+try:
+    from backend.ai import AiChatRequest, MapParaanAiService
+except ImportError:
+    raise
 
 # Global planner instance loaded once at startup
 _PLANNER = None
 # Manila polygons as [polygon][ring][coordinate][longitude, latitude].
 _AREA = None
+_AI_SERVICE = MapParaanAiService()
 
 
 def resolve_data_dir(data_dir=None):
@@ -216,6 +226,35 @@ class TransitApiHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed_url = urllib.parse.urlparse(self.path)
+        if parsed_url.path.rstrip("/") in {"/ai", "/ai/chat"}:
+            if self.headers.get_content_type() != "application/json":
+                self._send_json(415, {"status": "error", "error": "Content-Type must be application/json."})
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length <= 0 or content_length > 65536:
+                    raise ValueError("invalid body size")
+                payload = json.loads(self.rfile.read(content_length))
+                if not isinstance(payload, dict):
+                    raise ValueError("request body must be an object")
+                request = AiChatRequest.from_payload(payload)
+                result = _AI_SERVICE.handle_request(request)
+                if result.get("status") == "quota_exceeded":
+                    self._send_json(429, result)
+                    return
+                if result.get("status") == "not_configured":
+                    self._send_json(503, result)
+                    return
+                self._send_json(200, result)
+                return
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                self._send_json(400, {"status": "error", "error": str(exc)})
+                return
+            except Exception as exc:  # pragma: no cover - defensive backend guard
+                print(f"[AI] Request failed: {exc}")
+                self._send_json(500, {"status": "error", "error": "The AI backend could not process this request."})
+                return
+
         if parsed_url.path.rstrip("/") != "/plan":
             self._send_json(404, {"status": "error", "error": "Route not found."})
             return
@@ -260,6 +299,21 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 "service": "Mapparaan Transit Planner API",
                 "trips": len(_PLANNER.trips) if _PLANNER else 0,
                 "stops": _PLANNER.n_stops if _PLANNER else 0,
+            })
+            return
+
+        # AI endpoint: /ai/health
+        if path == "/ai/health":
+            self._send_json(200, {
+                "status": "ok",
+                "service": "Mapparaan AI scaffolding",
+                "configured": _AI_SERVICE.provider.available,
+                "quota": {
+                    "user_daily_limit": _AI_SERVICE.quota_service.USER_DAILY_LIMIT,
+                    "user_minute_limit": _AI_SERVICE.quota_service.USER_MINUTE_LIMIT,
+                    "global_daily_limit": _AI_SERVICE.quota_service.GLOBAL_DAILY_LIMIT,
+                    "reset_timezone": "Asia/Manila",
+                },
             })
             return
 
@@ -407,6 +461,8 @@ def run_server(host="127.0.0.1", port=8080, data_dir=None):
     for warning in _PLANNER.warnings:
         print(f"[WARNING] {warning}")
     _AREA = load_service_area(resolved_dir)
+    _AI_SERVICE.planner = _PLANNER
+    _AI_SERVICE.service_area = _AREA
     print("Service area: strict City of Manila boundary loaded.")
     print("-" * 64)
     print(f"Server listening on http://{host}:{port}/")

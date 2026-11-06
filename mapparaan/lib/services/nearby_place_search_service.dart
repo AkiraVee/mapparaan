@@ -17,13 +17,41 @@ class NearbyPlaceSearchService {
   static const double _searchRadiusMeters = 3000;
   static const int _resultLimit = 30;
   static const Map<String, List<String>> _categoryFilters = {
-    'Mall': [r'shop~"^(mall|shopping_centre)$"'],
-    'Restaurant': [r'amenity~"^(restaurant|fast_food|cafe)$"'],
-    'Hospital': ['amenity=hospital', 'healthcare=hospital'],
-    'School': [r'amenity~"^(school|college|university|kindergarten)$"'],
-    'LRT/MRT': ['railway=station'],
-    'Park': [r'leisure~"^(park|garden)$"'],
-    'Market': ['amenity=marketplace', 'shop=market'],
+    'Mall': [
+      r'shop~"^(mall|shopping_centre|shopping_center)$"',
+      'building=shopping_mall',
+      'amenity=shopping_mall',
+    ],
+    'Restaurant': [
+      r'amenity~"^(restaurant|fast_food|cafe|food_court)$"',
+      r'shop~"^(coffee|bakery|confectionery)$"',
+    ],
+    'Hospital': [
+      'amenity=hospital',
+      'amenity=clinic',
+      'healthcare=hospital',
+      'healthcare=clinic',
+    ],
+    'School': [
+      r'amenity~"^(school|college|university|kindergarten)$"',
+      'amenity=library',
+    ],
+    'LRT/MRT': [
+      'railway=station',
+      'railway=subway_entrance',
+      'public_transport=station',
+    ],
+    'Park': [
+      r'leisure~"^(park|garden|playground)$"',
+      'amenity=park',
+      'landuse=recreation_ground',
+    ],
+    'Market': [
+      'amenity=marketplace',
+      'shop=market',
+      'shop=supermarket',
+      'amenity=supermarket',
+    ],
   };
 
   static final http.Client _client = http.Client();

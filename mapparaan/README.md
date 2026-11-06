@@ -127,6 +127,39 @@ set `MAPPARAAN_ALLOWED_ORIGINS` on Render to the exact web-app origin. The API
 binds to loopback locally; public deployments require that allowlist, TLS, and
 appropriate abuse controls. CORS is not authentication.
 
+### AI backend scaffolding and quota enforcement
+
+The Python backend now includes a lightweight AI orchestration layer for the
+existing server, rather than a separate FastAPI deployment. This keeps the
+transport planner and the AI scaffold in one place, avoids extra runtime cost,
+and preserves the current architecture. The AI service is intentionally scoped
+for backend scaffolding and quota enforcement only; the Flutter UI for chat is
+not part of this phase.
+
+Server-side configuration stays in the backend environment, not in Flutter.
+Set `GEMINI_API_KEY` in the backend environment before enabling live Gemini
+calls and optionally set `GEMINI_MODEL` to override the default model. The
+project currently targets the Google AI Studio free-tier
+`gemini-flash-lite-latest` alias, which resolves to `gemini-3.5-flash-lite`
+and supports function calling under the current Free Tier; verify the active AI
+Studio model list before production use because Google refreshes aliases over
+time. The AI quota ledger persists locally in `data/ai_usage.sqlite3` by
+default, with a matching Supabase migration at
+`supabase/migrations/20261106_ai_usage_quota.sql` for projects that want to
+move the same policy into a managed database. The enforced limits are:
+
+- 10 messages per authenticated user per day
+- 5 messages per authenticated user per minute
+- 100 AI messages globally per day
+- reset based on `Asia/Manila` local time
+
+The quota is keyed by the authenticated `user_id`, so new conversations or
+sessions do not bypass a user's limit. Requests that exceed quota return a
+429 response; requests that hit a non-configured backend return a 503 response.
+The backend's `POST /ai/chat` endpoint accepts the authenticated `user_id` and
+`message` payload and records usage without exposing Gemini credentials to
+Flutter.
+
 The Flutter planner sends route requests as JSON `POST /plan` requests so
 coordinates are not placed in request URLs. Older `GET /plan` requests remain
 supported for compatibility, but should not be used in new clients.

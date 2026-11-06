@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/drawer_destination_screen.dart';
+import '../screens/ai_chat_screen.dart';
 import '../services/place_search_service.dart';
 
 class MapparaanDrawer extends StatelessWidget {
@@ -110,6 +111,18 @@ class MapparaanDrawer extends StatelessWidget {
                     label: 'Friends & Shared Photos',
                     onTap: () =>
                         _openDestination(context, DrawerDestination.friends),
+                  ),
+                  _MenuItem(
+                    icon: Icons.smart_toy_outlined,
+                    label: 'MapParaan AI',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AiChatScreen(),
+                        ),
+                      );
+                    },
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),

@@ -9,12 +9,12 @@ import 'package:mapparaan/services/nearby_place_search_service.dart';
 void main() {
   const origin = LatLng(14.6, 120.98);
   const categories = {
-    'Mall': r'shop~"^(mall|shopping_centre)$"',
-    'Restaurant': r'amenity~"^(restaurant|fast_food|cafe)$"',
+    'Mall': r'shop~"^(mall|shopping_centre|shopping_center)$"',
+    'Restaurant': r'amenity~"^(restaurant|fast_food|cafe|food_court)$"',
     'Hospital': 'amenity=hospital',
     'School': r'amenity~"^(school|college|university|kindergarten)$"',
     'LRT/MRT': 'railway=station',
-    'Park': r'leisure~"^(park|garden)$"',
+    'Park': r'leisure~"^(park|garden|playground)$"',
     'Market': 'amenity=marketplace',
   };
 
