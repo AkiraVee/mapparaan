@@ -25,6 +25,7 @@ import sys
 import time
 import datetime
 import urllib.parse
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 
 # Ensure the project root is on sys.path for direct script execution.
@@ -37,6 +38,13 @@ from gtfs_planner import Planner
 
 try:
     from backend.ai import AiChatRequest, MapParaanAiService
+    from backend.ai.auth import (
+        SupabaseAuthNotConfigured,
+        SupabaseAuthUnavailable,
+        SupabaseInvalidToken,
+        verify_supabase_access_token,
+    )
+    from backend.ai.telemetry import log_ai_event
 except ImportError:
     raise
 
@@ -203,7 +211,7 @@ class TransitApiHandler(BaseHTTPRequestHandler):
         if _is_allowed_origin(origin):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Vary", "Origin")
 
@@ -227,8 +235,27 @@ class TransitApiHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_url = urllib.parse.urlparse(self.path)
         if parsed_url.path.rstrip("/") in {"/ai", "/ai/chat"}:
+            request_id = uuid.uuid4().hex
+            started_at = time.perf_counter()
+            authenticated_user_id = None
+
+            def log_event(category, status_code, failed_tool_name=None):
+                log_ai_event(
+                    request_id=request_id,
+                    user_id=authenticated_user_id,
+                    error_category=category,
+                    http_status=status_code,
+                    processing_duration_ms=(time.perf_counter() - started_at) * 1000,
+                    failed_tool_name=failed_tool_name,
+                )
+
             if self.headers.get_content_type() != "application/json":
-                self._send_json(415, {"status": "error", "error": "Content-Type must be application/json."})
+                log_event("invalid_content_type", 415)
+                self._send_json(415, {
+                    "status": "error",
+                    "error": "Content-Type must be application/json.",
+                    "request_id": request_id,
+                })
                 return
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
@@ -237,22 +264,131 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(content_length))
                 if not isinstance(payload, dict):
                     raise ValueError("request body must be an object")
+                authorization = self.headers.get("Authorization", "")
+                scheme, separator, access_token = authorization.partition(" ")
+                if scheme.lower() != "bearer" or not separator or not access_token.strip():
+                    log_event("missing_bearer_token", 401)
+                    self._send_json(
+                        401,
+                        {
+                            "status": "unauthorized",
+                            "error": "Please sign in to use MapParaan AI.",
+                            "request_id": request_id,
+                        },
+                    )
+                    return
+                try:
+                    authenticated_user_id = verify_supabase_access_token(access_token.strip())
+                except SupabaseInvalidToken:
+                    log_event("invalid_bearer_token", 401)
+                    self._send_json(
+                        401,
+                        {
+                            "status": "unauthorized",
+                            "error": "Your session is invalid or expired. Please sign in again.",
+                            "request_id": request_id,
+                        },
+                    )
+                    return
+                except SupabaseAuthNotConfigured:
+                    log_event("auth_not_configured", 503)
+                    self._send_json(
+                        503,
+                        {
+                            "status": "not_configured",
+                            "error": "AI authentication is not configured on the backend.",
+                            "request_id": request_id,
+                        },
+                    )
+                    return
+                except SupabaseAuthUnavailable:
+                    log_event("auth_service_unavailable", 503)
+                    self._send_json(
+                        503,
+                        {
+                            "status": "auth_unavailable",
+                            "error": "Sign-in verification is temporarily unavailable.",
+                            "request_id": request_id,
+                        },
+                    )
+                    return
+                supplied_user_id = str(payload.get("user_id") or payload.get("user") or "").strip()
+                if supplied_user_id and supplied_user_id != authenticated_user_id:
+                    log_event("user_identity_mismatch", 403)
+                    self._send_json(
+                        403,
+                        {
+                            "status": "forbidden",
+                            "error": "The request user does not match the signed-in account.",
+                            "request_id": request_id,
+                        },
+                    )
+                    return
+                payload["user_id"] = authenticated_user_id
                 request = AiChatRequest.from_payload(payload)
+                request.request_id = request_id
                 result = _AI_SERVICE.handle_request(request)
+                tool_results = result.get("tool_results", [])
+                if not isinstance(tool_results, list):
+                    tool_results = []
+                failed_tool = next(
+                    (
+                        item.get("name")
+                        for item in tool_results
+                        if isinstance(item, dict)
+                        and item.get("status") in {
+                            "tool_error",
+                            "invalid_tool",
+                            "invalid_arguments",
+                            "invalid_request",
+                            "planner_unavailable",
+                            "planner_error",
+                            "place_search_unavailable",
+                            "boundary_unavailable",
+                            "duplicate_tool_call",
+                            "provider_quota_exceeded",
+                        }
+                    ),
+                    None,
+                )
+                result["request_id"] = request_id
+                result_status = result.get("status", "error")
                 if result.get("status") == "quota_exceeded":
+                    log_event("application_quota_exceeded", 429)
                     self._send_json(429, result)
                     return
-                if result.get("status") == "not_configured":
+                if result_status in {
+                    "not_configured",
+                    "auth_unavailable",
+                    "provider_quota_exceeded",
+                    "provider_model_unavailable",
+                    "provider_configuration_error",
+                    "provider_unavailable",
+                    "provider_error",
+                    "provider_invalid_response",
+                    "provider_empty_response",
+                }:
+                    log_event(result_status, 503)
                     self._send_json(503, result)
                     return
+                log_event(result_status if result_status != "ok" else "success", 200, failed_tool)
                 self._send_json(200, result)
                 return
             except (ValueError, TypeError, json.JSONDecodeError) as exc:
-                self._send_json(400, {"status": "error", "error": str(exc)})
+                log_event("invalid_request", 400)
+                self._send_json(400, {
+                    "status": "invalid_request",
+                    "error": str(exc),
+                    "request_id": request_id,
+                })
                 return
-            except Exception as exc:  # pragma: no cover - defensive backend guard
-                print(f"[AI] Request failed: {exc}")
-                self._send_json(500, {"status": "error", "error": "The AI backend could not process this request."})
+            except Exception:
+                log_event("internal_error", 500)
+                self._send_json(500, {
+                    "status": "error",
+                    "error": "The AI backend could not process this request.",
+                    "request_id": request_id,
+                })
                 return
 
         if parsed_url.path.rstrip("/") != "/plan":

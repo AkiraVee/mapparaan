@@ -5,12 +5,17 @@
 
 ## Summary
 
-No confirmed exploitable vulnerability was established from the checked-in files reviewed. Two conditional risks require deployment verification: effective Supabase storage policies and ensuring the bundled `.env` contains only public client configuration. The local `.env` was not inspected by the original review.
+The source configuration previously bundled the root `.env` file into Flutter,
+and the local ignored `.env` was confirmed to contain a `GEMINI_API_KEY`
+variable. This created a real client-bundle secret exposure path. Flutter now
+loads a separate `.env.client` containing only public client settings. Any
+Gemini key previously included in a distributed build should still be rotated.
+The deployed Supabase policies and provider configuration remain unverified.
 
 | # | Severity | File | Lines | Finding | Confidence |
 |---|---|---|---|---|---|
 | 1 | HIGH if legacy policies remain | [README.md](README.md), [Actibe photo uploading.sql](supabase/migrations/Actibe%20photo%20uploading.sql) | README: 38–69; SQL: 1–7 | If legacy public-read storage policies remain active and private-photo hardening is absent, memory photos may be publicly readable. | 8/10 (conditional) |
-| 2 | HIGH if a privileged secret is bundled | [pubspec.yaml](pubspec.yaml), [README.md](README.md) | pubspec assets; README: 5–24 | `.env` is bundled as a Flutter asset and values can be extracted from a release build. A privileged credential in it would be exposed. | 9/10 (exposure path; contents unverified) |
+| 2 | HIGH — fixed in source; rotate prior key | [pubspec.yaml](pubspec.yaml), [main.dart](lib/main.dart), [README.md](README.md) | pubspec Flutter assets; `main.dart` dotenv asset | The root `.env` was bundled by Flutter and contained a server-only `GEMINI_API_KEY` variable. The app now bundles only `.env.client`; rotate any key that may have shipped in an earlier build. | 10/10 |
 
 ## Findings and recommended actions
 
@@ -20,9 +25,14 @@ The checked-in migrations describe private-photo protections, but migrations in 
 
 In the intended Supabase project, verify that the bucket is private and effective `storage.objects` policies allow reads only for the owner and explicitly authorized friends. Confirm the required migrations and helper functions are deployed. Do not rely on repository SQL alone to enforce access in the live project.
 
-### 2. Client configuration and privileged secrets
+### 2. Client configuration and privileged secrets — fixed in source
 
-The `.env` file is bundled into Flutter releases and can be extracted. This is acceptable only for public client configuration such as Supabase's publishable/anon key. Never put a Supabase `service_role` key or another privileged credential in it. The original review did not inspect the local `.env` contents.
+The app now loads `.env.client`, not the backend `.env`; `.env.client` remains a
+Flutter asset and must contain only public settings. The local `.env` variable
+names confirmed `GEMINI_API_KEY`, so rotate that key if it was present in any
+shared, published, or deployed Flutter artifact. The secret value is not
+recorded here. The backend `.env` remains ignored by Git and is not included in
+Flutter assets.
 
 ## CIA triad assessment
 
@@ -32,4 +42,8 @@ The `.env` file is bundled into Flutter releases and can be extracted. This is a
 
 ## Limitations
 
-This review did not inspect the live Supabase project, local `.env` contents, provider dashboards, deployed service configuration, or historical repository contents; it did not run active penetration tests or execute migrations. Verify deployed storage policies and ensure `.env` contains no privileged secrets.
+This review did not inspect the live Supabase project, provider dashboards,
+deployed service configuration, or historical repository contents; it did not
+run active penetration tests or execute migrations. Verify deployed storage
+policies, rotate any previously bundled Gemini key, and confirm the deployed
+backend configuration.

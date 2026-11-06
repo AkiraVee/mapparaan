@@ -2,6 +2,7 @@ FROM python:3.12-slim
 WORKDIR /app
 # Only what the API needs. data/raw, data/build and the Flutter app stay out of the image.
 COPY backend/planner/ backend/planner/
+COPY backend/ai/ backend/ai/
 COPY data/gtfs/ data/gtfs/
 COPY data/reference/ data/reference/
 ENV PYTHONUNBUFFERED=1

@@ -20,6 +20,8 @@ class AuthService {
 
   static User? get currentUser => _clientOrNull?.auth.currentUser;
 
+  static Session? get currentSession => _clientOrNull?.auth.currentSession;
+
   static bool get isConfigured => _clientOrNull != null;
 
   static void continueAsGuest() {

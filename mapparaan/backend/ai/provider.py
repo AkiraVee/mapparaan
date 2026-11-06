@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -35,6 +36,13 @@ def _load_backend_env() -> None:
 _load_backend_env()
 
 
+class GeminiProviderError(RuntimeError):
+    def __init__(self, category: str, message: str, *, retryable: bool = False):
+        super().__init__(message)
+        self.category = category
+        self.retryable = retryable
+
+
 class GeminiProvider:
     """Server-side Gemini wrapper for the Google AI Studio free tier."""
 
@@ -46,10 +54,12 @@ class GeminiProvider:
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         timeout: int = 20,
+        max_retries: int = 2,
     ):
         self.api_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
         self.model = (model or os.environ.get("GEMINI_MODEL") or self.DEFAULT_MODEL).strip() or self.DEFAULT_MODEL
         self.timeout = timeout
+        self.max_retries = max(0, min(max_retries, 2))
 
     @property
     def available(self) -> bool:
@@ -143,10 +153,35 @@ class GeminiProvider:
         return payload
 
     def _parse_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            )
         candidates = data.get("candidates") or []
+        if not isinstance(candidates, list):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            )
         candidate = candidates[0] if candidates else {}
+        if not isinstance(candidate, dict):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            )
         content = candidate.get("content") or {}
+        if not isinstance(content, dict):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            )
         parts = content.get("parts") or []
+        if not isinstance(parts, list):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            )
         text = "".join(part.get("text", "") for part in parts if isinstance(part, dict) and isinstance(part.get("text"), str))
         function_calls: List[Dict[str, Any]] = []
         for part in parts:
@@ -154,10 +189,24 @@ class GeminiProvider:
                 continue
             call = part.get("functionCall") or part.get("function_call")
             if call:
+                if (
+                    not isinstance(call, dict)
+                    or not isinstance(call.get("name"), str)
+                    or not isinstance(call.get("args") or {}, dict)
+                ):
+                    raise GeminiProviderError(
+                        "provider_invalid_response",
+                        "Gemini returned an invalid tool request. Please try again.",
+                    )
                 function_calls.append({
                     "name": call.get("name"),
                     "args": call.get("args") or {},
                 })
+        if not candidates or (not text.strip() and not function_calls):
+            raise GeminiProviderError(
+                "provider_empty_response",
+                "Gemini did not return an answer. Please try again.",
+            )
         return {
             "provider": "gemini",
             "model": self.model,
@@ -178,8 +227,9 @@ class GeminiProvider:
         tool_results: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         if not self.available:
-            raise RuntimeError(
-                "Gemini is not configured on the backend; set GEMINI_API_KEY before enabling AI responses."
+            raise GeminiProviderError(
+                "provider_not_configured",
+                "MapParaan AI is not configured on the backend right now.",
             )
 
         payload = self.build_payload(
@@ -197,23 +247,67 @@ class GeminiProvider:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            if exc.code == 429:
-                raise RuntimeError("Gemini API rate limit was exhausted. Please retry later or reduce usage.") from exc
-            if exc.code in {400, 401}:
-                raise RuntimeError("Gemini API request was rejected; verify the backend key and model configuration.") from exc
-            raise RuntimeError(f"Gemini API request failed with HTTP {exc.code}: {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Gemini provider is unavailable or timed out: {exc.reason}") from exc
+        body = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    body = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as exc:
+                status_code = exc.code
+                exc.close()
+                if 500 <= status_code < 600 and attempt < self.max_retries:
+                    time.sleep(0.25 * (2 ** attempt))
+                    continue
+                if status_code == 429:
+                    raise GeminiProviderError(
+                        "provider_quota_exceeded",
+                        "Gemini is temporarily rate-limited or its provider quota is exhausted. Please try again later.",
+                        retryable=False,
+                    ) from None
+                if status_code == 404:
+                    raise GeminiProviderError(
+                        "provider_model_unavailable",
+                        "The configured AI model is unavailable. Please contact support.",
+                    ) from None
+                if status_code in {400, 401, 403}:
+                    raise GeminiProviderError(
+                        "provider_configuration_error",
+                        "MapParaan AI could not use its configured provider. Please try again later.",
+                    ) from None
+                if 500 <= status_code < 600:
+                    raise GeminiProviderError(
+                        "provider_unavailable",
+                        "Gemini is temporarily unavailable. Please try again later.",
+                        retryable=True,
+                    ) from None
+                raise GeminiProviderError(
+                    "provider_error",
+                    "Gemini could not process this request. Please try again later.",
+                ) from None
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt < self.max_retries:
+                    time.sleep(0.25 * (2 ** attempt))
+                    continue
+                raise GeminiProviderError(
+                    "provider_unavailable",
+                    "Gemini is temporarily unavailable or timed out. Please try again.",
+                    retryable=True,
+                ) from None
 
         try:
+            if body is None:
+                raise GeminiProviderError(
+                    "provider_unavailable",
+                    "Gemini is temporarily unavailable. Please try again later.",
+                    retryable=True,
+                )
             data = json.loads(body)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Gemini returned a malformed response payload.") from exc
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise GeminiProviderError(
+                "provider_invalid_response",
+                "Gemini returned an invalid response. Please try again.",
+            ) from None
 
         return self._parse_response(data)
 

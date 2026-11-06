@@ -27,7 +27,7 @@ class LegalDocument {
 
 abstract final class LegalDocuments {
   static const termsVersion = '2026-11-07-v1';
-  static const privacyVersion = '2026-11-07-v1';
+  static const privacyVersion = '2026-11-07-v2';
 
   static const terms = LegalDocument(
     type: LegalDocumentType.termsOfService,
@@ -141,6 +141,19 @@ abstract final class LegalDocuments {
             'destination coordinates, passenger category, and any selected '
             'departure time or avoided modes to the Mapparaan route planner '
             'hosted on Render.\n\n'
+            'AI commute requests: when you use AI chat, your question and up '
+            'to ten recent user/assistant messages may be sent to the '
+            'Mapparaan backend hosted on Render and to Google Gemini for '
+            'processing. When a named origin or destination needs coordinates, '
+            'the place name is sent from the backend to OpenStreetMap '
+            'Nominatim. Nearby-place searches may send the requested category '
+            'and selected location to OpenStreetMap Overpass. The backend '
+            'keeps limited conversation context in memory for follow-up '
+            'questions for up to 30 minutes after activity; this context is '
+            'not a durable chat-history store. Named-place geocoding results '
+            'may also be cached in backend memory for up to 30 minutes. The '
+            'backend also stores AI '
+            'usage-quota records in its local SQLite database.\n\n'
             'Account features: if you use them while signed in, Supabase '
             'stores saved places, trip-history summaries (place names, '
             'preference, estimated duration and fare, and route summary), '
@@ -151,8 +164,8 @@ abstract final class LegalDocuments {
             'On-device data: recent place searches and some app preferences '
             'are stored locally using device storage. The code reviewed does '
             'not show a separate chatbot-conversation store or an analytics '
-            'SDK. Natural-language requests are parsed in the app; the '
-            'destination search text may then be sent to Nominatim. Map tile '
+            'SDK. AI messages are processed by Gemini and are not saved as '
+            'durable chat history in Supabase by this backend. Map tile '
             'requests go to OpenStreetMap or CARTO depending on configuration.',
       ),
       LegalDocumentSection(
@@ -172,15 +185,18 @@ abstract final class LegalDocuments {
             'or a documented lawful-basis assessment for every processing '
             'activity. Before release, the project owner must confirm the '
             'applicable basis under RA 10173 for each activity, especially '
-            'any hosting/security logs, and update this notice accordingly.',
+            'AI provider processing and hosting/security logs, and update '
+            'this notice accordingly.',
       ),
       LegalDocumentSection(
         '3. Where information is processed',
         'Supabase provides authentication, database, and private photo '
-            'storage for account features. The route-planning API is hosted '
-            'on Render. Place search and nearby search use OpenStreetMap '
+            'storage for account features. The route-planning and AI APIs are '
+            'hosted on Render. Place search and nearby search use OpenStreetMap '
             'Nominatim and Overpass; map tiles use OpenStreetMap or CARTO '
-            'according to the app configuration. These providers receive '
+            'according to the app configuration. AI questions are also '
+            'processed by Google Gemini; named-location AI requests may be '
+            'sent to Nominatim and nearby searches to Overpass. These providers receive '
             'the request data needed for their service and may process '
             'network/device metadata under their own terms and privacy '
             'practices. The project owner should confirm current provider '

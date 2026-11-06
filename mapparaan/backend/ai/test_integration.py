@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 import urllib.error
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.ai.models import AiChatRequest
@@ -23,6 +24,24 @@ class FakeProvider:
             return {"text": "Assistant reply", "function_calls": []}
         result = self.responses.pop(0)
         return result
+
+
+class FakePlanner:
+    trips = []
+    stop_name = []
+    stop_lat = []
+    stop_lon = []
+
+    def plan(self, *args, **kwargs):
+        return [{
+            "modes": ["jeepney", "lrt1"],
+            "fare": 25,
+            "fare_max": 35,
+            "fare_discounted": 20,
+            "fare_discounted_max": 28,
+            "minutes": 35,
+            "transfers": 1,
+        }]
 
 
 class GeminiProviderTests(unittest.TestCase):
@@ -91,9 +110,16 @@ class MapParaanAiServiceTests(unittest.TestCase):
         service = MapParaanAiService(
             provider=fake_provider,
             quota_service=AiQuotaService(db_path=self.db_path),
+            planner=FakePlanner(),
         )
         request = AiChatRequest(user_id="user-1", message="Plan my route to the office.")
-        result = service.handle_request(request)
+        planner_module = SimpleNamespace(
+            _AREA=[[]],
+            in_service_area=lambda point: True,
+            to_manila=lambda: None,
+        )
+        with patch.object(service, "_planner_module", return_value=planner_module):
+            result = service.handle_request(request)
         self.assertEqual(result["status"], "ok")
         self.assertIn("message", result)
 

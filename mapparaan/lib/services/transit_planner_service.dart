@@ -172,9 +172,17 @@ class TransitLeg {
     final rawPath = json['path'] as List? ?? [];
     final points = <LatLng>[];
     for (final pt in rawPath) {
-      if (pt is List && pt.length >= 2) {
-        final lat = (pt[0] as num).toDouble();
-        final lon = (pt[1] as num).toDouble();
+      if (pt is! List || pt.length < 2 || pt[0] is! num || pt[1] is! num) {
+        continue;
+      }
+      final lat = (pt[0] as num).toDouble();
+      final lon = (pt[1] as num).toDouble();
+      if (lat.isFinite &&
+          lon.isFinite &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lon >= -180 &&
+          lon <= 180) {
         points.add(LatLng(lat, lon));
       }
     }
@@ -416,12 +424,13 @@ class TransitPlanOption {
   }
 
   factory TransitPlanOption.fromJson(Map<String, dynamic> json) {
-    final rawLegs = json['legs'] as List? ?? [];
+    final rawLegs = json['legs'] is List ? json['legs'] as List : const [];
     final parsedLegs = rawLegs
-        .map((l) => TransitLeg.fromJson(l as Map<String, dynamic>))
+        .whereType<Map>()
+        .map((l) => TransitLeg.fromJson(Map<String, dynamic>.from(l)))
         .toList();
 
-    final rawModes = json['modes'] as List? ?? [];
+    final rawModes = json['modes'] is List ? json['modes'] as List : const [];
     final parsedModes = rawModes.map((m) => m.toString()).toList();
 
     return TransitPlanOption(

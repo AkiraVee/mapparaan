@@ -32,6 +32,7 @@ class LocationDetailsScreen extends StatefulWidget {
   final RoutePreference initialPreference;
   final PassengerType passengerType;
   final LocalUiPreferences localPreferences;
+  final TransitPlanOption? initialRouteOption;
 
   const LocationDetailsScreen({
     super.key,
@@ -43,6 +44,7 @@ class LocationDetailsScreen extends StatefulWidget {
     this.initialPreference = RoutePreference.fastest,
     this.passengerType = PassengerType.general,
     this.localPreferences = const LocalUiPreferences(),
+    this.initialRouteOption,
   });
 
   String get resolvedPlaceName => place?.name ?? placeName;
@@ -95,7 +97,20 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     _selectedPreference = widget.initialPreference;
     _passengerType = widget.passengerType;
     _loadSavedState();
-    _refreshRoute();
+    final initialRoute = widget.initialRouteOption;
+    if (initialRoute == null) {
+      _refreshRoute();
+    } else {
+      _selectedOption = initialRoute;
+      _routeOptions = [initialRoute];
+      _routePoints = initialRoute.allPoints;
+      _routeOrigin = widget.userLocation;
+      _selectedPreference = initialRoute.routePreference;
+      _tripLogged = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fitCameraToBounds(_routePoints);
+      });
+    }
   }
 
   @override
@@ -374,7 +389,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.fromLTRB(40, 100, 40, 360),
+          padding: EdgeInsets.fromLTRB(
+            40,
+            100,
+            40,
+            widget.initialRouteOption == null ? 360 : 180,
+          ),
         ),
       );
     } catch (_) {}
@@ -581,9 +601,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         ),
       );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Could not save this place. Please try again.'),
           ),
@@ -847,6 +865,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     final destination = widget.resolvedDestination;
     final hasRouteGeometry =
         _selectedOption?.legs.any((leg) => leg.path.length >= 2) ?? false;
+    final hasMissingRouteGeometry =
+        widget.initialRouteOption != null &&
+        (_selectedOption?.legs.any((leg) => leg.path.length < 2) ?? false);
 
     return Scaffold(
       drawer: MapparaanDrawer(
@@ -905,6 +926,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                         ),
                       ],
                     ),
+                  if (widget.initialRouteOption != null &&
+                      _selectedOption?.legs.any(
+                            (leg) => leg.isRide && leg.path.length >= 2,
+                          ) ==
+                          true)
+                    MarkerLayer(markers: _routeStopMarkers()),
                   MarkerLayer(
                     markers: [
                       if (widget.userLocation != null)
@@ -958,10 +985,15 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      CircleIconButton(
-                        icon: Icons.menu,
-                        onTap: () => Scaffold.of(context).openDrawer(),
-                      ),
+                      widget.initialRouteOption != null
+                          ? CircleIconButton(
+                              icon: Icons.arrow_back,
+                              onTap: () => Navigator.of(context).maybePop(),
+                            )
+                          : CircleIconButton(
+                              icon: Icons.menu,
+                              onTap: () => Scaffold.of(context).openDrawer(),
+                            ),
                       CircleIconButton(
                         icon: Icons.my_location,
                         onTap: _centerOnMyLocation,
@@ -1010,6 +1042,22 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
 
+              if (hasMissingRouteGeometry)
+                Positioned(
+                  top: 88,
+                  left: 16,
+                  right: 16,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(
+                        'Some route segments do not include map geometry. Only planner-provided segments are drawn.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ),
+                ),
+
               _PlaceDetailsSheet(
                 placeName: widget.resolvedPlaceName,
                 address: widget.resolvedSubtitle,
@@ -1044,6 +1092,72 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         },
       ),
     );
+  }
+
+  List<Marker> _routeStopMarkers() {
+    final option = _selectedOption;
+    if (option == null) return const [];
+    final markers = <Marker>[];
+    final used = <LatLng>[];
+    final rideIndexes = [
+      for (var index = 0; index < option.legs.length; index++)
+        if (option.legs[index].isRide && option.legs[index].path.length >= 2)
+          index,
+    ];
+
+    void addStop(TransitLeg leg, LatLng point, String label) {
+      final duplicates = used.any((existing) {
+        final latDifference = (existing.latitude - point.latitude).abs();
+        final lonDifference = (existing.longitude - point.longitude).abs();
+        return latDifference < 0.00015 && lonDifference < 0.00015;
+      });
+      if (duplicates) return;
+      used.add(point);
+      final route =
+          leg.routeCode ?? leg.routeName ?? leg.modeLabel ?? 'Transit';
+      markers.add(
+        Marker(
+          point: point,
+          width: 42,
+          height: 42,
+          child: Tooltip(
+            message: '$label: ${label == 'Board' ? leg.from : leg.to} ($route)',
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: leg.color,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 3),
+                ],
+              ),
+              child: Icon(
+                label == 'Board' ? Icons.directions_transit : Icons.place,
+                size: 19,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    for (final rideIndex in rideIndexes) {
+      final leg = option.legs[rideIndex];
+      final isTransferBoarding = rideIndexes.first != rideIndex;
+      final isTransferAlighting = rideIndexes.last != rideIndex;
+      addStop(
+        leg,
+        leg.path.first,
+        isTransferBoarding ? 'Transfer / board' : 'Board',
+      );
+      addStop(
+        leg,
+        leg.path.last,
+        isTransferAlighting ? 'Transfer / alight' : 'Alight',
+      );
+    }
+    return markers;
   }
 }
 

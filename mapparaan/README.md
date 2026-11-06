@@ -4,16 +4,23 @@ A new Flutter project.
 
 ## Local configuration
 
-Copy `.env.example` to `.env` and set the project URL and client keys before
-running the app. The `.env` file is ignored by Git and included as a Flutter
-asset because `flutter_dotenv` loads it at startup. Values in a distributed
-Flutter app are extractable.
+Copy `.env.client.example` to `.env.client` and set the public client
+configuration before running the Flutter app. `.env.client` is ignored by Git
+and bundled as a Flutter asset, so every value in it is extractable. It may
+contain only public client configuration such as the Supabase URL and
+publishable/anon key, plus provider-restricted public map keys. Never place
+`GEMINI_API_KEY`, a Supabase `service_role` key, or any other privileged secret
+in `.env.client`.
+
+For the Python backend, copy `.env.example` to `.env`. Keep server-only
+credentials such as `GEMINI_API_KEY` in that backend environment only. The
+backend loads `.env` locally; it is not included in the Flutter asset bundle.
 
 Supabase's publishable/anon key is a public client key; protect user data with
 database Row Level Security and Storage policies. CARTO keys are also visible
 to clients and should be restricted by provider-side domain, quota, and
 allowed API settings. Never put a Supabase `service_role` key or another
-privileged secret in `.env`.
+privileged secret in `.env.client`.
 
 Release builds require HTTPS URLs for Supabase and the transit API. The
 localhost transit URL is a development fallback only. Route planning sends
@@ -25,8 +32,8 @@ configured providers must process the data needed to provide their services.
 Tell users which providers receive location data and avoid sending more than
 each feature needs.
 
-After changing configuration or Flutter assets, run `flutter pub get` and
-rebuild the app.
+After creating `.env.client` or changing Flutter assets, run `flutter pub get`
+and rebuild the app.
 
 ## Supabase database setup
 
@@ -135,7 +142,7 @@ Flutter client-side throttling. Verify the project's Auth rate limits and
 configure CAPTCHA/abuse protection where available. Do not treat a client-side
 lockout as a security boundary. The bundled Supabase anon/publishable key and map-provider keys are public
 client configuration; never put a `service_role` or other privileged key in
-`.env`, and restrict provider keys in their respective dashboards.
+`.env.client`, and restrict provider keys in their respective dashboards.
 
 Run the transit planner locally from this directory with
 `python backend/planner/api.py --host 127.0.0.1 --port 8080`. The app's default
@@ -145,7 +152,7 @@ check `http://127.0.0.1:8080/health`.
 
 The Render blueprint is at the repository root (`render.yaml`). Deploy that
 blueprint to create the hosted planner, then set `TRANSIT_API_URL` in the
-Flutter app's `.env` to the deployed HTTPS service URL. For Flutter web, also
+Flutter app's `.env.client` to the deployed HTTPS service URL. For Flutter web, also
 set `MAPPARAAN_ALLOWED_ORIGINS` on Render to the exact web-app origin. The API
 binds to loopback locally; public deployments require that allowlist, TLS, and
 appropriate abuse controls. CORS is not authentication.
@@ -155,13 +162,15 @@ appropriate abuse controls. CORS is not authentication.
 The Python backend now includes a lightweight AI orchestration layer for the
 existing server, rather than a separate FastAPI deployment. This keeps the
 transport planner and the AI scaffold in one place, avoids extra runtime cost,
-and preserves the current architecture. The AI service is intentionally scoped
-for backend scaffolding and quota enforcement only; the Flutter UI for chat is
-not part of this phase.
+and preserves the current architecture. The existing Flutter chat client sends requests to this backend and uses the
+current Supabase session for authentication.
 
 Server-side configuration stays in the backend environment, not in Flutter.
 Set `GEMINI_API_KEY` in the backend environment before enabling live Gemini
-calls and optionally set `GEMINI_MODEL` to override the default model. The
+calls, `SUPABASE_URL` plus `SUPABASE_PUBLISHABLE_KEY` (or the legacy
+`SUPABASE_ANON_KEY`) so the backend can validate session tokens, and optionally
+`GEMINI_MODEL` to override the default model. Use only a Supabase public client
+key for token verification; never configure a `service_role` key. The
 project currently targets the Google AI Studio free-tier
 `gemini-flash-lite-latest` alias, which resolves to `gemini-3.5-flash-lite`
 and supports function calling under the current Free Tier; verify the active AI
@@ -169,19 +178,43 @@ Studio model list before production use because Google refreshes aliases over
 time. The AI quota ledger persists locally in `data/ai_usage.sqlite3` by
 default, with a matching Supabase migration at
 `supabase/migrations/20261106_ai_usage_quota.sql` for projects that want to
-move the same policy into a managed database. The enforced limits are:
+move the same policy into a managed database. Apply
+`supabase/migrations/20261107_harden_ai_usage_quota.sql` after that schema
+migration: client roles can read only their own quota rows and cannot insert,
+update, or delete events. The enforced limits are:
 
 - 10 messages per authenticated user per day
 - 5 messages per authenticated user per minute
 - 100 AI messages globally per day
 - reset based on `Asia/Manila` local time
 
-The quota is keyed by the authenticated `user_id`, so new conversations or
-sessions do not bypass a user's limit. Requests that exceed quota return a
-429 response; requests that hit a non-configured backend return a 503 response.
-The backend's `POST /ai/chat` endpoint accepts the authenticated `user_id` and
-`message` payload and records usage without exposing Gemini credentials to
-Flutter.
+The quota is keyed by the identity returned by Supabase after validating the
+Bearer access token, so a client-supplied `user_id` cannot change quota
+attribution. Requests without a valid token are rejected; requests that exceed
+quota return a 429 response. Flutter sends the Supabase session access token in
+the `Authorization` header. The backend verifies it through Supabase Auth and
+does not expose Gemini credentials to Flutter. For web clients, include the
+app's exact origin in `MAPPARAAN_ALLOWED_ORIGINS`; CORS is not authentication.
+
+The assistant can geocode named locations, find nearby supported places or
+GTFS stops, estimate fares using planner output, and inspect static GTFS
+service estimates. Route and schedule recommendations are not live traffic or
+vehicle data; missing schedule data is reported as unknown rather than proof
+that a service is closed. AI question text and up to ten recent messages are
+sent to Gemini. Named locations may be sent to Nominatim for geocoding, and
+nearby searches may send a category and location to Overpass. Limited
+conversation context is held in backend memory for up to 30 minutes after
+activity, while quota records are stored in the backend's local SQLite
+database. Render restarts or multiple instances do not share that SQLite quota
+ledger or conversation context; configure shared persistent storage/rate
+limiting before relying on these controls in production.
+
+The current privacy notice documents this processing as version
+`2026-11-07-v2`. Before deploying the updated Flutter app, apply
+`supabase/migrations/20261107_update_ai_privacy_notice.sql` after the existing
+legal-acknowledgement migration so users are asked to acknowledge the updated
+notice. Confirm migration prerequisites and deployed state first; this
+workspace cannot verify the live Supabase project.
 
 The Flutter planner sends route requests as JSON `POST /plan` requests so
 coordinates are not placed in request URLs. Older `GET /plan` requests remain

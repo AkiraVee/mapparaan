@@ -173,7 +173,11 @@ class FareTests(unittest.TestCase):
 
     def test_lrt2_full_fare_when_the_discount_is_switched_off(self):
         import copy
-        cfg = json.load(open(os.path.join(DATA_DIR, "reference", "fare_config.json"), encoding="utf-8"))
+        with open(
+            os.path.join(DATA_DIR, "reference", "fare_config.json"),
+            encoding="utf-8",
+        ) as fare_config:
+            cfg = json.load(fare_config)
         cfg = copy.deepcopy(cfg)
         cfg["modes"]["lrt2"]["temporary_discount"]["active"] = False
         tmp = tempfile.mkdtemp(prefix="mapparaan_promo_")

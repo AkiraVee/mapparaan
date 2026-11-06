@@ -24,7 +24,7 @@ Future<void> main() async {
 
   String? configurationError;
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: '.env.client');
   } catch (error) {
     configurationError = 'Local cloud configuration is unavailable.';
   }
@@ -35,8 +35,8 @@ Future<void> main() async {
         url: AppConstants.supabaseUrl,
         publishableKey: AppConstants.supabaseClientKey,
       );
-    } catch (error) {
-      configurationError = 'Cloud services are unavailable: $error';
+    } catch (_) {
+      configurationError = 'Cloud services are unavailable.';
     }
   }
 
@@ -263,8 +263,7 @@ class _AuthGateState extends State<AuthGate> {
       );
       setState(() {
         _checkingAcknowledgements = false;
-        _acknowledgementError =
-            'We could not verify the current notices. Check your connection and try again.';
+        _acknowledgementError = 'We could not verify the current notices. Check your connection and try again.';
       });
     }
   }
@@ -346,9 +345,7 @@ class _AuthGateState extends State<AuthGate> {
       if (_checkingAcknowledgements ||
           (_hasCurrentAcknowledgements == null &&
               _acknowledgementError == null)) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
       if (_acknowledgementError != null) {
         return Scaffold(
@@ -358,10 +355,7 @@ class _AuthGateState extends State<AuthGate> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _acknowledgementError!,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(_acknowledgementError!, textAlign: TextAlign.center),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: () => _checkAcknowledgements(_activeUserId!),
