@@ -26,6 +26,7 @@ class SearchLocationScreen extends StatefulWidget {
   final PlaceReverseGeocode reverseGeocode;
   final Future<ManilaBoundary> Function() loadManilaBoundary;
   final Future<List<SavedPlace>> Function() loadSavedPlaces;
+  final ValueNotifier<double>? routeDragOffset;
 
   const SearchLocationScreen({
     super.key,
@@ -38,22 +39,55 @@ class SearchLocationScreen extends StatefulWidget {
     this.reverseGeocode = PlaceSearchService.reverseGeocode,
     this.loadManilaBoundary = ManilaBoundaryService.load,
     this.loadSavedPlaces = SavedPlacesService.fetchSavedPlaces,
+    this.routeDragOffset,
   });
 
   static Route<SearchSelection> route({required SearchLocationScreen screen}) {
+    final routeDragOffset = ValueNotifier<double>(0);
+    final routedScreen = screen._withRouteDragOffset(routeDragOffset);
     return PageRouteBuilder<SearchSelection>(
-      pageBuilder: (context, animation, secondaryAnimation) => screen,
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (context, animation, secondaryAnimation) => routedScreen,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final position = animation.drive(
-          Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
         );
-        return SlideTransition(position: position, child: child);
+        return AnimatedBuilder(
+          animation: Listenable.merge([curvedAnimation, routeDragOffset]),
+          child: child,
+          builder: (context, child) {
+            final dragOffset = routeDragOffset.value;
+            final routeOffset =
+                (1 - curvedAnimation.value) *
+                    (MediaQuery.sizeOf(context).height - dragOffset) +
+                dragOffset;
+            return Transform.translate(
+              key: const ValueKey('search-route-transition'),
+              offset: Offset(0, routeOffset),
+              child: child,
+            );
+          },
+        );
       },
+    );
+  }
+
+  SearchLocationScreen _withRouteDragOffset(ValueNotifier<double> offset) {
+    return SearchLocationScreen(
+      key: key,
+      initialQuery: initialQuery,
+      selectionActionLabel: selectionActionLabel,
+      showMap: showMap,
+      locateUser: locateUser,
+      searchPlaces: searchPlaces,
+      searchNearbyCategory: searchNearbyCategory,
+      reverseGeocode: reverseGeocode,
+      loadManilaBoundary: loadManilaBoundary,
+      loadSavedPlaces: loadSavedPlaces,
+      routeDragOffset: offset,
     );
   }
 
@@ -61,7 +95,8 @@ class SearchLocationScreen extends StatefulWidget {
   State<SearchLocationScreen> createState() => _SearchLocationScreenState();
 }
 
-class _SearchLocationScreenState extends State<SearchLocationScreen> {
+class _SearchLocationScreenState extends State<SearchLocationScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _topSearchController = TextEditingController();
   final FocusNode _topSearchFocusNode = FocusNode();
   final MapController _mapController = MapController();
@@ -93,7 +128,14 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   String? _selectedCategory;
   int _searchGeneration = 0;
   double _dismissDragOffset = 0;
-  bool _isDraggingDismissHandle = false;
+  late final ValueNotifier<double> _routeDragOffset =
+      widget.routeDragOffset ?? ValueNotifier<double>(0);
+  late final AnimationController _dismissSnapBackController =
+      AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 180),
+      )..addListener(_updateSnapBack);
+  double _snapBackStartOffset = 0;
 
   static const _quickChips = [
     'Mall',
@@ -472,12 +514,18 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 
   void _updateDismissDrag(DragUpdateDetails details) {
-    setState(() {
-      _dismissDragOffset = (_dismissDragOffset + details.delta.dy).clamp(
-        0,
-        MediaQuery.sizeOf(context).height,
-      );
-    });
+    _dismissSnapBackController.stop();
+    _dismissDragOffset = (_dismissDragOffset + details.delta.dy).clamp(
+      0,
+      MediaQuery.sizeOf(context).height,
+    );
+    _routeDragOffset.value = _dismissDragOffset;
+  }
+
+  void _updateSnapBack() {
+    _dismissDragOffset =
+        _snapBackStartOffset * (1 - _dismissSnapBackController.value);
+    _routeDragOffset.value = _dismissDragOffset;
   }
 
   void _endDismissDrag(DragEndDetails details) {
@@ -487,10 +535,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       return;
     }
 
-    setState(() {
-      _isDraggingDismissHandle = false;
-      _dismissDragOffset = 0;
-    });
+    _snapBackStartOffset = _dismissDragOffset;
+    _dismissSnapBackController.forward(from: 0);
   }
 
   void _closeSearch() {
@@ -506,6 +552,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _topSearchFocusNode.dispose();
     _discoveryScrollController.dispose();
     _mapController.dispose();
+    _dismissSnapBackController.dispose();
+    _routeDragOffset.dispose();
     super.dispose();
   }
 
@@ -700,114 +748,102 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                   ),
                   SizedBox(height: mapPeek),
                   Expanded(
-                    child: AnimatedContainer(
-                      duration: _isDraggingDismissHandle
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      transform: Matrix4.translationValues(
-                        0,
-                        _dismissDragOffset,
-                        0,
+                    child: Material(
+                      color: colorScheme.surface,
+                      elevation: 10,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
                       ),
-                      child: Material(
-                        color: colorScheme.surface,
-                        elevation: 10,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(24),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
-                            GestureDetector(
-                              key: const ValueKey('search-dismiss-handle'),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _closeSearch,
-                              onVerticalDragStart: (_) {
-                                setState(() => _isDraggingDismissHandle = true);
-                              },
-                              onVerticalDragUpdate: _updateDismissDrag,
-                              onVerticalDragEnd: _endDismissDrag,
-                              child: Semantics(
-                                button: true,
-                                label: 'Close search',
-                                hint: 'Swipe down or tap to close search',
-                                child: SizedBox(
-                                  width: 64,
-                                  height: 48,
-                                  child: Center(
-                                    child: Container(
-                                      width: 36,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.outlineVariant,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            key: const ValueKey('search-dismiss-handle'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _closeSearch,
+                            onVerticalDragStart: (_) =>
+                                _dismissSnapBackController.stop(),
+                            onVerticalDragUpdate: _updateDismissDrag,
+                            onVerticalDragEnd: _endDismissDrag,
+                            child: Semantics(
+                              button: true,
+                              label: 'Close search',
+                              hint: 'Swipe down or tap to close search',
+                              child: SizedBox(
+                                width: 64,
+                                height: 48,
+                                child: Center(
+                                  child: Container(
+                                    width: 36,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.outlineVariant,
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _selectedPlace != null
+                                            ? 'Selected place'
+                                            : _isSearching
+                                            ? 'Searching places'
+                                            : _isSearchingCategory
+                                            ? 'Finding nearby $_selectedCategory'
+                                            : _hasSearched
+                                            ? 'Search results'
+                                            : 'Explore places',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                      if (_selectedOrigin != null)
                                         Text(
-                                          _selectedPlace != null
-                                              ? 'Selected place'
-                                              : _isSearching
-                                              ? 'Searching places'
-                                              : _isSearchingCategory
-                                              ? 'Finding nearby $_selectedCategory'
-                                              : _hasSearched
-                                              ? 'Search results'
-                                              : 'Explore places',
+                                          'Pickup: ${_selectedOrigin!.name}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: Theme.of(context)
                                               .textTheme
-                                              .titleMedium
+                                              .bodySmall
                                               ?.copyWith(
-                                                fontWeight: FontWeight.w700,
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                         ),
-                                        if (_selectedOrigin != null)
-                                          Text(
-                                            'Pickup: ${_selectedOrigin!.name}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                          ),
-                                      ],
-                                    ),
+                                    ],
                                   ),
-                                  if (_hasSearched &&
-                                      !_isSearching &&
-                                      !_hasSearchError)
-                                    Text(
-                                      '${_searchResults.length} found',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                ],
-                              ),
+                                ),
+                                if (_hasSearched &&
+                                    !_isSearching &&
+                                    !_hasSearchError)
+                                  Text(
+                                    '${_searchResults.length} found',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                              ],
                             ),
-                            Expanded(child: _buildSearchContent(query)),
-                          ],
-                        ),
+                          ),
+                          Expanded(child: _buildSearchContent(query)),
+                        ],
                       ),
                     ),
                   ),

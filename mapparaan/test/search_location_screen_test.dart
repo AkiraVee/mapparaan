@@ -219,14 +219,17 @@ void main() {
             body: Center(
               child: FilledButton(
                 onPressed: () {
-                  Navigator.of(context).push<SearchSelection>(
-                    SearchLocationScreen.route(
-                      screen: const SearchLocationScreen(
-                        showMap: false,
-                        loadSavedPlaces: _emptySavedPlaces,
-                      ),
+                  final route = SearchLocationScreen.route(
+                    screen: const SearchLocationScreen(
+                      showMap: false,
+                      loadSavedPlaces: _emptySavedPlaces,
                     ),
+                  ) as PageRoute<SearchSelection>;
+                  expect(
+                    route.transitionDuration,
+                    route.reverseTransitionDuration,
                   );
+                  Navigator.of(context).push<SearchSelection>(route);
                 },
                 child: const Text('Open search'),
               ),
@@ -241,6 +244,19 @@ void main() {
     await tester.drag(
       find.byKey(const ValueKey('search-dismiss-handle')),
       const Offset(0, 120),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    final exitOffset = tester
+        .widget<Transform>(
+          find.byKey(const ValueKey('search-route-transition')),
+        )
+        .transform
+        .getTranslation()
+        .y;
+    expect(exitOffset, greaterThan(0));
+    expect(
+      exitOffset,
+      lessThan(tester.view.physicalSize.height / tester.view.devicePixelRatio),
     );
     await tester.pumpAndSettle();
 
