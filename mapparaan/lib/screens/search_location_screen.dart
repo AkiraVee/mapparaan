@@ -40,6 +40,23 @@ class SearchLocationScreen extends StatefulWidget {
     this.loadSavedPlaces = SavedPlacesService.fetchSavedPlaces,
   });
 
+  static Route<SearchSelection> route({required SearchLocationScreen screen}) {
+    return PageRouteBuilder<SearchSelection>(
+      pageBuilder: (context, animation, secondaryAnimation) => screen,
+      transitionDuration: const Duration(milliseconds: 280),
+      reverseTransitionDuration: const Duration(milliseconds: 240),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final position = animation.drive(
+          Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        );
+        return SlideTransition(position: position, child: child);
+      },
+    );
+  }
+
   @override
   State<SearchLocationScreen> createState() => _SearchLocationScreenState();
 }
@@ -75,6 +92,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   Timer? _debounce;
   String? _selectedCategory;
   int _searchGeneration = 0;
+  double _dismissDragOffset = 0;
+  bool _isDraggingDismissHandle = false;
 
   static const _quickChips = [
     'Mall',
@@ -452,6 +471,34 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _onSearchChanged(_topSearchController.text);
   }
 
+  void _updateDismissDrag(DragUpdateDetails details) {
+    setState(() {
+      _dismissDragOffset = (_dismissDragOffset + details.delta.dy).clamp(
+        0,
+        MediaQuery.sizeOf(context).height,
+      );
+    });
+  }
+
+  void _endDismissDrag(DragEndDetails details) {
+    final downwardVelocity = details.primaryVelocity ?? 0;
+    if (_dismissDragOffset >= 88 || downwardVelocity >= 700) {
+      _closeSearch();
+      return;
+    }
+
+    setState(() {
+      _isDraggingDismissHandle = false;
+      _dismissDragOffset = 0;
+    });
+  }
+
+  void _closeSearch() {
+    FocusScope.of(context).unfocus();
+    _debounce?.cancel();
+    Navigator.of(context).maybePop();
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -573,9 +620,9 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                     child: Row(
                       children: [
                         IconButton(
-                          tooltip: 'Back',
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.of(context).pop(),
+                          tooltip: 'Close search',
+                          icon: const Icon(Icons.close),
+                          onPressed: _closeSearch,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -653,83 +700,114 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                   ),
                   SizedBox(height: mapPeek),
                   Expanded(
-                    child: Material(
-                      color: colorScheme.surface,
-                      elevation: 10,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(24),
+                    child: AnimatedContainer(
+                      duration: _isDraggingDismissHandle
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      transform: Matrix4.translationValues(
+                        0,
+                        _dismissDragOffset,
+                        0,
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 10),
-                          Container(
-                            width: 36,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _selectedPlace != null
-                                            ? 'Selected place'
-                                            : _isSearching
-                                            ? 'Searching places'
-                                            : _isSearchingCategory
-                                            ? 'Finding nearby $_selectedCategory'
-                                            : _hasSearched
-                                            ? 'Search results'
-                                            : 'Explore places',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                      child: Material(
+                        color: colorScheme.surface,
+                        elevation: 10,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              key: const ValueKey('search-dismiss-handle'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _closeSearch,
+                              onVerticalDragStart: (_) {
+                                setState(() => _isDraggingDismissHandle = true);
+                              },
+                              onVerticalDragUpdate: _updateDismissDrag,
+                              onVerticalDragEnd: _endDismissDrag,
+                              child: Semantics(
+                                button: true,
+                                label: 'Close search',
+                                hint: 'Swipe down or tap to close search',
+                                child: SizedBox(
+                                  width: 64,
+                                  height: 48,
+                                  child: Center(
+                                    child: Container(
+                                      width: 36,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.outlineVariant,
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
-                                      if (_selectedOrigin != null)
-                                        Text(
-                                          'Pickup: ${_selectedOrigin!.name}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                        ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                                if (_hasSearched &&
-                                    !_isSearching &&
-                                    !_hasSearchError)
-                                  Text(
-                                    '${_searchResults.length} found',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                              ],
+                              ),
                             ),
-                          ),
-                          Expanded(child: _buildSearchContent(query)),
-                        ],
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _selectedPlace != null
+                                              ? 'Selected place'
+                                              : _isSearching
+                                              ? 'Searching places'
+                                              : _isSearchingCategory
+                                              ? 'Finding nearby $_selectedCategory'
+                                              : _hasSearched
+                                              ? 'Search results'
+                                              : 'Explore places',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        if (_selectedOrigin != null)
+                                          Text(
+                                            'Pickup: ${_selectedOrigin!.name}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (_hasSearched &&
+                                      !_isSearching &&
+                                      !_hasSearchError)
+                                    Text(
+                                      '${_searchResults.length} found',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Expanded(child: _buildSearchContent(query)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -905,10 +983,7 @@ class _EmptySearchState extends StatelessWidget {
               ),
             ),
             if (recentPlaces.isNotEmpty)
-              TextButton(
-                onPressed: onClearRecents,
-                child: const Text('Clear'),
-              ),
+              TextButton(onPressed: onClearRecents, child: const Text('Clear')),
           ],
         ),
         if (hasRecentPlacesError)
@@ -955,19 +1030,24 @@ class _EmptySearchState extends StatelessWidget {
             ),
           )
         else
-          ...savedPlaces.take(6).map(
-            (place) => _PlaceListTile(
-              name: place.name,
-              subtitle: place.subtitle,
-              icon: Icons.bookmark_outline,
-              onTap: () => onSelectSavedPlace(place),
-            ),
-          ),
+          ...savedPlaces
+              .take(6)
+              .map(
+                (place) => _PlaceListTile(
+                  name: place.name,
+                  subtitle: place.subtitle,
+                  icon: Icons.bookmark_outline,
+                  onTap: () => onSelectSavedPlace(place),
+                ),
+              ),
       ],
     );
   }
 
-  Widget _buildNearbyCategorySection(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildNearbyCategorySection(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
     if (selectedCategory == null) return const SizedBox.shrink();
 
     return Column(

@@ -209,6 +209,45 @@ void main() {
     expect(find.text(place.name), findsNothing);
   });
 
+  testWidgets('swiping the search handle down closes the search screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () {
+                  Navigator.of(context).push<SearchSelection>(
+                    SearchLocationScreen.route(
+                      screen: const SearchLocationScreen(
+                        showMap: false,
+                        loadSavedPlaces: _emptySavedPlaces,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open search'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open search'));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('search-dismiss-handle')),
+      const Offset(0, 120),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open search'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-dismiss-handle')), findsNothing);
+  });
+
   testWidgets('returns the selected place and parsed route preferences', (
     WidgetTester tester,
   ) async {

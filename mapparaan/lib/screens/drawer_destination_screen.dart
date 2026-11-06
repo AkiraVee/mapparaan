@@ -1227,8 +1227,8 @@ class _SavedPlacesPageState extends State<_SavedPlacesPage> {
             onAction: () async {
               final selection = await Navigator.of(context)
                   .push<SearchSelection>(
-                    MaterialPageRoute<SearchSelection>(
-                      builder: (_) => const SearchLocationScreen(),
+                    SearchLocationScreen.route(
+                      screen: const SearchLocationScreen(),
                     ),
                   );
               if (context.mounted && selection != null) {
