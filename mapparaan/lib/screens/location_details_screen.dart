@@ -204,9 +204,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (outcome == TransitPlanOutcome.outsideServiceArea) {
       setState(() {
         _isOfflineFallback = false;
-        _serviceAreaMessage =
-            result.message ??
-            'Mapparaan currently covers the City of Manila only.';
+        _serviceAreaMessage = result.message ?? 'Routes between Manila City and locations outside Manila are not supported.';
         _routeOptions = const [];
         _selectedOption = null;
         _routePoints = [];
@@ -1758,8 +1756,7 @@ class _PlaceDetailsSheetState extends State<_PlaceDetailsSheet> {
                     if (widget.serviceAreaMessage != null)
                       _NoticeBanner(
                         icon: Icons.location_off_outlined,
-                        text:
-                            '${widget.serviceAreaMessage} Choose a start and destination inside the City of Manila.',
+                        text: widget.serviceAreaMessage!,
                       ),
                     if (widget.serverErrorMessage != null)
                       _NoticeBanner(

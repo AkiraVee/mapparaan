@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/manila_boundary_service.dart';
+import '../services/nearby_place_search_service.dart';
 import '../services/place_search_service.dart';
 import '../services/saved_places_service.dart';
 import '../widgets/mapparaan_tile_layer.dart';
@@ -18,7 +19,9 @@ import 'map_pin_selection_screen.dart';
 class SearchLocationScreen extends StatefulWidget {
   final String? initialQuery;
   final bool showMap;
+  final Future<LatLng?> Function()? locateUser;
   final PlaceSearch searchPlaces;
+  final NearbyCategorySearch searchNearbyCategory;
   final PlaceReverseGeocode reverseGeocode;
   final Future<ManilaBoundary> Function() loadManilaBoundary;
   final Future<List<SavedPlace>> Function() loadSavedPlaces;
@@ -27,7 +30,9 @@ class SearchLocationScreen extends StatefulWidget {
     super.key,
     this.initialQuery,
     this.showMap = true,
+    this.locateUser,
     this.searchPlaces = PlaceSearchService.search,
+    this.searchNearbyCategory = NearbyPlaceSearchService.search,
     this.reverseGeocode = PlaceSearchService.reverseGeocode,
     this.loadManilaBoundary = ManilaBoundaryService.load,
     this.loadSavedPlaces = SavedPlacesService.fetchSavedPlaces,
@@ -41,6 +46,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   final TextEditingController _topSearchController = TextEditingController();
   final FocusNode _topSearchFocusNode = FocusNode();
   final MapController _mapController = MapController();
+  final ScrollController _discoveryScrollController = ScrollController();
 
   static const _recentPlacesKey = 'recent_search_places';
   static const _maxRecentPlaces = 8;
@@ -50,12 +56,16 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   bool _isSearching = false;
   bool _isDebouncing = false;
   bool _isLocating = false;
+  bool _isSearchingCategory = false;
+  bool _categoryLocationUnavailable = false;
+  String? _categorySearchError;
   bool _isLoadingSavedPlaces = true;
   bool _hasSavedPlacesError = false;
   bool _hasRecentPlacesError = false;
 
   LatLng? _userLocation;
   List<PlaceResult> _searchResults = const [];
+  List<PlaceResult> _categoryResults = const [];
   List<PlaceResult> _recentPlaces = const [];
   List<SavedPlace> _savedPlaces = const [];
   PlaceResult? _selectedPlace;
@@ -64,136 +74,15 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   String? _selectedCategory;
   int _searchGeneration = 0;
 
-  static const _allPlaces = <String, List<_PopularPlace>>{
-    'Mall': [
-      _PopularPlace('SM Mall of Asia', 'Pasay City', LatLng(14.5351, 120.9822)),
-      _PopularPlace('SM North EDSA', 'Quezon City', LatLng(14.6569, 121.0307)),
-      _PopularPlace('Robinsons Manila', 'Manila', LatLng(14.5750, 120.9830)),
-      _PopularPlace(
-        'Ayala Malls Manila Bay',
-        'Pasay',
-        LatLng(14.5358, 120.9815),
-      ),
-      _PopularPlace('Greenbelt', 'Makati', LatLng(14.5520, 121.0240)),
-      _PopularPlace('Trinoma', 'Quezon City', LatLng(14.6535, 121.0325)),
-    ],
-    'Hospital': [
-      _PopularPlace(
-        'Philippine General Hospital',
-        'Manila',
-        LatLng(14.5778, 120.9856),
-      ),
-      _PopularPlace(
-        'St. Luke\'s Medical Center',
-        'Quezon City',
-        LatLng(14.6400, 121.0450),
-      ),
-      _PopularPlace(
-        'Makati Medical Center',
-        'Makati',
-        LatLng(14.5580, 121.0140),
-      ),
-      _PopularPlace(
-        'Chinese General Hospital',
-        'Manila',
-        LatLng(14.6250, 120.9850),
-      ),
-      _PopularPlace('The Medical City', 'Pasig', LatLng(14.5700, 121.0650)),
-    ],
-    'School': [
-      _PopularPlace(
-        'University of Santo Tomas',
-        'España, Manila',
-        LatLng(14.6091, 120.9894),
-      ),
-      _PopularPlace(
-        'University of the Philippines Diliman',
-        'Quezon City',
-        LatLng(14.6537, 121.0687),
-      ),
-      _PopularPlace(
-        'Ateneo de Manila University',
-        'Quezon City',
-        LatLng(14.6390, 121.0780),
-      ),
-      _PopularPlace(
-        'De La Salle University',
-        'Manila',
-        LatLng(14.5647, 120.9932),
-      ),
-      _PopularPlace(
-        'Polytechnic University of the Philippines',
-        'Manila',
-        LatLng(14.5980, 121.0100),
-      ),
-    ],
-    'LRT/MRT': [
-      _PopularPlace('LRT-1 Baclaran', 'Pasay', LatLng(14.5340, 120.9950)),
-      _PopularPlace('LRT-1 Doroteo Jose', 'Manila', LatLng(14.6040, 120.9820)),
-      _PopularPlace(
-        'MRT-3 North Avenue',
-        'Quezon City',
-        LatLng(14.6520, 121.0330),
-      ),
-      _PopularPlace('MRT-3 Ayala', 'Makati', LatLng(14.5490, 121.0270)),
-      _PopularPlace('LRT-2 Recto', 'Manila', LatLng(14.6030, 120.9830)),
-    ],
-    'Park': [
-      _PopularPlace('Rizal Park (Luneta)', 'Manila', LatLng(14.5832, 120.9794)),
-      _PopularPlace(
-        'Quezon City Memorial Circle',
-        'Quezon City',
-        LatLng(14.6510, 121.0490),
-      ),
-      _PopularPlace(
-        'Arroceros Forest Park',
-        'Manila',
-        LatLng(14.5930, 120.9810),
-      ),
-      _PopularPlace(
-        'La Mesa Eco Park',
-        'Quezon City',
-        LatLng(14.7120, 121.0920),
-      ),
-    ],
-    'Market': [
-      _PopularPlace('Divisoria Market', 'Manila', LatLng(14.6040, 120.9700)),
-      _PopularPlace('Baclaran Market', 'Pasay', LatLng(14.5345, 120.9960)),
-      _PopularPlace('Quiapo Market', 'Manila', LatLng(14.5980, 120.9835)),
-      _PopularPlace('Cartimar Market', 'Pasay', LatLng(14.5450, 120.9950)),
-    ],
-  };
-
-  static const _defaultPopular = [
-    _PopularPlace('SM Mall of Asia', 'Pasay City', LatLng(14.5351, 120.9822)),
-    _PopularPlace('Intramuros', 'Manila', LatLng(14.5896, 120.9747)),
-    _PopularPlace(
-      'Quezon City Circle',
-      'Quezon City',
-      LatLng(14.6510, 121.0490),
-    ),
-    _PopularPlace('BGC High Street', 'Taguig', LatLng(14.5515, 121.0510)),
-    _PopularPlace(
-      'University of Santo Tomas',
-      'España, Manila',
-      LatLng(14.6091, 120.9894),
-    ),
-    _PopularPlace('NAIA Terminal 3', 'Pasay', LatLng(14.5086, 121.0197)),
-  ];
-
   static const _quickChips = [
     'Mall',
+    'Restaurant',
     'Hospital',
     'School',
     'LRT/MRT',
     'Park',
     'Market',
   ];
-
-  List<_PopularPlace> get _displayedPlaces {
-    if (_selectedCategory == null) return _defaultPopular;
-    return _allPlaces[_selectedCategory] ?? _defaultPopular;
-  }
 
   @override
   void initState() {
@@ -210,6 +99,15 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     if (_isLocating) return;
     setState(() => _isLocating = true);
     try {
+      if (widget.locateUser != null) {
+        final location = await widget.locateUser!();
+        if (location != null && mounted) {
+          setState(() => _userLocation = location);
+          if (widget.showMap) _mapController.move(location, 14.0);
+        }
+        return;
+      }
+
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showLocationMessage(
@@ -363,20 +261,36 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _debounce?.cancel();
     final generation = ++_searchGeneration;
     final trimmed = query.trim();
-    setState(() {
-      _selectedPlace = null;
-      _selectedCategory = null;
-      _searchResults = const [];
-      _hasSearchError = false;
-      _hasSearched = false;
-      _isSearching = false;
-      _isDebouncing = trimmed.length >= AppConstants.searchMinQueryLength;
-    });
+    _resetSearchState(
+      keepCategorySelection: false,
+      shouldDebounce: trimmed.length >= AppConstants.searchMinQueryLength,
+    );
 
     if (trimmed.length < AppConstants.searchMinQueryLength) return;
     // Keep requests below Nominatim's public-service rate limit.
     _debounce = Timer(const Duration(milliseconds: 1100), () {
       _runSearch(trimmed, generation);
+    });
+  }
+
+  void _resetSearchState({
+    bool keepCategorySelection = false,
+    bool shouldDebounce = false,
+  }) {
+    setState(() {
+      _selectedPlace = null;
+      if (!keepCategorySelection) {
+        _selectedCategory = null;
+      }
+      _categoryResults = const [];
+      _categorySearchError = null;
+      _categoryLocationUnavailable = false;
+      _isSearchingCategory = false;
+      _searchResults = const [];
+      _hasSearchError = false;
+      _hasSearched = false;
+      _isSearching = false;
+      _isDebouncing = shouldDebounce;
     });
   }
 
@@ -413,24 +327,25 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _debounce?.cancel();
     ++_searchGeneration;
     _topSearchController.clear();
-    setState(() {
-      _searchResults = const [];
-      _selectedPlace = null;
-      _hasSearchError = false;
-      _hasSearched = false;
-      _isSearching = false;
-      _isDebouncing = false;
-      _selectedCategory = null;
-    });
+    _resetSearchState();
     _topSearchFocusNode.requestFocus();
   }
 
-  void _onChipTap(String chip) {
+  Future<void> _onChipTap(String chip, {bool retry = false}) async {
     _debounce?.cancel();
-    ++_searchGeneration;
+    final generation = ++_searchGeneration;
     _topSearchController.clear();
+    final category = retry
+        ? chip
+        : _selectedCategory == chip
+        ? null
+        : chip;
     setState(() {
-      _selectedCategory = _selectedCategory == chip ? null : chip;
+      _selectedCategory = category;
+      _categoryResults = const [];
+      _categorySearchError = null;
+      _categoryLocationUnavailable = false;
+      _isSearchingCategory = category != null;
       _searchResults = const [];
       _selectedPlace = null;
       _isSearching = false;
@@ -438,15 +353,40 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       _hasSearchError = false;
       _hasSearched = false;
     });
+    if (category == null) return;
+
+    try {
+      if (_userLocation == null) await _useCurrentLocation();
+      if (!mounted || generation != _searchGeneration) return;
+      final location = _userLocation;
+      if (location == null) {
+        setState(() {
+          _isSearchingCategory = false;
+          _categoryLocationUnavailable = true;
+        });
+        return;
+      }
+
+      final results = await widget.searchNearbyCategory(category, location);
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _categoryResults = results;
+        _isSearchingCategory = false;
+      });
+    } on Exception catch (error) {
+      debugPrint('Nearby $category search failed: $error');
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _isSearchingCategory = false;
+        _categorySearchError = 'Nearby places could not be loaded. Try again.';
+      });
+    }
   }
 
-  void _onPopularTap(_PopularPlace popular) {
-    final query = popular.name;
-    _topSearchController.text = query;
-    _topSearchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: query.length),
-    );
-    _onSearchChanged(query);
+  Future<void> _retryCategorySearch() async {
+    final category = _selectedCategory;
+    if (category == null) return;
+    await _onChipTap(category, retry: true);
   }
 
   void _previewPlace(PlaceResult place) {
@@ -515,6 +455,7 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
     _debounce?.cancel();
     _topSearchController.dispose();
     _topSearchFocusNode.dispose();
+    _discoveryScrollController.dispose();
     _mapController.dispose();
     super.dispose();
   }
@@ -742,6 +683,8 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
                                             ? 'Selected place'
                                             : _isSearching
                                             ? 'Searching places'
+                                            : _isSearchingCategory
+                                            ? 'Finding nearby $_selectedCategory'
                                             : _hasSearched
                                             ? 'Search results'
                                             : 'Explore places',
@@ -821,19 +764,27 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
       return _NoResultsState(query: query, onClear: _clearSearch);
     }
     if (_searchResults.isNotEmpty) {
-      return _SearchDropdown(results: _searchResults, onSelect: _previewPlace);
+      return _SearchDropdown(
+        results: _searchResults,
+        scrollController: _discoveryScrollController,
+        onSelect: _previewPlace,
+      );
     }
     return _EmptySearchState(
-      popularPlaces: _displayedPlaces,
       chips: _quickChips,
+      scrollController: _discoveryScrollController,
       selectedCategory: _selectedCategory,
+      categoryResults: _categoryResults,
+      isSearchingCategory: _isSearchingCategory,
+      categoryLocationUnavailable: _categoryLocationUnavailable,
+      categorySearchError: _categorySearchError,
       recentPlaces: _recentPlaces,
       savedPlaces: _savedPlaces,
       isLoadingSavedPlaces: _isLoadingSavedPlaces,
       hasSavedPlacesError: _hasSavedPlacesError,
       hasRecentPlacesError: _hasRecentPlacesError,
-      onPopularTap: _onPopularTap,
       onChipTap: _onChipTap,
+      onRetryCategory: _retryCategorySearch,
       onSelectPlace: _previewPlace,
       onSelectSavedPlace: _previewSavedPlace,
       onRetrySavedPlaces: _loadSavedPlaces,
@@ -853,53 +804,54 @@ class _SearchLocationScreenState extends State<SearchLocationScreen> {
   }
 }
 
-class _PopularPlace {
-  final String name;
-  final String subtitle;
-  final LatLng coordinates;
-
-  const _PopularPlace(this.name, this.subtitle, this.coordinates);
-}
-
 class _EmptySearchState extends StatelessWidget {
-  final List<_PopularPlace> popularPlaces;
+  final ScrollController scrollController;
   final List<String> chips;
   final String? selectedCategory;
+  final List<PlaceResult> categoryResults;
+  final bool isSearchingCategory;
+  final bool categoryLocationUnavailable;
+  final String? categorySearchError;
   final List<PlaceResult> recentPlaces;
   final List<SavedPlace> savedPlaces;
   final bool isLoadingSavedPlaces;
   final bool hasSavedPlacesError;
   final bool hasRecentPlacesError;
-  final ValueChanged<_PopularPlace> onPopularTap;
   final ValueChanged<String> onChipTap;
+  final VoidCallback onRetryCategory;
   final ValueChanged<PlaceResult> onSelectPlace;
   final ValueChanged<SavedPlace> onSelectSavedPlace;
   final VoidCallback onRetrySavedPlaces;
   final VoidCallback onClearRecents;
 
   const _EmptySearchState({
-    required this.popularPlaces,
+    required this.scrollController,
     required this.chips,
     required this.selectedCategory,
+    required this.categoryResults,
+    required this.isSearchingCategory,
+    required this.categoryLocationUnavailable,
+    required this.categorySearchError,
     required this.recentPlaces,
     required this.savedPlaces,
     required this.isLoadingSavedPlaces,
     required this.hasSavedPlacesError,
     required this.hasRecentPlacesError,
-    required this.onPopularTap,
     required this.onChipTap,
+    required this.onRetryCategory,
     required this.onSelectPlace,
     required this.onSelectSavedPlace,
     required this.onRetrySavedPlaces,
     required this.onClearRecents,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  bool get _hasRecentSection => recentPlaces.isNotEmpty || hasRecentPlacesError;
+  bool get _hasSavedSection =>
+      savedPlaces.isNotEmpty || isLoadingSavedPlaces || hasSavedPlacesError;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+  Widget _buildQuickCategories(BuildContext context, ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Quick categories',
@@ -931,96 +883,173 @@ class _EmptySearchState extends StatelessWidget {
             }).toList(),
           ),
         ),
-        if (recentPlaces.isNotEmpty || hasRecentPlacesError) ...[
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Recent places',
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
+      ],
+    );
+  }
+
+  Widget _buildRecentSection(BuildContext context, ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Recent places',
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
-              if (recentPlaces.isNotEmpty)
-                TextButton(
-                  onPressed: onClearRecents,
-                  child: const Text('Clear'),
-                ),
-            ],
-          ),
-          if (hasRecentPlacesError)
-            Text(
-              'Recent places could not be loaded from this device.',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.error),
             ),
-          ...recentPlaces.map(
-            (place) => _PlaceListTile(
-              name: place.name,
-              subtitle: place.subtitle,
-              icon: Icons.history,
-              onTap: () => onSelectPlace(place),
-            ),
+            if (recentPlaces.isNotEmpty)
+              TextButton(
+                onPressed: onClearRecents,
+                child: const Text('Clear'),
+              ),
+          ],
+        ),
+        if (hasRecentPlacesError)
+          Text(
+            'Recent places could not be loaded from this device.',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: colorScheme.error),
           ),
-        ],
-        ...[
-          const SizedBox(height: 14),
+        ...recentPlaces.map(
+          (place) => _PlaceListTile(
+            name: place.name,
+            subtitle: place.subtitle,
+            icon: Icons.history,
+            onTap: () => onSelectPlace(place),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSavedSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 14),
+        if (savedPlaces.isNotEmpty)
           Text(
             'Saved places',
             style: Theme.of(context).textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
-          if (isLoadingSavedPlaces)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: LinearProgressIndicator(),
-            )
-          else if (hasSavedPlacesError)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Could not load saved places'),
-              trailing: TextButton(
-                onPressed: onRetrySavedPlaces,
-                child: const Text('Retry'),
-              ),
-            )
-          else if (savedPlaces.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Places you save from their details will appear here.',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: colorScheme.onSurfaceVariant),
-              ),
-            )
-          else
-            ...savedPlaces
-                .take(6)
-                .map(
-                  (place) => _PlaceListTile(
-                    name: place.name,
-                    subtitle: place.subtitle,
-                    icon: Icons.bookmark_outline,
-                    onTap: () => onSelectSavedPlace(place),
-                  ),
-                ),
-        ],
+        if (isLoadingSavedPlaces)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(),
+          )
+        else if (hasSavedPlacesError)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Could not load saved places'),
+            trailing: TextButton(
+              onPressed: onRetrySavedPlaces,
+              child: const Text('Retry'),
+            ),
+          )
+        else
+          ...savedPlaces.take(6).map(
+            (place) => _PlaceListTile(
+              name: place.name,
+              subtitle: place.subtitle,
+              icon: Icons.bookmark_outline,
+              onTap: () => onSelectSavedPlace(place),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildNearbyCategorySection(BuildContext context, ColorScheme colorScheme) {
+    if (selectedCategory == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         const SizedBox(height: 16),
         Text(
-          selectedCategory ?? 'Popular in Metro Manila',
+          'Nearby $selectedCategory',
           style: Theme.of(context).textTheme.titleSmall
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 4),
-        ...popularPlaces.map(
-          (place) => _PlaceListTile(
-            name: place.name,
-            subtitle: place.subtitle,
-            icon: Icons.place_outlined,
-            onTap: () => onPopularTap(place),
+        if (isSearchingCategory)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (categoryLocationUnavailable)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Allow location access to find places near you.'),
+                TextButton(
+                  onPressed: onRetryCategory,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          )
+        else if (categorySearchError != null)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(categorySearchError!),
+            trailing: TextButton(
+              onPressed: onRetryCategory,
+              child: const Text('Retry'),
+            ),
+          )
+        else if (categoryResults.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No nearby places were found for this category.',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          )
+        else
+          ...categoryResults.map(
+            (place) => _PlaceListTile(
+              name: place.name,
+              subtitle: place.subtitle,
+              icon: Icons.place_outlined,
+              onTap: () => onSelectPlace(place),
+            ),
           ),
-        ),
+        if (!isSearchingCategory)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Place data © OpenStreetMap contributors',
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListView(
+      key: const ValueKey('search-discovery-list'),
+      controller: scrollController,
+      primary: false,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      children: [
+        _buildQuickCategories(context, colorScheme),
+        if (_hasRecentSection) _buildRecentSection(context, colorScheme),
+        if (_hasSavedSection) _buildSavedSection(context),
+        _buildNearbyCategorySection(context, colorScheme),
       ],
     );
   }
@@ -1134,14 +1163,22 @@ class _SearchSkeleton extends StatelessWidget {
 
 class _SearchDropdown extends StatelessWidget {
   final List<PlaceResult> results;
+  final ScrollController scrollController;
   final ValueChanged<PlaceResult> onSelect;
 
-  const _SearchDropdown({required this.results, required this.onSelect});
+  const _SearchDropdown({
+    required this.results,
+    required this.scrollController,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListView.separated(
+      controller: scrollController,
+      primary: false,
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       itemCount: results.length,
       separatorBuilder: (_, _) =>

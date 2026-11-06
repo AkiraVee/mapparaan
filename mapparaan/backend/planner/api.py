@@ -11,8 +11,8 @@ Endpoint:
   POST /plan with JSON fields: from, to, passenger, when, and avoid
 
 Service area:
-  Both route endpoints must be inside the City of Manila boundary in
-  <data>/reference/manila_boundary.geojson. Otherwise /plan answers 200 with
+  Route endpoints must be on the same side of the City of Manila boundary in
+  <data>/reference/manila_boundary.geojson. Cross-boundary requests answer 200 with
       {"status": "ok", "options": [], "reason": "outside_service_area", "message": "..."}
   so the app can tell that apart from "no route found" (options empty, no reason).
 """
@@ -313,18 +313,30 @@ class TransitApiHandler(BaseHTTPRequestHandler):
                 })
                 return
 
-            # Keep outside-boundary requests distinct from missing transit routes.
-            if not (in_service_area(origin) and in_service_area(destination)):
-                print("[PLAN] Request outside service area.")
+            origin_in_manila = in_service_area(origin)
+            destination_in_manila = in_service_area(destination)
+            if not _AREA:
+                message = (
+                    "The City of Manila boundary could not be verified; route "
+                    "planning is unavailable until boundary data is restored."
+                )
+            elif origin_in_manila != destination_in_manila:
+                message = (
+                    "Routes between Manila City and locations outside Manila are "
+                    "not supported. Choose both locations on the same side of "
+                    "the City of Manila boundary."
+                )
+            else:
+                message = None
+
+            if message is not None:
+                print("[PLAN] Request rejected by service-area boundary check.")
                 self._send_json(200, {
                     "status": "ok",
                     "passenger": passenger,
                     "options": [],
                     "reason": "outside_service_area",
-                    "message": (
-                        "Both route locations must be inside the City of Manila "
-                        "administrative boundary."
-                    ),
+                    "message": message,
                 })
                 return
 

@@ -122,14 +122,22 @@ supported for compatibility, but should not be used in new clients.
 
 The location picker supports map pins for pickup and destination. Pin
 coordinates are checked against the City of Manila boundary polygon in
-`data/reference/manila_boundary.geojson` in both Flutter and the API; points
-outside the polygon are not selectable or routable. Reverse geocoding may add
-an address label, but routing uses the confirmed coordinates and does not
-depend on an address being found. This lookup, like place search, uses
-Nominatim. Transit planning uses the available static GTFS data, not live
-vehicle locations. Fare and travel-time values may be estimates; when the
-planner is offline, the app does not invent transit routes and shows only a
-street-walking alternative if one can be retrieved.
+`data/reference/manila_boundary.geojson` for map-pin selection. The route API
+allows trips whose origin and destination are both within Manila or both
+outside it, and blocks trips with one endpoint on each side. Reverse geocoding
+may add an address label, but routing uses the confirmed coordinates and does
+not depend on an address being found. Place-name search and reverse geocoding
+use Nominatim; nearby categories query OpenStreetMap Overpass using the selected
+category and device coordinates. Transit planning uses the available static
+GTFS data, not live vehicle locations. Fare and travel-time values may be
+estimates; when the planner is offline, the app does not invent transit routes
+and shows only a street-walking alternative if one can be retrieved.
+
+The current transit feed has 531 stops concentrated within the City of Manila.
+Outside-to-outside requests are passed to the planner, but transit service is
+not available throughout Metro Manila; locations without nearby feed stops may
+return no transit itinerary. The planner can provide a street-walking fallback
+when a verified walking route is available.
 
 Memory photos are selected at up to 1600 pixels per side and recompressed to
 JPEG with `flutter_image_compress` (including orientation correction and EXIF

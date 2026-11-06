@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('shows saved-place empty state and short-query guidance', (
+  testWidgets('keeps empty history free of placeholder locations', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -35,15 +36,108 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Recent places'), findsNothing);
+    expect(find.text('Saved places'), findsNothing);
+    expect(find.text('Popular in Metro Manila'), findsNothing);
     expect(
       find.text('Places you save from their details will appear here.'),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.enterText(find.byType(TextField), 'us');
     await tester.pump();
 
     expect(find.text('Type at least 3 characters to search.'), findsOneWidget);
+  });
+
+  testWidgets('quick category searches near the user location', (
+    WidgetTester tester,
+  ) async {
+    const currentLocation = LatLng(14.6, 120.98);
+    const nearbyHospital = PlaceResult(
+      name: 'Nearby Hospital',
+      subtitle: '0.4 km away',
+      coordinates: LatLng(14.603, 120.98),
+    );
+    String? requestedCategory;
+    LatLng? requestedLocation;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchLocationScreen(
+          showMap: false,
+          locateUser: () async => currentLocation,
+          searchNearbyCategory: (category, location) async {
+            requestedCategory = category;
+            requestedLocation = location;
+            return [nearbyHospital];
+          },
+          loadSavedPlaces: _emptySavedPlaces,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hospital'));
+    await tester.pumpAndSettle();
+
+    expect(requestedCategory, 'Hospital');
+    expect(requestedLocation, currentLocation);
+    expect(find.text('Nearby Hospital'), findsNWidgets(2));
+
+    await tester.tap(find.text('Nearby Hospital').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Selected destination'), findsOneWidget);
+  });
+
+  testWidgets('discovery section scrolls through recent and saved places', (
+    WidgetTester tester,
+  ) async {
+    final recent = List.generate(
+      8,
+      (index) => {
+        'name': 'Recent place $index',
+        'subtitle': 'Manila',
+        'latitude': 14.6,
+        'longitude': 120.95 + index / 1000,
+      },
+    );
+    final saved = List.generate(
+      6,
+      (index) => SavedPlace(
+        name: 'Saved place $index',
+        subtitle: 'Manila',
+        latitude: 14.6,
+        longitude: 120.96 + index / 1000,
+      ),
+    );
+    SharedPreferences.setMockInitialValues({
+      'recent_search_places': jsonEncode(recent),
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchLocationScreen(
+          showMap: false,
+          loadSavedPlaces: () async => saved,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('search-discovery-list'));
+    expect(list, findsOneWidget);
+    final scrollableFinder = find.descendant(
+      of: list,
+      matching: find.byType(Scrollable),
+    );
+    final scrollable = tester.state<ScrollableState>(scrollableFinder.first);
+    await tester.tap(find.byType(TextField));
+    await tester.drag(list, const Offset(0, -1400));
+    await tester.pumpAndSettle();
+
+    expect(scrollable.position.pixels, greaterThan(0));
+    expect(find.text('Saved place 5'), findsOneWidget);
   });
 
   testWidgets('shows a useful empty state when a search has no matches', (

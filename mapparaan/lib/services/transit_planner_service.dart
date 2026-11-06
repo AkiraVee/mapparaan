@@ -17,7 +17,7 @@ import 'ai_assistant_service.dart';
 import 'commuter_preference_service.dart';
 import 'route_planner_service.dart';
 
-/// Reason the planner API sends when a trip is outside the City of Manila.
+/// Reason the planner API sends when a trip crosses the City of Manila boundary.
 const String outsideServiceAreaReason = 'outside_service_area';
 
 /// Set by the app (not the server) when the planner answered with an HTTP error.
@@ -520,7 +520,8 @@ class TransitPlanOption {
 }
 
 /// What the planner API answered: routes, or an empty list with a [reason]
-/// such as [outsideServiceAreaReason] (the data covers the City of Manila only).
+/// such as [outsideServiceAreaReason] when a trip crosses the City of Manila
+/// boundary.
 class TransitPlanResult {
   final List<TransitPlanOption> options;
   final String? reason;
