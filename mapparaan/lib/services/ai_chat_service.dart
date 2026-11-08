@@ -452,8 +452,28 @@ class AiChatService {
       );
     }
 
-    final decoded = jsonDecode(request.body);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(request.body);
+    } on FormatException {
+      if (request.statusCode >= 400) {
+        return AiChatResponse(
+          status: 'http_${request.statusCode}',
+          message: _httpErrorMessage(request.statusCode),
+        );
+      }
+      return const AiChatResponse(
+        status: 'error',
+        message: 'The AI backend returned an invalid response.',
+      );
+    }
     if (decoded is! Map<String, dynamic>) {
+      if (request.statusCode >= 400) {
+        return AiChatResponse(
+          status: 'http_${request.statusCode}',
+          message: _httpErrorMessage(request.statusCode),
+        );
+      }
       return const AiChatResponse(
         status: 'error',
         message: 'The AI backend returned an invalid response.',
@@ -464,13 +484,20 @@ class AiChatService {
     if (request.statusCode >= 400 && response.message.isEmpty) {
       return AiChatResponse(
         status: response.status.isNotEmpty ? response.status : 'error',
-        message: 'MapParaan AI request failed with HTTP ${request.statusCode}.',
+        message: _httpErrorMessage(request.statusCode),
         error: response.error,
       );
     }
 
     return response;
   }
+
+  String _httpErrorMessage(int statusCode) => switch (statusCode) {
+    503 =>
+      'MapParaan AI is temporarily unavailable (HTTP 503). Check the '
+          'deployed AI service configuration and try again later.',
+    _ => 'MapParaan AI request failed with HTTP $statusCode.',
+  };
 
   List<Map<String, dynamic>> _recentHistory(List<AiChatMessage> history) {
     final eligible = history

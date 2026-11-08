@@ -15,6 +15,10 @@ in `.env.client`.
 For the Python backend, copy `.env.example` to `.env`. Keep server-only
 credentials such as `GEMINI_API_KEY` in that backend environment only. The
 backend loads `.env` locally; it is not included in the Flutter asset bundle.
+For Render deployments, configure `GEMINI_API_KEY` in the service's Environment
+settings and redeploy. The public `/ai/health` endpoint reports
+`configured: false` when the backend has no Gemini key; never put the key in
+Flutter configuration or commit it to the repository.
 
 Supabase's publishable/anon key is a public client key; protect user data with
 database Row Level Security and Storage policies. CARTO keys are also visible
@@ -85,6 +89,11 @@ records acknowledgements on the server and blocks account-data access until
 both current versions are recorded. Do not apply it until the missing trusted
 friend-sharing schema/migration has been recovered and the migration's target
 tables and function signatures have been checked against the live project.
+After that base migration is already present, also apply
+`supabase/migrations/20261107_update_ai_privacy_notice.sql`; it publishes the
+current AI-processing privacy notice version expected by the app. If the
+database still reports privacy notice `2026-11-07-v1`, acknowledgement of the
+app's `2026-11-07-v2` notice will be rejected until this update is applied.
 The migration replaces the known invite, friendship, and memory-sharing RPCs
 with versions that enforce the current acknowledgement gate; it requires the
 base friend-sharing tables and functions to exist, including `friend_invites`.

@@ -71,8 +71,9 @@ class _LegalAcknowledgementScreenState
       );
       if (mounted) {
         setState(
-          () => _errorMessage =
-              'We could not save your acknowledgement. Check your connection and try again.',
+          () => _errorMessage = error is LegalAcknowledgementException
+              ? error.message
+              : 'We could not save your acknowledgement. Check your connection and try again.',
         );
       }
     } finally {
@@ -104,8 +105,7 @@ class _LegalAcknowledgementScreenState
             LegalAcknowledgementControls(
               termsAccepted: _termsAccepted,
               privacyAcknowledged: _privacyAcknowledged,
-              onTermsChanged: (value) =>
-                  setState(() => _termsAccepted = value),
+              onTermsChanged: (value) => setState(() => _termsAccepted = value),
               onPrivacyChanged: (value) =>
                   setState(() => _privacyAcknowledged = value),
               showValidation: _showValidation,

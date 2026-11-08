@@ -184,6 +184,25 @@ void main() {
     expect(result.userFacingMessage, contains('AI usage limit'));
   });
 
+  test('explains a non-JSON HTTP 503 from the deployed AI service', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        '<html>Service unavailable</html>',
+        503,
+        headers: {'content-type': 'text/html'},
+      ),
+    );
+    final result = await AiChatService(
+      client: client,
+      accessTokenProvider: () => 'verified-token',
+      userIdProvider: () => 'user-503',
+    ).sendMessage(message: 'Test availability', sessionId: 'session-503');
+
+    expect(result.status, 'http_503');
+    expect(result.userFacingMessage, contains('HTTP 503'));
+    expect(result.userFacingMessage, contains('AI service configuration'));
+  });
+
   test(
     'labels partial backend results without discarding the answer',
     () async {
